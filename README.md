@@ -1,29 +1,41 @@
 # product-proposal
 
-**Project Title**:
-TaskTrack
+**Project Name**: 
+BudgetBuddy
 
-**Project Pitch**:
-TaskTrack is a lightweight web-based application designed to help students organize assignments, track deadlines, and manage their academic workload in one simple dashboard.
+Project Pitch: 
+BudgetBuddy is a simple and user-friendly personal finance tracker designed to help users monitor their income and expenses so they can better manage their money and develop smarter financial habits.
 
-**Project Description**:
-TaskTrack helps students stay on top of their school responsibilities by providing a clear and organized way to track assignments, exams, and project deadlines. Users can add tasks, set due dates, and mark items as complete, reducing stress and missed deadlines.
+Project Description
 
-The platform is designed to be simple and distraction-free, focusing only on what students need to succeed academically. It can be expanded in the future to include reminders, calendar views, and progress tracking.
+BudgetBuddy allows users to record daily expenses, categorize spending such as food, transportation, and entertainment, and view an overall summary of their finances in one place. The application focuses on simplicity and ease of use, making personal finance less overwhelming for beginners while still providing useful insights into spending habits. Over time, the project can be expanded to include visual charts, savings goals, and monthly financial reports to help users make informed financial decisions.
 
-**Primary Users**
-- College and high school students
-- Anyone managing multiple academic deadlines
+Primary Users
 
-**Features**
-- Add, edit, and delete assignments
-- Set due dates for tasks
-- Mark tasks as complete
-- View upcoming deadlines
-- Simple and clean interface
+College students
 
-**Benefits**
-- Helps students stay organized
-- Reduces missed deadlines
-- Improves time management
-- Easy to use and understand
+Young adults managing finances
+
+Anyone wanting better spending habits
+
+Features
+
+Add and categorize expenses
+
+View total spending
+
+Set monthly budgets
+
+Track income
+
+Simple financial summary
+
+Benefits
+
+Encourages responsible spending
+
+Helps users save money
+
+Improves financial awareness
+
+Easy to use for beginners
