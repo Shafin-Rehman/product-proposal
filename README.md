@@ -3,7 +3,7 @@
 **Project Name**: 
 BudgetBuddy
 
-**Project Pitch: **
+**Project Pitch**: 
 BudgetBuddy is a simple money-tracking app that helps people keep track of what they earn and spend. It makes managing money easier by showing where money goes and helping users make better financial choices.
 
 **Project Description:** 
