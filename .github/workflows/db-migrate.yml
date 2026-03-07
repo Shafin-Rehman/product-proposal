@@ -2,7 +2,7 @@ name: DB Migrations
 
 on:
   push:
-    branches: [setup/database-schema]
+    branches: [main]
     paths:
       - 'supabase/migrations/**'
 
