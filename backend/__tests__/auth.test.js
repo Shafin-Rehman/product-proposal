@@ -69,7 +69,7 @@ describe('POST /login', () => {
     expect(res.status).toBe(401)
     expect(res.body.error).toBe('Invalid login credentials')
   })
- 
+
   it('500 — unexpected error', async () => {
     supabase.signIn.mockRejectedValueOnce(new Error())
     const res = await request(app).post('/login').send({ email: 'a@b.com', password: 'pw' })

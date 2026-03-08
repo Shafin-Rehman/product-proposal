@@ -1,6 +1,10 @@
 name: Backend CI
 
 on:
+  push:
+    branches: [feature/add-expense-6]
+    paths:
+      - 'backend/**'
   pull_request:
     branches: [feature/add-expense-6]
     paths:
