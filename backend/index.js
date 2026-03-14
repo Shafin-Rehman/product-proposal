@@ -8,6 +8,7 @@ app.use(express.json())
 app.get('/', (req, res) => res.json({ status: 'ok' }))
 app.use('/', require('./routes/auth'))
 app.use('/expenses', require('./routes/expenses'))
+app.use('/income', require('./routes/income'))
 
 module.exports = app
 
