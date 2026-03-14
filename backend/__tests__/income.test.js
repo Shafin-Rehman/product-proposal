@@ -78,6 +78,27 @@ describe('GET /income', () => {
   })
 })
 
+describe('GET /income/categories', () => {
+  it('returns all income categories', async () => {
+    const rows = [
+      { id: 'src-1', name: 'Salary', icon: '💼' },
+      { id: 'src-2', name: 'Freelance', icon: '💻' },
+    ]
+    db.query.mockResolvedValueOnce({ rows })
+    const res = await request(app).get('/income/categories')
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveLength(2)
+    expect(res.body[0]).toMatchObject({ id: 'src-1', name: 'Salary', icon: '💼' })
+  })
+
+  it('returns 500 on db failure', async () => {
+    db.query.mockRejectedValueOnce(new Error())
+    const res = await request(app).get('/income/categories')
+    expect(res.status).toBe(500)
+    expect(res.body.error).toBe('Failed to fetch income categories')
+  })
+})
+
 describe('POST /income/get', () => {
   const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', month: '2026-03-01', notes: null, source_name: 'Salary', source_icon: '💼' }
 

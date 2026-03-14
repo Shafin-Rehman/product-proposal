@@ -37,6 +37,15 @@ router.get('/', async (req, res) => {
   }
 })
 
+router.get('/categories', async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT id, name, icon FROM public.income_sources ORDER BY name ASC`)
+    res.json(rows)
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch income categories' })
+  }
+})
+
 router.post('/get', async (req, res) => {
   const { income_id } = req.body
   if (!income_id) return res.status(400).json({ error: 'income_id required' })
