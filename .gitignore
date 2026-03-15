@@ -4,6 +4,12 @@ frontend/node_modules/
 # Backend
 backend/node_modules/
 
+# Next.js
+nextjs/node_modules/
+nextjs/.next/
+nextjs/.swc/
+nextjs/coverage/
+
 # Test output
 backend/coverage/
 backend/test-report/
