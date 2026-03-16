@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [feature/create-ui-12]
+    branches: [main]
     paths:
       - 'nextjs/**'
   pull_request:
-    branches: [feature/create-ui-12]
+    branches: [main]
     paths:
       - 'nextjs/**'
 
