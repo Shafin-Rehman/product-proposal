@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
+import { evaluateThresholdForMonth } from '@/lib/budget'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -34,7 +35,8 @@ export async function POST(request) {
       [user.id, category_id ?? null, amount, description ?? null, date]
     )
     const { user_id, ...expense } = rows[0]
-    return NextResponse.json(expense, { status: 201 })
+    const threshold = await evaluateThresholdForMonth(user.id, expense.date)
+    return NextResponse.json({ ...expense, budget_alert: threshold?.budget_alert ?? null }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
   }

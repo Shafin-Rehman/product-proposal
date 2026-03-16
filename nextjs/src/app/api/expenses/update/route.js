@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
+import { evaluateThresholdForMonth } from '@/lib/budget'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -18,13 +19,25 @@ export async function POST(request) {
   const n = entries.length
 
   try {
+    const existingResult = await db.query(
+      `SELECT date
+       FROM public.expenses
+       WHERE id = $1 AND user_id = $2`,
+      [expense_id, user.id]
+    )
+    if (!existingResult.rows.length) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
+
+    const previousDate = existingResult.rows[0].date
     const { rows } = await db.query(
       `UPDATE public.expenses SET ${fields.join(', ')} WHERE id = $${n + 1} AND user_id = $${n + 2} RETURNING *`,
       values
     )
     if (!rows.length) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
     const { user_id, ...expense } = rows[0]
-    return NextResponse.json(expense)
+    const monthsToCheck = [...new Set([previousDate, expense.date])]
+    const thresholdResults = await Promise.all(monthsToCheck.map(month => evaluateThresholdForMonth(user.id, month)))
+    const triggeredAlert = thresholdResults.find(result => result?.alertTriggered)
+    return NextResponse.json({ ...expense, budget_alert: triggeredAlert?.budget_alert ?? null })
   } catch {
     return NextResponse.json({ error: 'Failed to update expense' }, { status: 500 })
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
+import { normalizeMonth } from '@/lib/budget'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -9,8 +10,16 @@ export async function POST(request) {
   try { body = await request.json() } catch {}
   const { income_id, source_id, amount, month, notes } = body
   if (!income_id) return NextResponse.json({ error: 'income_id required' }, { status: 400 })
+  if (month !== undefined && !normalizeMonth(month)) {
+    return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
+  }
 
-  const entries = Object.entries({ source_id, amount, month, notes }).filter(([, v]) => v !== undefined)
+  const entries = Object.entries({
+    source_id,
+    amount,
+    month: month === undefined ? undefined : normalizeMonth(month),
+    notes
+  }).filter(([, v]) => v !== undefined)
   if (!entries.length) return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
 
   const fields = entries.map(([k], i) => `${k} = $${i + 1}`)

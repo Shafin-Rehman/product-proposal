@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
+import { normalizeMonth } from '@/lib/budget'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -27,11 +28,13 @@ export async function POST(request) {
   try { body = await request.json() } catch {}
   const { source_id, amount, month, notes } = body
   if (!amount || !month) return NextResponse.json({ error: 'amount and month are required' }, { status: 400 })
+  const normalizedMonth = normalizeMonth(month)
+  if (!normalizedMonth) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
   try {
     const { rows } = await db.query(
       `INSERT INTO public.income (user_id, source_id, amount, month, notes)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [user.id, source_id ?? null, amount, month, notes ?? null]
+      [user.id, source_id ?? null, amount, normalizedMonth, notes ?? null]
     )
     const { user_id, ...income } = rows[0]
     return NextResponse.json(income, { status: 201 })

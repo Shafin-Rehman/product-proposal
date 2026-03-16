@@ -1,10 +1,12 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({ signUp: jest.fn(), signIn: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
+jest.mock('@/lib/budget', () => ({ normalizeMonth: jest.fn() }))
 
 const { testApiHandler } = require('next-test-api-route-handler')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
+const { normalizeMonth } = require('@/lib/budget')
 const incomeHandler = require('@/app/api/income/route')
 const categoriesHandler = require('@/app/api/income/categories/route')
 const getHandler = require('@/app/api/income/get/route')
@@ -16,7 +18,9 @@ const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: {
 beforeEach(() => {
   db.query.mockClear()
   authenticate.mockClear()
+  normalizeMonth.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
+  normalizeMonth.mockImplementation(value => value)
 })
 
 describe('POST /api/income', () => {
@@ -32,6 +36,22 @@ describe('POST /api/income', () => {
         const body = await res.json()
         expect(body).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', month: '2026-03-01' })
         expect(body).not.toHaveProperty('user_id')
+      }
+    })
+  })
+
+  it('normalizes the stored month to month-start', async () => {
+    normalizeMonth.mockReturnValueOnce('2026-03-01')
+    db.query.mockResolvedValueOnce({ rows: [row] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 3000, month: '2026-03-15' }))
+        expect(res.status).toBe(201)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO public.income'),
+          ['uid', null, 3000, '2026-03-01', null]
+        )
       }
     })
   })
@@ -54,6 +74,18 @@ describe('POST /api/income', () => {
         const res = await fetch(post({ amount: 3000 }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount and month are required')
+      }
+    })
+  })
+
+  it('rejects request with an invalid month', async () => {
+    normalizeMonth.mockReturnValueOnce(null)
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 3000, month: 'bad' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid month is required')
       }
     })
   })
@@ -184,6 +216,22 @@ describe('POST /api/income/update', () => {
     })
   })
 
+  it('normalizes month during update', async () => {
+    normalizeMonth.mockReturnValueOnce('2026-03-01')
+    db.query.mockResolvedValueOnce({ rows: [row] })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, month: '2026-03-22' }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE public.income SET'),
+          ['2026-03-01', 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('rejects update without income_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,
@@ -202,6 +250,18 @@ describe('POST /api/income/update', () => {
         const res = await fetch(post({ income_id: 1 }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('No fields provided to update')
+      }
+    })
+  })
+
+  it('rejects update with an invalid month', async () => {
+    normalizeMonth.mockReturnValueOnce(null)
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, month: 'bad' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid month is required')
       }
     })
   })
