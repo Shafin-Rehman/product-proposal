@@ -1,12 +1,8 @@
-# Frontend
-frontend/node_modules/
-
-# Backend
-backend/node_modules/
-
-# Test output
-backend/coverage/
-backend/test-report/
+# Next.js
+nextjs/node_modules/
+nextjs/.next/
+nextjs/.swc/
+nextjs/coverage/
 
 # Other
 .env
