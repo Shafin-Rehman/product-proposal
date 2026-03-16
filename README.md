@@ -29,8 +29,8 @@ npm install
 
 Create a `.env.local` file in the root folder and add your Supabase credentials:
 ```
-NEXT_PUBLIC_SUPABASE_URL= https://vsnygrmhdrpryoehuadn.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbnlncm1oZHJwcnlvZWh1YWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MzQxMzAsImV4cCI6MjA4ODQxMDEzMH0.z65N4fkMAAMTqWrFWSZIJ6ZzsM4rcCmA8fgR9wbmTF0
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 
