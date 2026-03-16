@@ -10,14 +10,16 @@ export async function POST(request) {
   try { body = await request.json() } catch {}
   const { income_id, source_id, amount, month, notes } = body
   if (!income_id) return NextResponse.json({ error: 'income_id required' }, { status: 400 })
-  if (month !== undefined && !normalizeMonth(month)) {
+
+  const normalizedMonth = month === undefined ? undefined : normalizeMonth(month)
+  if (month !== undefined && !normalizedMonth) {
     return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
   }
 
   const entries = Object.entries({
     source_id,
     amount,
-    month: month === undefined ? undefined : normalizeMonth(month),
+    month: normalizedMonth,
     notes
   }).filter(([, v]) => v !== undefined)
   if (!entries.length) return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
