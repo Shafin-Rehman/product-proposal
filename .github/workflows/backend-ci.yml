@@ -12,6 +12,11 @@ on:
 jobs:
   backend-test:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
+      SUPABASE_URL: http://localhost
+      SUPABASE_ANON_KEY: dummy
     defaults:
       run:
         working-directory: nextjs
@@ -24,3 +29,5 @@ jobs:
           cache-dependency-path: nextjs/package-lock.json
       - run: npm ci
       - run: npm test -- --coverage
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
