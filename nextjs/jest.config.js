@@ -6,5 +6,9 @@ module.exports = createJestConfig({
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
-  testPathIgnorePatterns: ['<rootDir>/e2e/']
+  testPathIgnorePatterns: ['<rootDir>/e2e/'],
+  collectCoverageFrom: [
+    'src/app/**/*.js',
+    'src/lib/**/*.js'
+  ]
 })
