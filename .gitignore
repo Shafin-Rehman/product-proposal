@@ -7,8 +7,6 @@ nextjs/coverage/
 # Other
 .env
 .env.*
-.secrets
 .DS_Store
 supabase/.temp
 test-results/
-package-lock.json
