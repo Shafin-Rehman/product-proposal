@@ -1,0 +1,39 @@
+name: Test Automation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        working-directory: ./nextjs
+        run: npm ci || npm install
+
+      - name: Build Application
+        working-directory: ./nextjs
+        run: npm run build
+
+      - name: Run Unit and Integration Tests with Coverage
+        working-directory: ./nextjs
+        run: npx jest --coverage
+
+      - name: Install Playwright Browsers
+        working-directory: ./nextjs
+        run: npx playwright install --with-deps chromium
+
+      - name: Run End-to-End Tests
+        working-directory: ./nextjs
+        run: npx playwright test
