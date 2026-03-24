@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install Dependencies
         working-directory: ./nextjs
@@ -24,6 +24,9 @@ jobs:
 
       - name: Build Application
         working-directory: ./nextjs
+        env:
+          SUPABASE_URL: "https://dummy.supabase.co"
+          SUPABASE_ANON_KEY: "dummy"
         run: npm run build
 
       - name: Run Unit and Integration Tests with Coverage
