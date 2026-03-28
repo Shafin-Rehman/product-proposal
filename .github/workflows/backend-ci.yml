@@ -1,16 +1,18 @@
-name: Backend CI
+name: App CI
 on:
   push:
     branches: [main]
     paths:
       - 'nextjs/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'nextjs/**'
+      - '.github/workflows/backend-ci.yml'
 
 jobs:
-  backend-test:
+  app-test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,3 +26,8 @@ jobs:
           cache-dependency-path: nextjs/package-lock.json
       - run: npm ci
       - run: npm test -- --coverage
+      - run: npm run build
+        env:
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiZXhwIjoyMDk5OTk5OTk5fQ.signature
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
