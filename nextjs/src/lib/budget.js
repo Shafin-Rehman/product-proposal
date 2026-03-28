@@ -93,7 +93,7 @@ export async function buildBudgetSummary(userId, month) {
 
   const totalExpenses = Number(totals.total_expenses)
   const monthlyLimit = budget?.monthly_limit == null ? null : String(budget.monthly_limit)
-  const thresholdExceeded = monthlyLimit == null ? false : totalExpenses > Number(monthlyLimit)
+  const thresholdExceeded = monthlyLimit == null ? false : totalExpenses >= Number(monthlyLimit)
 
   return {
     month,
@@ -116,7 +116,7 @@ export async function evaluateThresholdForMonth(userId, rawMonth) {
   const totals = await getMonthlyTotals(userId, month)
   const totalExpenses = Number(totals.total_expenses)
   const monthlyLimit = String(budget.monthly_limit)
-  const thresholdExceeded = totalExpenses > Number(monthlyLimit)
+  const thresholdExceeded = totalExpenses >= Number(monthlyLimit)
   const alertTriggered = thresholdExceeded && !budget.notified
 
   if (budget.notified !== thresholdExceeded) {

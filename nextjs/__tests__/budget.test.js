@@ -13,6 +13,7 @@ const { NextResponse } = require('next/server')
 const { authenticate } = require('@/lib/auth')
 const db = require('@/lib/db')
 const budget = require('@/lib/budget')
+const actualBudget = jest.requireActual('@/lib/budget')
 const budgetHandler = require('@/app/api/budget/route')
 const summaryHandler = require('@/app/api/budget/summary/route')
 const breakdownHandler = require('@/app/api/expenses/breakdown/route')
@@ -119,7 +120,7 @@ describe('GET /api/budget', () => {
 })
 
 describe('POST /api/budget', () => {
-  it('upserts a monthly budget and returns the latest notification state', async () => {
+  it('upserts a monthly budget and returns notified when spending reaches the limit', async () => {
     budget.upsertMonthlyBudget.mockResolvedValueOnce({ month: '2026-03-01', monthly_limit: '100.00', notified: false })
     budget.evaluateThresholdForMonth.mockResolvedValueOnce({ notified: true })
     await testApiHandler({
@@ -174,6 +175,35 @@ describe('GET /api/budget/summary', () => {
     })
   })
 
+  it('reports threshold_exceeded when spending reaches the monthly limit', async () => {
+    budget.buildBudgetSummary.mockResolvedValueOnce({
+      month: '2026-03-01',
+      monthly_limit: '500.00',
+      total_income: '3000.00',
+      total_expenses: '500.00',
+      remaining_budget: '0.00',
+      threshold_exceeded: true,
+      notified: true,
+    })
+    await testApiHandler({
+      appHandler: summaryHandler,
+      url: 'http://localhost/api/budget/summary?month=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({
+          month: '2026-03-01',
+          monthly_limit: '500.00',
+          total_income: '3000.00',
+          total_expenses: '500.00',
+          remaining_budget: '0.00',
+          threshold_exceeded: true,
+          notified: true,
+        })
+      }
+    })
+  })
+
   it('returns 400 for an invalid month', async () => {
     budget.normalizeMonth.mockReturnValueOnce(null)
     await testApiHandler({
@@ -185,5 +215,67 @@ describe('GET /api/budget/summary', () => {
         expect((await res.json()).error).toBe('Valid month is required')
       }
     })
+  })
+})
+
+describe('budget helper threshold boundary', () => {
+  it('treats spending equal to the limit as threshold reached in the summary', async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: false }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_expenses: '100.00' }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_income: '2500.00' }]
+      })
+
+    const summary = await actualBudget.buildBudgetSummary('uid', '2026-03-01')
+
+    expect(summary).toEqual({
+      month: '2026-03-01',
+      monthly_limit: '100.00',
+      total_income: '2500.00',
+      total_expenses: '100.00',
+      remaining_budget: '0.00',
+      threshold_exceeded: true,
+      notified: false,
+    })
+  })
+
+  it('triggers a budget alert when spending reaches the limit for the first time', async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: false }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_expenses: '100.00' }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_income: '0.00' }]
+      })
+      .mockResolvedValueOnce({ rows: [] })
+
+    const result = await actualBudget.evaluateThresholdForMonth('uid', '2026-03-20')
+
+    expect(result).toEqual({
+      month: '2026-03-01',
+      monthly_limit: '100.00',
+      total_expenses: '100.00',
+      threshold_exceeded: true,
+      notified: true,
+      alertTriggered: true,
+      budget_alert: {
+        month: '2026-03-01',
+        monthly_limit: '100.00',
+        total_expenses: '100.00',
+        threshold_exceeded: true,
+      },
+    })
+    expect(db.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE public.budget_thresholds'),
+      ['uid', '2026-03-01', true]
+    )
   })
 })
