@@ -8,6 +8,7 @@ import { useAuth } from '@/components/providers'
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/transactions', label: 'Transactions', icon: 'transactions' },
+  { href: '/insights', label: 'Insights', icon: 'insights' },
   { href: '/account', label: 'Account', icon: 'account' },
 ]
 
@@ -43,6 +44,15 @@ function TabIcon({ icon }) {
           <path d="M5 12h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
           <path d="M5 16h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
           <circle cx="17.5" cy="12" fill="currentColor" r="1.2" />
+        </svg>
+      )
+    case 'insights':
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path d="M5 18.5h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M8 16V9.25" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M12 16V6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M16 16v-4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
         </svg>
       )
     default:
