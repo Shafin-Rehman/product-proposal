@@ -2654,25 +2654,6 @@ html[data-theme='dark'] .app-shell__backdrop {
   letter-spacing: -0.03em;
 }
 
-.screen-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.2rem;
-  padding: 0 0.95rem;
-  border-radius: 999px;
-  background: rgba(122, 181, 146, 0.12);
-  color: var(--accent-strong);
-  font-size: 0.82rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.screen-chip--live {
-  background: rgba(86, 96, 90, 0.08);
-  color: var(--text-secondary);
-}
-
 .screen-heading {
   display: grid;
   gap: 0.3rem;
@@ -3663,7 +3644,6 @@ html[data-theme='dark'] .tab-link--active {
   }
 
   .period-chip,
-  .screen-chip,
   .segment-control--mini {
     width: 100%;
   }
@@ -3969,10 +3949,6 @@ html[data-theme='dark'] .tab-link--active {
     align-items: stretch;
   }
 
-  .screen-chip {
-    width: auto;
-  }
-
   .budget-glance {
     display: flex;
     gap: 0.9rem;
@@ -4174,13 +4150,6 @@ html[data-theme='dark'] .dashboard-pocket__metric {
   align-items: center;
   justify-content: center;
   min-height: 3.25rem;
-}
-
-.screen-topline--month .screen-chip {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%);
 }
 
 .month-switcher {
@@ -5404,11 +5373,6 @@ html[data-theme='dark'] .transactions-fab {
     min-height: 0;
   }
 
-  .screen-topline--month .screen-chip {
-    position: static;
-    transform: none;
-  }
-
   .budget-hero__badge {
     position: static;
   }
@@ -5820,10 +5784,6 @@ html[data-theme='dark'] .donut-chart__inner {
 @media (max-width: 640px) {
   .insights-screen__masthead-row {
     grid-template-columns: 1fr;
-  }
-
-  .insights-screen__masthead-row .screen-chip {
-    justify-self: start;
   }
 
   .screen-topline--month-insights .month-switcher {

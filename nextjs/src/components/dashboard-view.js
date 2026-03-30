@@ -3,15 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
+import { useAuth, useDataChanged } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
-import {
-  DEMO_MONTH,
-  demoActivity,
-  demoBudgetSummary,
-  demoBudgetTrend,
-  demoCategoryBudgets,
-} from '@/lib/demoData'
 import { getCategoryVisual, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
@@ -221,7 +214,6 @@ function LiveNotice({ message, onRetry }) {
 export default function DashboardView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
-  const { isSampleMode } = useDataMode()
   const { dataChangedToken } = useDataChanged()
   const [currentMonth] = useState(getCurrentMonthStart)
   const [reloadToken, setReloadToken] = useState(0)
@@ -239,7 +231,7 @@ export default function DashboardView() {
   const [budgetSaveError, setBudgetSaveError] = useState('')
 
   useEffect(() => {
-    if (isSampleMode || !isReady || !session?.accessToken) return
+    if (!isReady || !session?.accessToken) return
 
     const controller = new AbortController()
 
@@ -321,12 +313,10 @@ export default function DashboardView() {
     })
 
     return () => controller.abort()
-  }, [currentMonth, dataChangedToken, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [currentMonth, dataChangedToken, isReady, logout, reloadToken, router, session?.accessToken])
 
   const openBudgetSheet = () => {
-    const currentLimit = isSampleMode
-      ? demoBudgetSummary?.monthly_limit
-      : liveState.summary?.monthly_limit
+    const currentLimit = liveState.summary?.monthly_limit
     setBudgetDraft({ monthly_limit: currentLimit ? String(currentLimit) : '' })
     setBudgetSaveError('')
     setIsBudgetSheetOpen(true)
@@ -365,36 +355,17 @@ export default function DashboardView() {
     return null
   }
 
-  const summary = isSampleMode ? demoBudgetSummary : liveState.summary
-  const activity = isSampleMode
-    ? demoActivity
-    : buildActivityFeed(liveState.expenses, liveState.income)
+  const summary = liveState.summary
+  const activity = buildActivityFeed(liveState.expenses, liveState.income)
   const recentActivity = activity.slice(0, PREVIEW_LIMIT)
   const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
-  const categoryCards = isSampleMode
-    ? demoCategoryBudgets.map((item) => {
-      const visual = getCategoryVisual(item.name)
-      const remaining = item.budget - item.spent
-      return {
-        id: item.id,
-        name: visual.label,
-        symbol: visual.symbol,
-        color: visual.color,
-        soft: visual.soft,
-        progress: Math.min((item.spent / item.budget) * 100, 100),
-        amount: item.spent,
-        note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
-      }
-    })
-    : buildLiveCategoryCards(
+  const categoryCards = buildLiveCategoryCards(
       [...liveState.breakdown].sort((left, right) => Number(right.total_amount) - Number(left.total_amount)),
       Number(summary?.total_expenses ?? 0)
     )
   const heroState = getHeroState(summary)
-  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
-  const trendPoints = isSampleMode
-    ? demoBudgetTrend
-    : buildMonthlySpendTrend(liveState.expenses, currentMonth)
+  const chartMonth = summary?.month || currentMonth
+  const trendPoints = buildMonthlySpendTrend(liveState.expenses, currentMonth)
   const projectedTrendPoints = buildProjectedTrend(chartMonth, heroState.budget, trendPoints.length)
   const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, heroState.budget)
   const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
@@ -424,9 +395,6 @@ export default function DashboardView() {
             <h1 className="screen-persona__title">{firstName}</h1>
           </div>
         </div>
-        <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
-          {isSampleMode ? 'Sample' : 'Live'}
-        </span>
       </div>
 
       <LiveNotice
@@ -442,11 +410,9 @@ export default function DashboardView() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
             <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
-            {!isSampleMode && (
-              <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
+            <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
                 {heroState.budget ? 'Edit budget' : 'Set budget'}
               </button>
-            )}
           </div>
         </div>
 

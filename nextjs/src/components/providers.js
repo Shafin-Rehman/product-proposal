@@ -4,23 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { clearSession, readSession, writeSession } from '@/lib/session'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
-const DATA_MODE_STORAGE_KEY = 'budgetbuddy.data-mode'
 const AuthContext = createContext(null)
 const ThemeContext = createContext(null)
-const DataModeContext = createContext(null)
 const DataChangedContext = createContext(null)
 
 function setDocumentTheme(theme) {
   document.documentElement.dataset.theme = theme
   document.documentElement.style.colorScheme = theme
-}
-
-function readStoredDataMode() {
-  try {
-    return window.localStorage.getItem(DATA_MODE_STORAGE_KEY) === 'sample' ? 'sample' : 'live'
-  } catch {
-    return 'live'
-  }
 }
 
 function ThemeProvider({ children }) {
@@ -91,31 +81,6 @@ function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-function DataModeProvider({ children }) {
-  const [mode, setModeState] = useState('live')
-
-  useEffect(() => {
-    setModeState(readStoredDataMode())
-  }, [])
-
-  const setMode = (nextMode) => {
-    const safeMode = nextMode === 'sample' ? 'sample' : 'live'
-    setModeState(safeMode)
-
-    try {
-      window.localStorage.setItem(DATA_MODE_STORAGE_KEY, safeMode)
-    } catch {}
-  }
-
-  const value = useMemo(() => ({
-    mode,
-    isSampleMode: mode === 'sample',
-    setMode,
-  }), [mode])
-
-  return <DataModeContext.Provider value={value}>{children}</DataModeContext.Provider>
-}
-
 function DataChangedProvider({ children }) {
   const [token, setToken] = useState(0)
 
@@ -132,9 +97,7 @@ export function AppProviders({ children }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <DataModeProvider>
-          <DataChangedProvider>{children}</DataChangedProvider>
-        </DataModeProvider>
+        <DataChangedProvider>{children}</DataChangedProvider>
       </AuthProvider>
     </ThemeProvider>
   )
@@ -152,11 +115,7 @@ export function useTheme() {
   return context
 }
 
-export function useDataMode() {
-  const context = useContext(DataModeContext)
-  if (!context) throw new Error('useDataMode must be used within AppProviders')
-  return context
-}
+
 
 export function useDataChanged() {
   const context = useContext(DataChangedContext)
