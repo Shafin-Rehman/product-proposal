@@ -22,22 +22,29 @@ cd product-proposal
 
 **2. Install dependencies**
 ```bash
+cd nextjs
 npm install
 ```
 
 **3. Set up environment variables**
 
-Create a `.env.local` file in the root folder and add your Supabase credentials:
+Create a `.env.local` file in the `nextjs/` folder and add the server-side environment variables used by the app:
 ```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+DATABASE_URL=your_database_connection_string
 ```
 
-
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are not enough for the current implementation because the API routes and shared server code read `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `DATABASE_URL`.
 
 **4. Start the app**
 ```bash
 npm run dev
+```
+
+**5. Verify the production build**
+```bash
+npm run build
 ```
 
 

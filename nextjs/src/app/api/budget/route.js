@@ -40,6 +40,7 @@ export async function POST(request) {
       month: savedBudget.month,
       monthly_limit: savedBudget.monthly_limit,
       notified: updatedBudget?.notified ?? false,
+      budget_alert: updatedBudget?.budget_alert ?? null,
     })
   } catch {
     return NextResponse.json({ error: 'Failed to save budget' }, { status: 500 })
