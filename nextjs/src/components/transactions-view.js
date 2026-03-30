@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth, useDataChanged } from '@/components/providers'
+import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
+import { demoActivity } from '@/lib/demoData'
 import { getCategoryVisual, getEntryVisual } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
@@ -23,6 +24,132 @@ const REPEATING_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ]
+
+const EXTRA_SAMPLE_ACTIVITY = [
+  {
+    id: 'demo-exp-9',
+    kind: 'expense',
+    title: 'Bookstore run',
+    chip: 'Shopping',
+    amount: 42.18,
+    occurredOn: '2026-03-17',
+    note: 'Notebooks and pens',
+    merchant: 'Campus store',
+  },
+  {
+    id: 'demo-exp-10',
+    kind: 'expense',
+    title: 'Weekend groceries',
+    chip: 'Groceries',
+    amount: 61.47,
+    occurredOn: '2026-03-16',
+    note: 'Produce and snacks',
+    merchant: 'Trader Joe\'s',
+  },
+  {
+    id: 'demo-exp-11',
+    kind: 'expense',
+    title: 'Coffee and bagel',
+    chip: 'Dining',
+    amount: 12.4,
+    occurredOn: '2026-03-15',
+    note: 'Breakfast before class',
+    merchant: 'Blue Bottle',
+  },
+  {
+    id: 'demo-inc-3',
+    kind: 'income',
+    title: 'Tutoring payout',
+    chip: 'Freelance',
+    amount: 110,
+    occurredOn: '2026-03-14',
+    note: 'Weekend session',
+    merchant: 'Venmo transfer',
+  },
+  {
+    id: 'demo-exp-12',
+    kind: 'expense',
+    title: 'Pharmacy stop',
+    chip: 'Health',
+    amount: 23.89,
+    occurredOn: '2026-03-13',
+    note: 'Refill and essentials',
+    merchant: 'CVS',
+  },
+  {
+    id: 'demo-exp-13',
+    kind: 'expense',
+    title: 'Subway reload',
+    chip: 'Travel',
+    amount: 34,
+    occurredOn: '2026-03-12',
+    note: 'Weekly transit pass',
+    merchant: 'OMNY',
+  },
+  {
+    id: 'demo-exp-14',
+    kind: 'expense',
+    title: 'Streaming bundle',
+    chip: 'Fun',
+    amount: 18.99,
+    occurredOn: '2026-03-11',
+    note: 'Movie add-on',
+    merchant: 'Hulu',
+  },
+  {
+    id: 'demo-exp-15',
+    kind: 'expense',
+    title: 'Phone bill',
+    chip: 'Bills',
+    amount: 36,
+    occurredOn: '2026-03-10',
+    note: 'Monthly autopay',
+    merchant: 'T-Mobile',
+  },
+  {
+    id: 'demo-exp-16',
+    kind: 'expense',
+    title: 'Late study dinner',
+    chip: 'Dining',
+    amount: 21.65,
+    occurredOn: '2026-03-09',
+    note: 'After library session',
+    merchant: 'Sweetgreen',
+  },
+  {
+    id: 'demo-exp-17',
+    kind: 'expense',
+    title: 'Laundry supplies',
+    chip: 'Shopping',
+    amount: 17.26,
+    occurredOn: '2026-03-08',
+    note: 'Detergent and dryer sheets',
+    merchant: 'Target',
+  },
+  {
+    id: 'demo-exp-18',
+    kind: 'expense',
+    title: 'Corner market',
+    chip: 'Groceries',
+    amount: 19.54,
+    occurredOn: '2026-03-07',
+    note: 'Quick restock',
+    merchant: 'Westside Market',
+  },
+  {
+    id: 'demo-inc-4',
+    kind: 'income',
+    title: 'Refund posted',
+    chip: 'Refund',
+    amount: 28.75,
+    occurredOn: '2026-03-06',
+    note: 'Returned class supplies',
+    merchant: 'Amazon',
+  },
+]
+
+const SAMPLE_ACTIVITY = [...demoActivity, ...EXTRA_SAMPLE_ACTIVITY]
+  .sort((left, right) => right.occurredOn.localeCompare(left.occurredOn) || right.id.localeCompare(left.id))
 
 function getTodayInputValue(date = new Date()) {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -85,6 +212,7 @@ function LiveNotice({ message, onRetry }) {
 export default function TransactionsView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
+  const { isSampleMode } = useDataMode()
   const { notifyDataChanged } = useDataChanged()
   const [reloadToken, setReloadToken] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
@@ -107,7 +235,7 @@ export default function TransactionsView() {
   })
 
   useEffect(() => {
-    if (!isReady || !session?.accessToken) return
+    if (isSampleMode || !isReady || !session?.accessToken) return
 
     const controller = new AbortController()
 
@@ -172,7 +300,7 @@ export default function TransactionsView() {
     })
 
     return () => controller.abort()
-  }, [isReady, logout, reloadToken, router, session?.accessToken])
+  }, [isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
 
   useEffect(() => {
     if (!selectedEntry && !isEntrySheetOpen) return undefined
@@ -232,17 +360,17 @@ export default function TransactionsView() {
   }, [])
 
   useEffect(() => {
-    if (!isReady || !session?.accessToken) return
+    if (isSampleMode || !isReady || !session?.accessToken) return
     const token = session.accessToken
     apiGet('/api/expenses/categories', { accessToken: token }).then(setExpenseCategories).catch(() => {})
     apiGet('/api/income/categories', { accessToken: token }).then(setIncomeCategories).catch(() => {})
-  }, [isReady, session?.accessToken])
+  }, [isReady, isSampleMode, session?.accessToken])
 
   if (!isReady || !session?.accessToken) {
     return null
   }
 
-  const feed = buildActivityFeed(liveState.expenses, liveState.income)
+  const feed = isSampleMode ? SAMPLE_ACTIVITY : buildActivityFeed(liveState.expenses, liveState.income)
   const filteredFeed = feed.filter((entry) => {
     if (entryFilter !== 'all' && entry.kind !== entryFilter) return false
     if (!searchQuery.trim()) return true
@@ -256,7 +384,7 @@ export default function TransactionsView() {
     )
   })
   const groupedFeed = groupActivityByDate(filteredFeed)
-  const isLoading = liveState.status === 'loading' && !feed.length
+  const isLoading = !isSampleMode && liveState.status === 'loading' && !feed.length
   const selectedVisual = selectedEntry ? getEntryVisual(selectedEntry) : null
   const entryPreview = getCategoryVisual(
     [entryDraft.category, entryDraft.counterparty].filter(Boolean).join(' '),
@@ -377,8 +505,13 @@ export default function TransactionsView() {
   return (
     <>
       <section className="app-screen transactions-screen">
-        <div className="screen-heading">
-          <h1 className="screen-heading__title">Transactions</h1>
+        <div className="screen-heading--split">
+          <div className="screen-heading">
+            <h1 className="screen-heading__title">Transactions</h1>
+          </div>
+          <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
+            {isSampleMode ? 'Sample' : 'Live'}
+          </span>
         </div>
 
         <div className="search-panel">
@@ -482,7 +615,7 @@ export default function TransactionsView() {
             <span>
               {searchQuery || entryFilter !== 'all'
                 ? 'Try a broader search or switch back to the full feed.'
-                : 'Add a transaction to get started.'}
+                : 'Turn on Sample mode in Account if you want to preview a fuller feed.'}
             </span>
           </div>
         )}
@@ -555,7 +688,7 @@ export default function TransactionsView() {
               </div>
             </div>
 
-            {selectedEntry.raw && (
+            {!isSampleMode && selectedEntry.raw && (
               <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
                 {deleteConfirm ? (
                   <>
@@ -760,9 +893,11 @@ export default function TransactionsView() {
                   <div className="inline-error" role="alert">{saveError}</div>
                 ) : (
                   <span className="entry-sheet__hint">
-                    {editingEntry
-                      ? 'Changes will update the live record immediately.'
-                      : 'This will be saved to your live account.'}
+                    {isSampleMode
+                      ? 'Switch to Live mode in Account to save transactions.'
+                      : editingEntry
+                        ? 'Changes will update the live record immediately.'
+                        : 'This will be saved to your live account.'}
                   </span>
                 )}
                 <div className="entry-sheet__actions">
@@ -771,7 +906,7 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={isSaving || !entryDraft.amount || !entryDraft.occurredOn}
+                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
