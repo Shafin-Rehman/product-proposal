@@ -55,13 +55,10 @@ describe('POST /api/expenses', () => {
   it('201 - returns a budget alert when the threshold is crossed', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
     evaluateThresholdForMonth.mockResolvedValueOnce({
-      alertTriggered: true,
-      budget_alert: {
-        month: '2026-03-01',
-        monthly_limit: '20.00',
-        total_expenses: '25.00',
-        threshold_exceeded: true,
-      }
+      threshold_exceeded: true,
+      month: '2026-03-01',
+      monthly_limit: '20.00',
+      total_expenses: '25.00',
     })
     await testApiHandler({
       appHandler: expensesHandler,
