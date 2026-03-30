@@ -8,8 +8,4 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 })
 
-pool.connect()
-  .then(client => { console.log('connected to db'); client.release() })
-  .catch(err => console.error('db connection failed:', err.message))
-
 export default pool

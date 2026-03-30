@@ -21,11 +21,12 @@ export async function GET(request) {
       `SELECT
          e.category_id,
          COALESCE(c.name, 'Uncategorized') AS category_name,
+         c.icon AS category_icon,
          COALESCE(SUM(e.amount), 0)::TEXT AS total_amount
        FROM public.expenses e
        LEFT JOIN public.categories c ON e.category_id = c.id
        WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3
-       GROUP BY e.category_id, COALESCE(c.name, 'Uncategorized')
+       GROUP BY e.category_id, COALESCE(c.name, 'Uncategorized'), c.icon
        ORDER BY category_name ASC`,
       [user.id, month, getNextMonth(month)]
     )

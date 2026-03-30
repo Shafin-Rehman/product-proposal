@@ -8,7 +8,7 @@ export async function GET(request) {
   if (error) return error
   try {
     const { rows } = await db.query(
-      `SELECT e.*, c.name AS category_name
+      `SELECT e.*, c.name AS category_name, c.icon AS category_icon
        FROM public.expenses e
        LEFT JOIN public.categories c ON e.category_id = c.id
        WHERE e.user_id = $1
@@ -36,7 +36,10 @@ export async function POST(request) {
     )
     const { user_id, ...expense } = rows[0]
     const threshold = await evaluateThresholdForMonth(user.id, expense.date)
-    return NextResponse.json({ ...expense, budget_alert: threshold?.budget_alert ?? null }, { status: 201 })
+    const budget_alert = threshold?.threshold_exceeded
+      ? { month: threshold.month, monthly_limit: threshold.monthly_limit, total_expenses: threshold.total_expenses, threshold_exceeded: true }
+      : null
+    return NextResponse.json({ ...expense, budget_alert }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
   }

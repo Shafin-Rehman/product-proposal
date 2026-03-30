@@ -3,6 +3,7 @@ nextjs/node_modules/
 nextjs/.next/
 nextjs/.swc/
 nextjs/coverage/
+nextjs/test-results/
 
 # Other
 .env
