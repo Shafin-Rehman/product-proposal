@@ -5,29 +5,6 @@ import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
-const HEADER_COPY = {
-  '/dashboard': {
-    eyebrow: 'Your foundation',
-    title: 'A softer way to keep an eye on money',
-    description: 'The shell is live, your session is in place, and the first real budget surfaces are ready for data to plug into next.',
-  },
-  '/transactions': {
-    eyebrow: 'Activity flow',
-    title: 'Transactions are about to feel much lighter',
-    description: 'This is where your recent spending and incoming cash will land once the capture flows are wired into the interface.',
-  },
-  '/insights': {
-    eyebrow: 'Pattern finder',
-    title: 'Insights will turn habits into something readable',
-    description: 'The structure is ready for trend stories, category breakdowns, and gentle guidance once live numbers start flowing in.',
-  },
-  '/account': {
-    eyebrow: 'Your setup',
-    title: 'Account details stay simple and calm',
-    description: 'Use this space for session details, appearance preferences, and the essentials that keep the app feeling like yours.',
-  },
-}
-
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/transactions', label: 'Transactions', icon: 'transactions' },
@@ -38,9 +15,12 @@ const NAV_ITEMS = [
 function AppLoadingShell() {
   return (
     <div className="route-shell-loading">
-      <section className="route-shell-loading__card surface-card">
+      <div className="route-shell-loading__glow route-shell-loading__glow--top" />
+      <div className="route-shell-loading__glow route-shell-loading__glow--bottom" />
+      <section className="route-shell-loading__card">
         <span className="brand-pill">BudgetBuddy</span>
-        <p>Loading your private shell and making sure we still have your session in place.</p>
+        <h1>Loading your budget space</h1>
+        <p>Checking your session and restoring the app shell.</p>
       </section>
     </div>
   )
@@ -51,35 +31,35 @@ function TabIcon({ icon }) {
     case 'dashboard':
       return (
         <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-          <rect height="7" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="7" x="3.5" y="4.5" />
-          <rect height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="7" x="13.5" y="4.5" />
-          <rect height="7" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="7" x="13.5" y="16.5" />
-          <rect height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="7" x="3.5" y="13.5" />
+          <rect height="6.5" rx="2.2" stroke="currentColor" strokeWidth="1.7" width="6.5" x="4" y="4" />
+          <rect height="9.5" rx="2.2" stroke="currentColor" strokeWidth="1.7" width="6.5" x="13.5" y="4" />
+          <rect height="6.5" rx="2.2" stroke="currentColor" strokeWidth="1.7" width="6.5" x="13.5" y="13.5" />
+          <rect height="9.5" rx="2.2" stroke="currentColor" strokeWidth="1.7" width="6.5" x="4" y="10.5" />
         </svg>
       )
     case 'transactions':
       return (
         <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-          <path d="M6 7.25h12" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M6 12h12" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M6 16.75h7" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M16.25 14.25l2.25 2.5 3.25-4.25" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+          <path d="M5 8h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M5 12h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M5 16h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <circle cx="17.5" cy="12" fill="currentColor" r="1.2" />
         </svg>
       )
     case 'insights':
       return (
         <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-          <path d="M4.75 18.25h14.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M7 16V9.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M12 16V5.75" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-          <path d="M17 16v-3.75" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M5 18.5h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M8 16V9.25" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M12 16V6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M16 16v-4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
         </svg>
       )
     default:
       return (
         <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-          <circle cx="12" cy="8" r="3.25" stroke="currentColor" strokeWidth="1.8" />
-          <path d="M5.75 19.25c1.15-2.95 3.45-4.5 6.25-4.5s5.1 1.55 6.25 4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M6 19.25c1.35-2.8 3.35-4.25 6-4.25s4.65 1.45 6 4.25" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
         </svg>
       )
   }
@@ -88,9 +68,7 @@ function TabIcon({ icon }) {
 export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isReady, isAuthenticated, user } = useAuth()
-  const header = HEADER_COPY[pathname] ?? HEADER_COPY['/dashboard']
-  const firstName = user?.email?.split('@')[0]
+  const { isReady, isAuthenticated } = useAuth()
 
   useEffect(() => {
     if (!isReady || isAuthenticated) return
@@ -103,37 +81,30 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="app-shell">
+      <div className="app-shell__backdrop" />
       <div className="app-shell__frame">
-        <header className="app-header">
-          <div className="app-header__top">
-            <span className="brand-pill">BudgetBuddy</span>
-            <span className="info-chip">
-              <strong>{firstName ? `${firstName}, you're in.` : "You're signed in."}</strong>
-            </span>
-          </div>
-          <div className="section-kicker">{header.eyebrow}</div>
-          <h1 className="app-header__title">{header.title}</h1>
-          <p className="app-header__copy">{header.description}</p>
-        </header>
-
-        <main className="page-stack">{children}</main>
+        <main className="app-shell__content">{children}</main>
+        <div className="app-shell__nav">
+          <nav aria-label="Primary" className="bottom-nav">
+            {NAV_ITEMS.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`tab-link${isActive ? ' tab-link--active' : ''}`}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <span className="tab-link__icon">
+                    <TabIcon icon={item.icon} />
+                  </span>
+                  <span className="tab-link__label">{item.label}</span>
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
       </div>
-
-      <nav aria-label="Primary" className="bottom-nav">
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              className={`tab-link${isActive ? ' tab-link--active' : ''}`}
-              href={item.href}
-              key={item.href}
-            >
-              <TabIcon icon={item.icon} />
-              <span className="tab-link__label">{item.label}</span>
-            </Link>
-          )
-        })}
-      </nav>
     </div>
   )
 }
