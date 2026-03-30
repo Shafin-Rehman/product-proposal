@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth, useDataMode } from '@/components/providers'
-import { ApiError, apiGet } from '@/lib/apiClient'
+import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
+import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
 import {
   DEMO_MONTH,
   demoActivity,
@@ -21,9 +21,8 @@ import {
   formatShortDate,
   getCurrentMonthStart,
 } from '@/lib/financeUtils'
-
 const PREVIEW_LIMIT = 4
-const INCOME_LIMIT = 2
+const INCOME_LIMIT = 4
 const CHART_WIDTH = 312
 const CHART_HEIGHT = 148
 const CHART_INSET = 18
@@ -185,14 +184,15 @@ function getTrendPoint(points, width, height, inset, maxValue, index = points.le
 
 function buildLiveCategoryCards(breakdown = [], totalExpenses = 0) {
   return breakdown.map((item) => {
-    const visual = getCategoryVisual(item.category_name || 'Uncategorized')
+    const displayName = item.category_name || 'Uncategorized'
+    const visual = getCategoryVisual(displayName)
     const amount = Number(item.total_amount ?? 0)
     const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: visual.label,
-      symbol: visual.symbol,
+      name: displayName,
+      symbol: item.category_icon || visual.symbol,
       color: visual.color,
       soft: visual.soft,
       progress: Math.min(share, 100),
@@ -222,6 +222,7 @@ export default function DashboardView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
   const { isSampleMode } = useDataMode()
+  const { dataChangedToken } = useDataChanged()
   const [currentMonth] = useState(getCurrentMonthStart)
   const [reloadToken, setReloadToken] = useState(0)
   const [liveState, setLiveState] = useState({
@@ -232,6 +233,10 @@ export default function DashboardView() {
     expenses: [],
     income: [],
   })
+  const [isBudgetSheetOpen, setIsBudgetSheetOpen] = useState(false)
+  const [budgetDraft, setBudgetDraft] = useState({ monthly_limit: '' })
+  const [isBudgetSaving, setIsBudgetSaving] = useState(false)
+  const [budgetSaveError, setBudgetSaveError] = useState('')
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -316,7 +321,45 @@ export default function DashboardView() {
     })
 
     return () => controller.abort()
-  }, [currentMonth, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [currentMonth, dataChangedToken, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+
+  const openBudgetSheet = () => {
+    const currentLimit = isSampleMode
+      ? demoBudgetSummary?.monthly_limit
+      : liveState.summary?.monthly_limit
+    setBudgetDraft({ monthly_limit: currentLimit ? String(currentLimit) : '' })
+    setBudgetSaveError('')
+    setIsBudgetSheetOpen(true)
+  }
+
+  const closeBudgetSheet = () => {
+    setIsBudgetSheetOpen(false)
+    setBudgetSaveError('')
+  }
+
+  const handleSaveBudget = async () => {
+    if (isBudgetSaving) return
+    setIsBudgetSaving(true)
+    setBudgetSaveError('')
+    try {
+      await apiPost(
+        '/api/budget',
+        { month: currentMonth, monthly_limit: Number(budgetDraft.monthly_limit) },
+        { accessToken: session.accessToken }
+      )
+      closeBudgetSheet()
+      setReloadToken((value) => value + 1)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        logout()
+        router.replace('/login')
+        return
+      }
+      setBudgetSaveError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
+    } finally {
+      setIsBudgetSaving(false)
+    }
+  }
 
   if (!isReady || !session?.accessToken) {
     return null
@@ -368,16 +411,10 @@ export default function DashboardView() {
   const currentPoint = getTrendPoint(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
   const currentPointLeft = currentPoint ? `${(currentPoint.x / CHART_WIDTH) * 100}%` : '50%'
   const currentPointTop = currentPoint ? `${(currentPoint.y / CHART_HEIGHT) * 100}%` : '50%'
-  const balance = Number(summary?.total_income ?? 0) - Number(summary?.total_expenses ?? 0)
   const firstName = getFirstName(session?.user?.email)
-  const remainingBudget = Number(summary?.remaining_budget ?? 0)
-  const budgetStatus = heroState.budget
-    ? remainingBudget >= 0
-      ? `${formatCurrency(remainingBudget)} left in budget`
-      : `${formatCurrency(Math.abs(remainingBudget))} over budget`
-    : 'Budget not set'
 
   return (
+    <>
     <section className="app-screen dashboard-screen">
       <div className="screen-topline">
         <div className="screen-persona">
@@ -403,7 +440,14 @@ export default function DashboardView() {
             <h2 className="budget-hero__value">{heroState.value}</h2>
             <p className="budget-hero__suffix">{heroState.supportingText}</p>
           </div>
-          <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
+            <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+            {!isSampleMode && (
+              <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
+                {heroState.budget ? 'Edit budget' : 'Set budget'}
+              </button>
+            )}
+          </div>
         </div>
 
         {trendPoints.length ? (
@@ -432,7 +476,7 @@ export default function DashboardView() {
                 />
               ) : null}
             </svg>
-            {overrunAmount > 0 && currentPoint ? (
+            {currentPoint && trendPoints.length ? (
               <div
                 className="budget-hero__callout"
                 style={{
@@ -440,7 +484,7 @@ export default function DashboardView() {
                   top: currentPointTop,
                 }}
               >
-                {formatCurrency(overrunAmount)} over pace
+                {formatCurrency(trendPoints.at(-1) ?? 0)} spent
               </div>
             ) : null}
           </div>
@@ -546,60 +590,142 @@ export default function DashboardView() {
           )}
         </section>
 
-        <article className="dashboard-panel dashboard-pocket">
-          <div className="dashboard-pocket__header">
-            <div>
-              <span className="dashboard-pocket__eyebrow">Income support</span>
-              <h2 className="dashboard-pocket__title">{formatCurrency(summary?.total_income ?? 0)}</h2>
-              <p className="dashboard-pocket__summary">{budgetStatus}</p>
-            </div>
-            <span className={`dashboard-pocket__trend${balance < 0 ? ' dashboard-pocket__trend--negative' : ''}`}>
-              {balance < 0 ? `${formatCurrency(Math.abs(balance))} behind` : `${formatCurrency(balance)} ahead`}
-            </span>
+        <section className="section-block dashboard-panel dashboard-panel--income">
+          <div className="section-headline">
+            <h2>Recent income</h2>
+            <Link className="section-link" href="/transactions">
+              View all
+            </Link>
           </div>
 
-          <div className="dashboard-pocket__stats">
-            <div className="dashboard-pocket__metric">
-              <span>Tracked</span>
-              <strong>{formatCurrency(summary?.total_income ?? 0)}</strong>
-            </div>
-            <div className="dashboard-pocket__metric">
-              <span>Net</span>
-              <strong>{formatCurrency(balance)}</strong>
-            </div>
-          </div>
-
-          <div className="dashboard-pocket__list">
-            {recentIncome.length ? recentIncome.map((entry) => {
-              const visual = getEntryVisual(entry)
-              return (
-                <div
-                  className="dashboard-pocket__row"
-                  key={entry.id}
-                  style={{
-                    '--entry-color': visual.color,
-                    '--entry-soft': visual.soft,
-                  }}
-                >
-                  <div className="entry-avatar entry-avatar--small">
-                    <span>{visual.symbol}</span>
+          {recentIncome.length ? (
+            <div className="activity-feed">
+              {recentIncome.map((entry) => {
+                const visual = getEntryVisual(entry)
+                return (
+                  <div
+                    className="activity-feed__row"
+                    key={entry.id}
+                    style={{
+                      '--entry-color': visual.color,
+                      '--entry-soft': visual.soft,
+                    }}
+                  >
+                    <div className="entry-avatar">
+                      <span>{visual.symbol}</span>
+                    </div>
+                    <div className="entry-main">
+                      <strong>{entry.title}</strong>
+                      <div className="entry-meta">
+                        <span className="entry-chip">{entry.chip}</span>
+                        <span>{formatShortDate(entry.occurredOn)}</span>
+                      </div>
+                    </div>
+                    <div className="entry-amount entry-amount--income">
+                      +{formatCurrency(entry.amount)}
+                    </div>
                   </div>
-                  <div className="dashboard-pocket__copy">
-                    <strong>{entry.title}</strong>
-                    <span>{entry.note || formatMonthPeriod(entry.occurredOn)}</span>
-                  </div>
-                  <div className="entry-amount entry-amount--income">+{formatCurrency(entry.amount)}</div>
-                </div>
-              )
-            }) : (
-              <div className="blank-state blank-state--compact">
-                <strong>No income rows yet</strong>
-                <span>Income deposits will show up here as they land.</span>
-              </div>
-            )}
-          </div>
-        </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="blank-state blank-state--compact">
+              <strong>No income yet</strong>
+              <span>Income entries will show up here as they land.</span>
+            </div>
+          )}
+        </section>
       </div>
     </section>
+
+      {isBudgetSheetOpen ? (
+        <div className="detail-overlay" role="presentation">
+          <button
+            aria-label="Close budget settings"
+            className="detail-overlay__backdrop"
+            onClick={closeBudgetSheet}
+            type="button"
+          />
+          <div aria-labelledby="budget-sheet-title" aria-modal="true" className="detail-sheet entry-sheet" role="dialog">
+            <div className="detail-sheet__handle" />
+
+            <div
+              className="detail-sheet__hero entry-sheet__hero"
+              style={{ '--entry-color': 'var(--accent-strong)', '--entry-soft': 'var(--accent-soft)' }}
+            >
+              <div className="entry-avatar entry-avatar--large">
+                <span>◎</span>
+              </div>
+              <div className="detail-sheet__copy">
+                <span className="entry-chip">{formatMonthPeriod(currentMonth)}</span>
+                <h2 className="detail-sheet__title" id="budget-sheet-title">
+                  {heroState.budget ? 'Edit budget' : 'Set budget'}
+                </h2>
+                <p className="detail-sheet__subtitle">
+                  Monthly spending limit for {formatMonthPeriod(currentMonth)}
+                </p>
+              </div>
+              <button className="button-secondary page-retry" onClick={closeBudgetSheet} type="button">
+                Close
+              </button>
+            </div>
+
+            <div className="entry-sheet__amount">
+              <span className="entry-amount entry-amount--expense">
+                {budgetDraft.monthly_limit ? formatCurrency(Number(budgetDraft.monthly_limit)) : '$0.00'}
+              </span>
+              <small>Monthly limit</small>
+            </div>
+
+            <form
+              className="entry-sheet__form"
+              onSubmit={(event) => { event.preventDefault(); handleSaveBudget() }}
+            >
+              <label className="entry-sheet__field">
+                <span>Monthly limit ($)</span>
+                <input
+                  className="input-field"
+                  inputMode="decimal"
+                  min="1"
+                  onChange={(event) => setBudgetDraft({ monthly_limit: event.target.value })}
+                  placeholder="e.g. 2000"
+                  type="number"
+                  value={budgetDraft.monthly_limit}
+                />
+              </label>
+
+              <div className="entry-sheet__footer">
+                {budgetSaveError ? (
+                  <div className="inline-error" role="alert">{budgetSaveError}</div>
+                ) : (
+                  <span className="entry-sheet__hint">
+                    {heroState.budget
+                      ? `Current limit: ${formatCurrency(heroState.budget)}. Changes take effect immediately.`
+                      : 'Setting a limit enables the budget tracker and spending trend.'}
+                  </span>
+                )}
+                <div className="entry-sheet__actions">
+                  <button
+                    className="button-secondary"
+                    disabled={isBudgetSaving}
+                    onClick={closeBudgetSheet}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button-primary"
+                    disabled={isBudgetSaving || !budgetDraft.monthly_limit || Number(budgetDraft.monthly_limit) <= 0}
+                    type="submit"
+                  >
+                    {isBudgetSaving ? 'Saving...' : heroState.budget ? 'Update budget' : 'Set budget'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }

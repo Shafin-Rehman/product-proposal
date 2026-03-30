@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { clearSession, readSession, writeSession } from '@/lib/session'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
@@ -8,6 +8,7 @@ const DATA_MODE_STORAGE_KEY = 'budgetbuddy.data-mode'
 const AuthContext = createContext(null)
 const ThemeContext = createContext(null)
 const DataModeContext = createContext(null)
+const DataChangedContext = createContext(null)
 
 function setDocumentTheme(theme) {
   document.documentElement.dataset.theme = theme
@@ -115,11 +116,25 @@ function DataModeProvider({ children }) {
   return <DataModeContext.Provider value={value}>{children}</DataModeContext.Provider>
 }
 
+function DataChangedProvider({ children }) {
+  const [token, setToken] = useState(0)
+
+  const notifyDataChanged = useCallback(() => {
+    setToken((n) => n + 1)
+  }, [])
+
+  const value = useMemo(() => ({ dataChangedToken: token, notifyDataChanged }), [token, notifyDataChanged])
+
+  return <DataChangedContext.Provider value={value}>{children}</DataChangedContext.Provider>
+}
+
 export function AppProviders({ children }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <DataModeProvider>{children}</DataModeProvider>
+        <DataModeProvider>
+          <DataChangedProvider>{children}</DataChangedProvider>
+        </DataModeProvider>
       </AuthProvider>
     </ThemeProvider>
   )
@@ -140,5 +155,11 @@ export function useTheme() {
 export function useDataMode() {
   const context = useContext(DataModeContext)
   if (!context) throw new Error('useDataMode must be used within AppProviders')
+  return context
+}
+
+export function useDataChanged() {
+  const context = useContext(DataChangedContext)
+  if (!context) throw new Error('useDataChanged must be used within AppProviders')
   return context
 }

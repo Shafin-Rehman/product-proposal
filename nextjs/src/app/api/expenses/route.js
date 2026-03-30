@@ -8,7 +8,7 @@ export async function GET(request) {
   if (error) return error
   try {
     const { rows } = await db.query(
-      `SELECT e.*, c.name AS category_name
+      `SELECT e.*, c.name AS category_name, c.icon AS category_icon
        FROM public.expenses e
        LEFT JOIN public.categories c ON e.category_id = c.id
        WHERE e.user_id = $1

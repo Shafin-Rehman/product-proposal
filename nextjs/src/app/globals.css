@@ -440,6 +440,30 @@ html[data-theme='dark'] .auth-shell__glow--right {
   color: var(--text-primary);
 }
 
+.button-danger {
+  background: var(--danger-soft);
+  border: 1px solid rgba(183, 95, 103, 0.22);
+  color: var(--danger);
+  min-height: 3.35rem;
+  border-radius: 1.2rem;
+  font-weight: 800;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease,
+    background 180ms ease;
+}
+
+.button-danger:hover {
+  background: rgba(183, 95, 103, 0.2);
+  transform: translateY(-1px);
+}
+
+.button-danger:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
 .button-row {
   display: flex;
   gap: 0.8rem;
@@ -4647,7 +4671,7 @@ html[data-theme='dark'] .insight-flow__stat {
 
 .budget-hero__chart {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: 0.55rem 0.2rem 0.15rem;
 }
 
@@ -4668,7 +4692,7 @@ html[data-theme='dark'] .insight-flow__stat {
   font-size: 0.76rem;
   font-weight: 800;
   line-height: 1;
-  transform: translate(-92%, -122%);
+  transform: translate(-100%, calc(-100% - 0.5rem));
   white-space: nowrap;
   animation: fade-in 420ms ease both;
 }
