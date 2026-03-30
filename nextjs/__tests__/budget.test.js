@@ -122,13 +122,31 @@ describe('GET /api/budget', () => {
 describe('POST /api/budget', () => {
   it('upserts a monthly budget and returns notified when spending reaches the limit', async () => {
     budget.upsertMonthlyBudget.mockResolvedValueOnce({ month: '2026-03-01', monthly_limit: '100.00', notified: false })
-    budget.evaluateThresholdForMonth.mockResolvedValueOnce({ notified: true })
+    budget.evaluateThresholdForMonth.mockResolvedValueOnce({
+      notified: true,
+      budget_alert: {
+        month: '2026-03-01',
+        monthly_limit: '100.00',
+        total_expenses: '100.00',
+        threshold_exceeded: true,
+      },
+    })
     await testApiHandler({
       appHandler: budgetHandler,
       async test({ fetch }) {
         const res = await fetch(post({ month: '2026-03-01', monthly_limit: 100 }))
         expect(res.status).toBe(200)
-        expect(await res.json()).toEqual({ month: '2026-03-01', monthly_limit: '100.00', notified: true })
+        expect(await res.json()).toEqual({
+          month: '2026-03-01',
+          monthly_limit: '100.00',
+          notified: true,
+          budget_alert: {
+            month: '2026-03-01',
+            monthly_limit: '100.00',
+            total_expenses: '100.00',
+            threshold_exceeded: true,
+          },
+        })
       }
     })
   })
@@ -244,7 +262,7 @@ describe('budget helper threshold boundary', () => {
     })
   })
 
-  it('triggers a budget alert when spending reaches the limit for the first time', async () => {
+  it('triggers a budget alert when spending reaches the limit', async () => {
     db.query
       .mockResolvedValueOnce({
         rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: false }]
@@ -277,5 +295,31 @@ describe('budget helper threshold boundary', () => {
       expect.stringContaining('UPDATE public.budget_thresholds'),
       ['uid', '2026-03-01', true]
     )
+  })
+
+  it('does not return a new budget alert when already over the limit and already notified', async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: true }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_expenses: '120.00' }]
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total_income: '0.00' }]
+      })
+
+    const result = await actualBudget.evaluateThresholdForMonth('uid', '2026-03-25')
+
+    expect(result).toEqual({
+      month: '2026-03-01',
+      monthly_limit: '100.00',
+      total_expenses: '120.00',
+      threshold_exceeded: true,
+      notified: true,
+      alertTriggered: false,
+      budget_alert: null,
+    })
+    expect(db.query).toHaveBeenCalledTimes(3)
   })
 })
