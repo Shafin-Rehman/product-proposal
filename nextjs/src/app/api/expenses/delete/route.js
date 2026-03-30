@@ -24,8 +24,8 @@ export async function POST(request) {
       [expense_id, user.id]
     )
     if (!rows.length) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
-    await evaluateThresholdForMonth(user.id, existingResult.rows[0].date)
-    return new Response(null, { status: 204 })
+    const threshold = await evaluateThresholdForMonth(user.id, existingResult.rows[0].date)
+    return NextResponse.json({ id: rows[0].id, budget_alert: threshold?.budget_alert ?? null })
   } catch {
     return NextResponse.json({ error: 'Failed to delete expense' }, { status: 500 })
   }

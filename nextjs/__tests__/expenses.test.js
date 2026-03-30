@@ -213,15 +213,17 @@ describe('POST /api/expenses/update', () => {
 })
 
 describe('POST /api/expenses/delete', () => {
-  it('204 - deleted', async () => {
+  it('200 - deleted with budget alert status', async () => {
     db.query
       .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
       .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+    evaluateThresholdForMonth.mockResolvedValueOnce({ budget_alert: null, alertTriggered: false })
     await testApiHandler({
       appHandler: deleteHandler,
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1 }))
-        expect(res.status).toBe(204)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ id: 1, budget_alert: null })
       }
     })
     expect(evaluateThresholdForMonth).toHaveBeenCalledWith('uid', '2026-03-01')

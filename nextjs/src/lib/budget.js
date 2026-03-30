@@ -3,6 +3,13 @@ import db from './db'
 const MONTH_PATTERN = /^\d{4}-\d{2}(-\d{2})?$/
 
 function toMonthStart(value) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null
+    value = `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`
+  }
+  if (typeof value === 'string' && value.includes('T')) {
+    value = value.slice(0, 10)
+  }
   if (typeof value !== 'string' || !MONTH_PATTERN.test(value)) return null
 
   const [yearPart, monthPart, dayPart = '01'] = value.split('-')
@@ -53,7 +60,12 @@ export async function upsertMonthlyBudget(userId, month, monthlyLimit) {
     `INSERT INTO public.budget_thresholds (user_id, month, monthly_limit)
      VALUES ($1, $2, $3)
      ON CONFLICT (user_id, month)
-     DO UPDATE SET monthly_limit = EXCLUDED.monthly_limit
+     DO UPDATE SET
+       monthly_limit = EXCLUDED.monthly_limit,
+       notified = CASE
+         WHEN budget_thresholds.monthly_limit IS DISTINCT FROM EXCLUDED.monthly_limit THEN false
+         ELSE budget_thresholds.notified
+       END
      RETURNING month, monthly_limit, notified`,
     [userId, month, monthlyLimit]
   )
@@ -66,13 +78,13 @@ export async function getMonthlyTotals(userId, month) {
 
   const [expenseResult, incomeResult] = await Promise.all([
     db.query(
-      `SELECT COALESCE(SUM(amount), 0)::TEXT AS total_expenses
+      `SELECT COALESCE(SUM(amount), 0.00)::TEXT AS total_expenses
        FROM public.expenses
        WHERE user_id = $1 AND date >= $2 AND date < $3`,
       [userId, month, endMonth]
     ),
     db.query(
-      `SELECT COALESCE(SUM(amount), 0)::TEXT AS total_income
+      `SELECT COALESCE(SUM(amount), 0.00)::TEXT AS total_income
        FROM public.income
        WHERE user_id = $1 AND month = $2`,
       [userId, month]
@@ -93,7 +105,7 @@ export async function buildBudgetSummary(userId, month) {
 
   const totalExpenses = Number(totals.total_expenses)
   const monthlyLimit = budget?.monthly_limit == null ? null : String(budget.monthly_limit)
-  const thresholdExceeded = monthlyLimit == null ? false : totalExpenses > Number(monthlyLimit)
+  const thresholdExceeded = monthlyLimit == null ? false : totalExpenses >= Number(monthlyLimit)
 
   return {
     month,
@@ -116,7 +128,7 @@ export async function evaluateThresholdForMonth(userId, rawMonth) {
   const totals = await getMonthlyTotals(userId, month)
   const totalExpenses = Number(totals.total_expenses)
   const monthlyLimit = String(budget.monthly_limit)
-  const thresholdExceeded = totalExpenses > Number(monthlyLimit)
+  const thresholdExceeded = totalExpenses >= Number(monthlyLimit)
   const alertTriggered = thresholdExceeded && !budget.notified
 
   if (budget.notified !== thresholdExceeded) {
