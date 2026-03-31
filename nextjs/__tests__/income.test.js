@@ -1,12 +1,12 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({ signUp: jest.fn(), signIn: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
-jest.mock('@/lib/budget', () => ({ normalizeMonth: jest.fn() }))
+jest.mock('@/lib/budget', () => ({ normalizeDate: jest.fn() }))
 
 const { testApiHandler } = require('next-test-api-route-handler')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
-const { normalizeMonth } = require('@/lib/budget')
+const { normalizeDate } = require('@/lib/budget')
 const incomeHandler = require('@/app/api/income/route')
 const categoriesHandler = require('@/app/api/income/categories/route')
 const getHandler = require('@/app/api/income/get/route')
@@ -18,39 +18,39 @@ const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: {
 beforeEach(() => {
   db.query.mockClear()
   authenticate.mockClear()
-  normalizeMonth.mockClear()
+  normalizeDate.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
-  normalizeMonth.mockImplementation(value => value)
+  normalizeDate.mockImplementation((value) => value)
 })
 
 describe('POST /api/income', () => {
-  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', month: '2026-03-01', notes: null, created_at: '2026-03-01T10:00:00Z' }
+  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', date: '2026-03-15', notes: null, created_at: '2026-03-01T10:00:00Z' }
 
   it('creates income entry and strips user_id from response', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
     await testApiHandler({
       appHandler: incomeHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ amount: 3000, month: '2026-03-01' }))
+        const res = await fetch(post({ amount: 3000, date: '2026-03-15' }))
         expect(res.status).toBe(201)
         const body = await res.json()
-        expect(body).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', month: '2026-03-01' })
+        expect(body).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', date: '2026-03-15' })
         expect(body).not.toHaveProperty('user_id')
       }
     })
   })
 
-  it('normalizes the stored month to month-start', async () => {
-    normalizeMonth.mockReturnValueOnce('2026-03-01')
+  it('normalizes the stored date', async () => {
+    normalizeDate.mockReturnValueOnce('2026-03-15')
     db.query.mockResolvedValueOnce({ rows: [row] })
     await testApiHandler({
       appHandler: incomeHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ amount: 3000, month: '2026-03-15' }))
+        const res = await fetch(post({ amount: 3000, date: '2026-03-15T08:45:00Z' }))
         expect(res.status).toBe(201)
         expect(db.query).toHaveBeenCalledWith(
           expect.stringContaining('INSERT INTO public.income'),
-          ['uid', null, 3000, '2026-03-01', null]
+          ['uid', null, 3000, '2026-03-15', null]
         )
       }
     })
@@ -60,43 +60,42 @@ describe('POST /api/income', () => {
     await testApiHandler({
       appHandler: incomeHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ month: '2026-03-01' }))
+        const res = await fetch(post({ date: '2026-03-15' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount and month are required')
+        expect((await res.json()).error).toBe('amount and date are required')
       }
     })
   })
 
-  it('rejects request without month', async () => {
+  it('rejects request without date', async () => {
     await testApiHandler({
       appHandler: incomeHandler,
       async test({ fetch }) {
         const res = await fetch(post({ amount: 3000 }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount and month are required')
+        expect((await res.json()).error).toBe('amount and date are required')
       }
     })
   })
 
-  it('rejects request with an invalid month', async () => {
-    normalizeMonth.mockReturnValueOnce(null)
+  it('rejects request with an invalid date', async () => {
+    normalizeDate.mockReturnValueOnce(null)
     await testApiHandler({
       appHandler: incomeHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ amount: 3000, month: 'bad' }))
+        const res = await fetch(post({ amount: 3000, date: 'bad' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('Valid month is required')
+        expect((await res.json()).error).toBe('Valid date is required')
       }
     })
   })
-
 })
 
 describe('GET /api/income', () => {
-  it('returns all income entries and strips user_id from each', async () => {
+  it('returns all income entries ordered by date and strips user_id from each', async () => {
     const rows = [
-      { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', month: '2026-03-01', notes: null, source_name: 'Salary', source_icon: '💼' },
-      { id: 2, user_id: 'uid', source_id: 'src-2', amount: '500.00', month: '2026-02-01', notes: 'Side project', source_name: 'Freelance', source_icon: '💻' },
+      { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', date: '2026-03-15', notes: null, source_name: 'Salary', source_icon: '💼' },
+      { id: 2, user_id: 'uid', source_id: 'src-2', amount: '500.00', date: '2026-02-28', notes: 'Side project', source_name: 'Freelance', source_icon: '💻' },
     ]
     db.query.mockResolvedValueOnce({ rows })
     await testApiHandler({
@@ -106,9 +105,13 @@ describe('GET /api/income', () => {
         expect(res.status).toBe(200)
         const body = await res.json()
         expect(body).toHaveLength(2)
-        expect(body[0]).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', source_name: 'Salary' })
-        expect(body[1]).toMatchObject({ id: 2, source_id: 'src-2', notes: 'Side project', source_name: 'Freelance' })
-        body.forEach(i => expect(i).not.toHaveProperty('user_id'))
+        expect(body[0]).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', date: '2026-03-15', source_name: 'Salary' })
+        expect(body[1]).toMatchObject({ id: 2, source_id: 'src-2', notes: 'Side project', date: '2026-02-28', source_name: 'Freelance' })
+        body.forEach((income) => expect(income).not.toHaveProperty('user_id'))
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('ORDER BY i.date DESC, i.created_at DESC'),
+          ['uid']
+        )
       }
     })
   })
@@ -159,7 +162,7 @@ describe('GET /api/income/categories', () => {
 })
 
 describe('POST /api/income/get', () => {
-  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', month: '2026-03-01', notes: null, source_name: 'Salary', source_icon: '💼' }
+  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3000.00', date: '2026-03-15', notes: null, source_name: 'Salary', source_icon: '💼' }
 
   it('returns income entry and strips user_id from response', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
@@ -169,7 +172,7 @@ describe('POST /api/income/get', () => {
         const res = await fetch(post({ income_id: 1 }))
         expect(res.status).toBe(200)
         const body = await res.json()
-        expect(body).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', source_name: 'Salary' })
+        expect(body).toMatchObject({ id: 1, source_id: 'src-1', amount: '3000.00', date: '2026-03-15', source_name: 'Salary' })
         expect(body).not.toHaveProperty('user_id')
       }
     })
@@ -200,7 +203,7 @@ describe('POST /api/income/get', () => {
 })
 
 describe('POST /api/income/update', () => {
-  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3500.00', month: '2026-03-01', notes: null }
+  const row = { id: 1, user_id: 'uid', source_id: 'src-1', amount: '3500.00', date: '2026-03-22', notes: null }
 
   it('updates amount and strips user_id from response', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
@@ -210,23 +213,23 @@ describe('POST /api/income/update', () => {
         const res = await fetch(post({ income_id: 1, amount: 3500 }))
         expect(res.status).toBe(200)
         const body = await res.json()
-        expect(body).toMatchObject({ id: 1, amount: '3500.00' })
+        expect(body).toMatchObject({ id: 1, amount: '3500.00', date: '2026-03-22' })
         expect(body).not.toHaveProperty('user_id')
       }
     })
   })
 
-  it('normalizes month during update', async () => {
-    normalizeMonth.mockReturnValueOnce('2026-03-01')
+  it('normalizes date during update', async () => {
+    normalizeDate.mockReturnValueOnce('2026-03-22')
     db.query.mockResolvedValueOnce({ rows: [row] })
     await testApiHandler({
       appHandler: updateHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ income_id: 1, month: '2026-03-22' }))
+        const res = await fetch(post({ income_id: 1, date: '2026-03-22T09:15:00Z' }))
         expect(res.status).toBe(200)
         expect(db.query).toHaveBeenCalledWith(
           expect.stringContaining('UPDATE public.income SET'),
-          ['2026-03-01', 1, 'uid']
+          ['2026-03-22', 1, 'uid']
         )
       }
     })
@@ -254,14 +257,14 @@ describe('POST /api/income/update', () => {
     })
   })
 
-  it('rejects update with an invalid month', async () => {
-    normalizeMonth.mockReturnValueOnce(null)
+  it('rejects update with an invalid date', async () => {
+    normalizeDate.mockReturnValueOnce(null)
     await testApiHandler({
       appHandler: updateHandler,
       async test({ fetch }) {
-        const res = await fetch(post({ income_id: 1, month: 'bad' }))
+        const res = await fetch(post({ income_id: 1, date: 'bad' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('Valid month is required')
+        expect((await res.json()).error).toBe('Valid date is required')
       }
     })
   })

@@ -213,9 +213,9 @@ export function buildActivityFeed(expenses = [], income = []) {
       title: sourceName,
       chip: displayCategory,
       amount: Number(entry.amount ?? 0),
-      occurredOn: entry.created_at || entry.month,
-      sortOn: parseCalendarDate(entry.created_at || entry.month)?.getTime() ?? 0,
-      note: notes || formatMonthPeriod(entry.month),
+      occurredOn: entry.date || entry.created_at,
+      sortOn: parseCalendarDate(entry.date || entry.created_at)?.getTime() ?? 0,
+      note: notes || '',
       merchant: sourceName,
       raw: entry,
     }
@@ -247,7 +247,7 @@ export function buildIncomeSourceBreakdown(incomeEntries = [], month) {
   const grouped = new Map()
 
   incomeEntries
-    .filter((entry) => isInMonth(entry.month || entry.created_at, month))
+    .filter((entry) => isInMonth(entry.date || entry.created_at, month))
     .forEach((entry) => {
       const label = entry?.source_name || 'Income'
       grouped.set(label, (grouped.get(label) || 0) + Number(entry.amount ?? 0))

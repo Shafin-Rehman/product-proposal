@@ -260,6 +260,11 @@ describe('budget helper threshold boundary', () => {
       threshold_exceeded: true,
       notified: false,
     })
+    expect(db.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('WHERE user_id = $1 AND date >= $2 AND date < $3'),
+      ['uid', '2026-03-01', '2026-04-01']
+    )
   })
 
   it('triggers a budget alert when spending reaches the limit', async () => {

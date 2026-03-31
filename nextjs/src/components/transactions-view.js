@@ -452,7 +452,7 @@ export default function TransactionsView() {
         const sourceId = incomeCategories.find((c) => c.name === entryDraft.category)?.id
         const body = {
           amount: Number(entryDraft.amount),
-          month: `${entryDraft.occurredOn.slice(0, 7)}-01`,
+          date: entryDraft.occurredOn,
           notes: (entryDraft.note.trim() || entryDraft.counterparty.trim()) || undefined,
           ...(sourceId ? { source_id: sourceId } : {}),
         }

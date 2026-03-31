@@ -90,9 +90,15 @@ describe('buildActivityFeed', () => {
 
   it('sorts combined entries with the most recent first', () => {
     const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-05' }]
-    const income = [{ id: 'i1', amount: '2000.00', month: '2026-03-01', created_at: '2026-03-20', source_name: 'Payroll' }]
+    const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01', source_name: 'Payroll' }]
     const feed = buildActivityFeed(expenses, income)
     expect(feed[0].kind).toBe('income')
+  })
+
+  it('does not invent a month-style note for income entries without notes', () => {
+    const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', source_name: 'Payroll' }]
+    const [entry] = buildActivityFeed([], income)
+    expect(entry.note).toBe('')
   })
 })
 
@@ -113,9 +119,9 @@ describe('groupActivityByDate', () => {
 describe('buildIncomeSourceBreakdown', () => {
   it('groups by source, sums amounts, and ignores entries outside the month', () => {
     const income = [
-      { id: 1, source_name: 'Payroll', amount: '2000.00', month: '2026-03-01' },
-      { id: 2, source_name: 'Payroll', amount: '500.00', month: '2026-03-01' },
-      { id: 3, source_name: 'Freelance', amount: '800.00', month: '2026-02-01' },
+      { id: 1, source_name: 'Payroll', amount: '2000.00', date: '2026-03-03' },
+      { id: 2, source_name: 'Payroll', amount: '500.00', date: '2026-03-18' },
+      { id: 3, source_name: 'Freelance', amount: '800.00', date: '2026-02-28' },
     ]
     const result = buildIncomeSourceBreakdown(income, '2026-03-01')
     expect(result).toHaveLength(1)

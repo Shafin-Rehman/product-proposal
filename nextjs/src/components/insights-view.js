@@ -307,7 +307,7 @@ export default function InsightsView() {
     ? [DEMO_MONTH]
     : [
       ...liveState.expenses.map((expense) => getMonthStartValue(expense.date || expense.created_at)),
-      ...liveState.income.map((entry) => getMonthStartValue(entry.month || entry.created_at)),
+      ...liveState.income.map((entry) => getMonthStartValue(entry.date || entry.created_at)),
     ].filter(Boolean)
   const earliestMonth = availableMonths.length ? [...availableMonths].sort()[0] : currentLiveMonth
   const previousMonth = shiftMonth(activeMonth, -1)
@@ -319,7 +319,7 @@ export default function InsightsView() {
     : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, activeMonth))
   const monthlyIncome = isSampleMode
     ? []
-    : liveState.income.filter((entry) => isInMonth(entry.month || entry.created_at, activeMonth))
+    : liveState.income.filter((entry) => isInMonth(entry.date || entry.created_at, activeMonth))
   const monthlyActivity = isSampleMode
     ? demoActivity.filter((entry) => isInMonth(entry.occurredOn, activeMonth))
     : buildActivityFeed(liveState.expenses, liveState.income).filter((entry) => isInMonth(entry.occurredOn, activeMonth))
