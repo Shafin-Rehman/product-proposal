@@ -339,14 +339,29 @@ export default function InsightsView() {
         symbol: visual.symbol,
       }
     })
-    : buildLiveExpenseBreakdown(monthlyExpenses)
+    : [...(liveState.summary?.category_statuses ?? [])]
+      .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
       .slice(0, BREAKDOWN_LIMIT)
-      .map((item) => ({
-        ...item,
-        summaryLine: `This month: ${formatCurrency(item.amount)}`,
-        detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-        secondary: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-      }))
+      .map((item) => {
+        const visual = getCategoryVisual(item.category_name)
+        const spent = Number(item.spent ?? 0)
+        const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
+        return {
+          id: item.category_id ?? item.category_name,
+          name: item.category_name,
+          amount: spent,
+          summaryLine: `This month: ${formatCurrency(spent)}`,
+          detailLine: item.monthly_limit == null
+            ? 'No budget set'
+            : `Budget: ${formatCurrency(item.monthly_limit)}`,
+          secondary: item.monthly_limit == null
+            ? 'No budget set'
+            : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
+          color: visual.color,
+          soft: visual.soft,
+          symbol: item.category_icon || visual.symbol,
+        }
+      })
 
   const incomeSourceCounts = new Map()
   monthlyIncome.forEach((entry) => {
@@ -396,7 +411,9 @@ export default function InsightsView() {
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
   const spentValue = summary ? Number(summary.total_expenses ?? derivedSpent) : derivedSpent
   const incomeValue = summary ? Number(summary.total_income ?? derivedIncome) : derivedIncome
-  const budgetLimit = summary?.monthly_limit == null ? null : Number(summary.monthly_limit)
+  const budgetLimit = summary?.total_budget == null
+    ? (summary?.monthly_limit == null ? null : Number(summary.monthly_limit))
+    : Number(summary.total_budget)
   const remainingBudget = budgetLimit == null
     ? null
     : summary?.remaining_budget != null

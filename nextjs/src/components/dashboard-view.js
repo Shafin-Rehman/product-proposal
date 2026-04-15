@@ -46,7 +46,7 @@ function getFirstName(email) {
 }
 
 function getHeroState(summary) {
-  const budget = Number(summary?.monthly_limit ?? 0)
+  const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
   const spent = Number(summary?.total_expenses ?? 0)
   const income = Number(summary?.total_income ?? 0)
   const remaining = Number(summary?.remaining_budget ?? 0)
@@ -182,12 +182,13 @@ function getTrendPoint(points, width, height, inset, maxValue, index = points.le
   }
 }
 
-function buildLiveCategoryCards(breakdown = [], totalExpenses = 0) {
-  return breakdown.map((item) => {
+function buildLiveCategoryCards(categoryStatuses = []) {
+  return categoryStatuses.map((item) => {
     const displayName = item.category_name || 'Uncategorized'
     const visual = getCategoryVisual(displayName)
-    const amount = Number(item.total_amount ?? 0)
-    const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
+    const amount = Number(item.spent ?? 0)
+    const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
+    const progress = item.monthly_limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
@@ -195,9 +196,11 @@ function buildLiveCategoryCards(breakdown = [], totalExpenses = 0) {
       symbol: item.category_icon || visual.symbol,
       color: visual.color,
       soft: visual.soft,
-      progress: Math.min(share, 100),
+      progress,
       amount,
-      note: `${Math.round(share) || 0}% of spend`,
+      note: item.monthly_limit == null
+        ? 'No budget set'
+        : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
     }
   })
 }
@@ -229,7 +232,6 @@ export default function DashboardView() {
     status: 'loading',
     message: '',
     summary: null,
-    breakdown: [],
     expenses: [],
     income: [],
   })
@@ -252,10 +254,6 @@ export default function DashboardView() {
 
       const results = await Promise.allSettled([
         apiGet(`/api/budget/summary?month=${encodeURIComponent(currentMonth)}`, {
-          accessToken: session.accessToken,
-          signal: controller.signal,
-        }),
-        apiGet(`/api/expenses/breakdown?month=${encodeURIComponent(currentMonth)}`, {
           accessToken: session.accessToken,
           signal: controller.signal,
         }),
@@ -282,9 +280,8 @@ export default function DashboardView() {
       }
 
       const summaryResult = results[0]
-      const breakdownResult = results[1]
-      const expensesResult = results[2]
-      const incomeResult = results[3]
+      const expensesResult = results[1]
+      const incomeResult = results[2]
       const failedCount = results.filter((result) => result.status === 'rejected').length
 
       setLiveState({
@@ -295,7 +292,6 @@ export default function DashboardView() {
             : 'Some live sections are missing for the moment, but the rest of the month is still visible.'
           : '',
         summary: summaryResult.status === 'fulfilled' ? summaryResult.value : null,
-        breakdown: breakdownResult.status === 'fulfilled' ? breakdownResult.value : [],
         expenses: expensesResult.status === 'fulfilled' ? expensesResult.value : [],
         income: incomeResult.status === 'fulfilled' ? incomeResult.value : [],
       })
@@ -314,7 +310,6 @@ export default function DashboardView() {
         status: 'error',
         message: getErrorMessage(error),
         summary: null,
-        breakdown: [],
         expenses: [],
         income: [],
       })
@@ -387,8 +382,8 @@ export default function DashboardView() {
       }
     })
     : buildLiveCategoryCards(
-      [...liveState.breakdown].sort((left, right) => Number(right.total_amount) - Number(left.total_amount)),
-      Number(summary?.total_expenses ?? 0)
+      [...(summary?.category_statuses ?? [])]
+        .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
     )
   const heroState = getHeroState(summary)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
