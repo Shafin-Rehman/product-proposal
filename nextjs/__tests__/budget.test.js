@@ -262,7 +262,7 @@ describe('budget helper threshold boundary', () => {
     })
     expect(db.query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining('WHERE user_id = $1 AND date >= $2 AND date < $3'),
+      expect.stringMatching(/FROM public\.income[\s\S]*WHERE user_id = \$1 AND date >= \$2 AND date < \$3/),
       ['uid', '2026-03-01', '2026-04-01']
     )
   })
