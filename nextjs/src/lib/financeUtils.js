@@ -183,6 +183,17 @@ export function buildMonthlySpendTrend(expenses = [], month) {
 }
 
 export function buildActivityFeed(expenses = [], income = []) {
+  const getCreatedSortValue = (value) => {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? 0 : value.getTime()
+    }
+    if (typeof value === 'string') {
+      const timestamp = Date.parse(value)
+      if (!Number.isNaN(timestamp)) return timestamp
+    }
+    return 0
+  }
+
   const expenseEntries = expenses.map((expense) => {
     const categoryName = expense?.category_name || 'Expense'
     const description = expense?.description?.trim()
@@ -195,7 +206,7 @@ export function buildActivityFeed(expenses = [], income = []) {
       chip: displayCategory,
       amount: Number(expense.amount ?? 0),
       occurredOn: expense.date || expense.created_at,
-      sortOn: parseCalendarDate(expense.created_at || expense.date)?.getTime() ?? 0,
+      sortOn: parseCalendarDate(expense.date || expense.created_at)?.getTime() ?? 0,
       note: description ? displayCategory : 'Live expense',
       merchant: description || displayCategory,
       raw: expense,
@@ -221,7 +232,10 @@ export function buildActivityFeed(expenses = [], income = []) {
     }
   })
 
-  return [...expenseEntries, ...incomeEntries].sort((left, right) => right.sortOn - left.sortOn)
+  return [...expenseEntries, ...incomeEntries].sort((left, right) => (
+    (right.sortOn - left.sortOn) ||
+    (getCreatedSortValue(right.raw?.created_at) - getCreatedSortValue(left.raw?.created_at))
+  ))
 }
 
 export function groupActivityByDate(entries = []) {

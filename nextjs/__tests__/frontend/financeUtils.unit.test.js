@@ -89,8 +89,15 @@ describe('buildActivityFeed', () => {
   })
 
   it('sorts combined entries with the most recent first', () => {
-    const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-05' }]
-    const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01', source_name: 'Payroll' }]
+    const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-25T09:00:00Z' }]
+    const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01T09:00:00Z', source_name: 'Payroll' }]
+    const feed = buildActivityFeed(expenses, income)
+    expect(feed[0].kind).toBe('income')
+  })
+
+  it('uses created_at as a tie-breaker when occurred dates match', () => {
+    const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-20', created_at: '2026-03-20T08:00:00Z' }]
+    const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-20T09:00:00Z', source_name: 'Payroll' }]
     const feed = buildActivityFeed(expenses, income)
     expect(feed[0].kind).toBe('income')
   })
