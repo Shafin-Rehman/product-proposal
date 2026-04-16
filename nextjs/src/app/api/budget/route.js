@@ -9,6 +9,8 @@ import {
   upsertMonthlyBudget,
 } from '@/lib/budget'
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export async function GET(request) {
   const { user, error } = await authenticate(request)
   if (error) return error
@@ -56,6 +58,10 @@ export async function POST(request) {
 
   if (normalizedCategoryBudgets.some((item) => !item.category_id)) {
     return NextResponse.json({ error: 'Each category budget requires a category_id' }, { status: 400 })
+  }
+
+  if (normalizedCategoryBudgets.some((item) => typeof item.category_id !== 'string' || !UUID_PATTERN.test(item.category_id))) {
+    return NextResponse.json({ error: 'Each category budget requires a valid UUID category_id' }, { status: 400 })
   }
 
   if (normalizedCategoryBudgets.some((item) => item.monthly_limit == null || Number.isNaN(Number(item.monthly_limit)) || Number(item.monthly_limit) <= 0)) {

@@ -23,6 +23,7 @@ const breakdownHandler = require('@/app/api/expenses/breakdown/route')
 const categoriesHandler = require('@/app/api/expenses/categories/route')
 
 const authorizedUser = { id: 'uid', email: 'a@b.com' }
+const FOOD_CATEGORY_ID = '11111111-1111-4111-8111-111111111111'
 const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
 
 beforeEach(() => {
@@ -190,8 +191,8 @@ describe('POST /api/budget', () => {
   })
 
   it('upserts category budgets without requiring an overall monthly limit', async () => {
-    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: 'cat-1', name: 'Food', icon: '🍔' }])
-    budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: 'cat-1', month: '2026-03-01', monthly_limit: '40.00' }])
+    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID, name: 'Food', icon: '🍔' }])
+    budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01', monthly_limit: '40.00' }])
     budget.evaluateThresholdForMonth.mockResolvedValueOnce(null)
     budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
       month: '2026-03-01',
@@ -199,7 +200,7 @@ describe('POST /api/budget', () => {
       notified: false,
       category_budgets: [
         {
-          category_id: 'cat-1',
+          category_id: FOOD_CATEGORY_ID,
           category_name: 'Food',
           category_icon: '🍔',
           monthly_limit: '40.00',
@@ -212,7 +213,7 @@ describe('POST /api/budget', () => {
       async test({ fetch }) {
         const res = await fetch(post({
           month: '2026-03-01',
-          category_budgets: [{ category_id: 'cat-1', monthly_limit: 40 }],
+          category_budgets: [{ category_id: FOOD_CATEGORY_ID, monthly_limit: 40 }],
         }))
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({
@@ -222,7 +223,7 @@ describe('POST /api/budget', () => {
           budget_alert: null,
           category_budgets: [
             {
-              category_id: 'cat-1',
+              category_id: FOOD_CATEGORY_ID,
               category_name: 'Food',
               category_icon: '🍔',
               monthly_limit: '40.00',
@@ -234,9 +235,9 @@ describe('POST /api/budget', () => {
   })
 
   it('upserts combined overall and category budgets', async () => {
-    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: 'cat-1', name: 'Food', icon: '🍔' }])
+    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID, name: 'Food', icon: '🍔' }])
     budget.upsertMonthlyBudget.mockResolvedValueOnce({ month: '2026-03-01', monthly_limit: '120.00', notified: false })
-    budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: 'cat-1', month: '2026-03-01', monthly_limit: '60.00' }])
+    budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01', monthly_limit: '60.00' }])
     budget.evaluateThresholdForMonth.mockResolvedValueOnce({
       notified: false,
       budget_alert: null,
@@ -247,7 +248,7 @@ describe('POST /api/budget', () => {
       notified: false,
       category_budgets: [
         {
-          category_id: 'cat-1',
+          category_id: FOOD_CATEGORY_ID,
           category_name: 'Food',
           category_icon: '🍔',
           monthly_limit: '60.00',
@@ -261,7 +262,7 @@ describe('POST /api/budget', () => {
         const res = await fetch(post({
           month: '2026-03-01',
           monthly_limit: 120,
-          category_budgets: [{ category_id: 'cat-1', monthly_limit: 60 }],
+          category_budgets: [{ category_id: FOOD_CATEGORY_ID, monthly_limit: 60 }],
         }))
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({
@@ -271,7 +272,7 @@ describe('POST /api/budget', () => {
           budget_alert: null,
           category_budgets: [
             {
-              category_id: 'cat-1',
+              category_id: FOOD_CATEGORY_ID,
               category_name: 'Food',
               category_icon: '🍔',
               monthly_limit: '60.00',
@@ -299,10 +300,25 @@ describe('POST /api/budget', () => {
       async test({ fetch }) {
         const res = await fetch(post({
           month: '2026-03-01',
-          category_budgets: [{ category_id: 'cat-1', monthly_limit: 0 }],
+          category_budgets: [{ category_id: FOOD_CATEGORY_ID, monthly_limit: 0 }],
         }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('Each category budget monthly_limit must be greater than 0')
+      }
+    })
+  })
+
+  it('returns 400 when category_id is not a valid UUID', async () => {
+    await testApiHandler({
+      appHandler: budgetHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          month: '2026-03-01',
+          category_budgets: [{ category_id: 'cat-1', monthly_limit: 40 }],
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Each category budget requires a valid UUID category_id')
+        expect(budget.getOwnedOrGlobalCategoriesByIds).not.toHaveBeenCalled()
       }
     })
   })

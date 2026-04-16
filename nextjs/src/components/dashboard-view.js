@@ -45,6 +45,14 @@ function getFirstName(email) {
     .join(' ')
 }
 
+export function hasOverallMonthlyLimit(summary) {
+  return Number(summary?.monthly_limit ?? 0) > 0
+}
+
+export function getBudgetCtaLabel(summary) {
+  return hasOverallMonthlyLimit(summary) ? 'Edit budget' : 'Set budget'
+}
+
 function getHeroState(summary) {
   const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
   const spent = Number(summary?.total_expenses ?? 0)
@@ -386,6 +394,7 @@ export default function DashboardView() {
         .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
     )
   const heroState = getHeroState(summary)
+  const budgetCtaLabel = getBudgetCtaLabel(summary)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const trendPoints = isSampleMode
     ? demoBudgetTrend
@@ -439,7 +448,7 @@ export default function DashboardView() {
             <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
             {!isSampleMode && (
               <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
-                {heroState.budget ? 'Edit budget' : 'Set budget'}
+                {budgetCtaLabel}
               </button>
             )}
           </div>
@@ -654,7 +663,7 @@ export default function DashboardView() {
               <div className="detail-sheet__copy">
                 <span className="entry-chip">{formatMonthPeriod(currentMonth)}</span>
                 <h2 className="detail-sheet__title" id="budget-sheet-title">
-                  {heroState.budget ? 'Edit budget' : 'Set budget'}
+                  {budgetCtaLabel}
                 </h2>
                 <p className="detail-sheet__subtitle">
                   Monthly spending limit for {formatMonthPeriod(currentMonth)}
@@ -694,8 +703,8 @@ export default function DashboardView() {
                   <div className="inline-error" role="alert">{budgetSaveError}</div>
                 ) : (
                   <span className="entry-sheet__hint">
-                    {heroState.budget
-                      ? `Current limit: ${formatCurrency(heroState.budget)}. Changes take effect immediately.`
+                    {hasOverallMonthlyLimit(summary)
+                      ? `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
                       : 'Setting a limit enables the budget tracker and spending trend.'}
                   </span>
                 )}
@@ -713,7 +722,7 @@ export default function DashboardView() {
                     disabled={isBudgetSaving || !budgetDraft.monthly_limit || Number(budgetDraft.monthly_limit) <= 0}
                     type="submit"
                   >
-                    {isBudgetSaving ? 'Saving...' : heroState.budget ? 'Update budget' : 'Set budget'}
+                    {isBudgetSaving ? 'Saving...' : hasOverallMonthlyLimit(summary) ? 'Update budget' : 'Set budget'}
                   </button>
                 </div>
               </div>
