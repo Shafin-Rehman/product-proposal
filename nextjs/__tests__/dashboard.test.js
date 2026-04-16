@@ -18,7 +18,12 @@ jest.mock('@/lib/demoData', () => ({
   demoCategoryBudgets: [],
 }))
 jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn(),
+  getCategoryVisual: jest.fn((value) => ({
+    label: value,
+    color: '#123456',
+    soft: '#abcdef',
+    symbol: value?.[0] || '?',
+  })),
   getEntryVisual: jest.fn(),
   getInitialsLabel: jest.fn(),
 }))
@@ -29,9 +34,10 @@ jest.mock('@/lib/financeUtils', () => ({
   formatMonthPeriod: jest.fn((value) => value),
   formatShortDate: jest.fn((value) => value),
   getCurrentMonthStart: jest.fn(() => '2026-03-01'),
+  isInMonth: jest.fn(),
 }))
 
-const { getBudgetCtaLabel } = require('@/components/dashboard-view')
+const { buildDerivedCategoryCards, getBudgetCtaLabel, getCategoryCards } = require('@/components/dashboard-view')
 
 describe('getBudgetCtaLabel', () => {
   it('returns Set budget when only category budgets exist', () => {
@@ -49,5 +55,49 @@ describe('getBudgetCtaLabel', () => {
       monthly_limit: '125.00',
       total_budget: '125.00',
     })).toBe('Edit budget')
+  })
+})
+
+describe('getCategoryCards', () => {
+  it('falls back to derived expense cards when category statuses are unavailable', () => {
+    expect(getCategoryCards(undefined, [
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '30.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '20.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '50.00' },
+    ])).toEqual([
+      expect.objectContaining({ name: 'Food', amount: 50, progress: 50, note: '50% of spend' }),
+      expect.objectContaining({ name: 'Fun', amount: 50, progress: 50, note: '50% of spend' }),
+    ])
+  })
+
+  it('prefers summary category statuses when they are available', () => {
+    expect(getCategoryCards([
+      {
+        category_id: 'cat-food',
+        category_name: 'Food',
+        category_icon: 'F',
+        monthly_limit: '80.00',
+        spent: '50.00',
+        remaining_budget: '30.00',
+        progress_percentage: 62.5,
+      },
+    ], [
+      { id: 'e1', category_id: 'cat-other', category_name: 'Other', amount: '999.00' },
+    ])).toEqual([
+      expect.objectContaining({ name: 'Food', amount: 50, progress: 62.5, note: '$30 left' }),
+    ])
+  })
+})
+
+describe('buildDerivedCategoryCards', () => {
+  it('groups live expenses by category and calculates share-based fallback cards', () => {
+    expect(buildDerivedCategoryCards([
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '25.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '15.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '10.00' },
+    ])).toEqual([
+      expect.objectContaining({ name: 'Food', amount: 40, progress: 80, note: '80% of spend' }),
+      expect.objectContaining({ name: 'Fun', amount: 10, progress: 20, note: '20% of spend' }),
+    ])
   })
 })

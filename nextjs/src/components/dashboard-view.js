@@ -20,6 +20,7 @@ import {
   formatMonthPeriod,
   formatShortDate,
   getCurrentMonthStart,
+  isInMonth,
 } from '@/lib/financeUtils'
 const PREVIEW_LIMIT = 4
 const INCOME_LIMIT = 4
@@ -213,6 +214,59 @@ function buildLiveCategoryCards(categoryStatuses = []) {
   })
 }
 
+export function buildDerivedCategoryCards(expenses = []) {
+  const grouped = new Map()
+
+  expenses.forEach((expense) => {
+    const amount = Number(expense.amount ?? 0)
+    const key = expense.category_id ?? expense.category_name ?? 'uncategorized'
+    const displayName = expense.category_name || 'Uncategorized'
+    const current = grouped.get(key) ?? {
+      category_name: displayName,
+      total_amount: 0,
+      count: 0,
+    }
+
+    current.total_amount += amount
+    current.count += 1
+    grouped.set(key, current)
+  })
+
+  const breakdown = Array.from(grouped.entries())
+    .map(([key, item]) => ({
+      category_id: key,
+      category_name: item.category_name,
+      total_amount: Number(item.total_amount.toFixed(2)),
+      count: item.count,
+    }))
+    .sort((left, right) => right.total_amount - left.total_amount)
+
+  const totalExpenses = breakdown.reduce((sum, item) => sum + Number(item.total_amount ?? 0), 0)
+
+  return breakdown.map((item) => {
+    const visual = getCategoryVisual(item.category_name || 'Uncategorized')
+    const amount = Number(item.total_amount ?? 0)
+    const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
+
+    return {
+      id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
+      name: item.category_name || 'Uncategorized',
+      symbol: visual.symbol,
+      color: visual.color,
+      soft: visual.soft,
+      progress: Math.min(share, 100),
+      amount,
+      note: `${Math.round(share) || 0}% of spend`,
+    }
+  })
+}
+
+export function getCategoryCards(categoryStatuses, expenses = []) {
+  return Array.isArray(categoryStatuses)
+    ? buildLiveCategoryCards(categoryStatuses)
+    : buildDerivedCategoryCards(expenses)
+}
+
 function LiveNotice({ message, onRetry }) {
   if (!message) return null
 
@@ -369,6 +423,9 @@ export default function DashboardView() {
   }
 
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
+  const currentMonthExpenses = isSampleMode
+    ? []
+    : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
   const activity = isSampleMode
     ? demoActivity
     : buildActivityFeed(liveState.expenses, liveState.income)
@@ -389,10 +446,7 @@ export default function DashboardView() {
         note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
       }
     })
-    : buildLiveCategoryCards(
-      [...(summary?.category_statuses ?? [])]
-        .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
-    )
+    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
   const heroState = getHeroState(summary)
   const budgetCtaLabel = getBudgetCtaLabel(summary)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
