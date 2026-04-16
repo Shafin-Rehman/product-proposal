@@ -601,6 +601,25 @@ describe('buildBudgetSummary helper', () => {
   })
 })
 
+describe('normalizeDate', () => {
+  it('accepts plain YYYY-MM-DD input', () => {
+    expect(actualBudget.normalizeDate('2026-03-15')).toBe('2026-03-15')
+  })
+
+  it('accepts ISO timestamp input', () => {
+    expect(actualBudget.normalizeDate('2026-03-15T08:30:00Z')).toBe('2026-03-15')
+  })
+
+  it('accepts Date instance input', () => {
+    const date = new Date(Date.UTC(2026, 2, 15, 8, 30, 0))
+    expect(actualBudget.normalizeDate(date)).toBe('2026-03-15')
+  })
+
+  it('rejects invalid dates', () => {
+    expect(actualBudget.normalizeDate('2026-02-30')).toBeNull()
+  })
+})
+
 describe('budget helper threshold boundary', () => {
   it('treats spending equal to the limit as threshold reached in the summary', async () => {
     db.query
@@ -636,7 +655,7 @@ describe('budget helper threshold boundary', () => {
     })
     expect(db.query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining('FROM public.income'),
+      expect.stringMatching(/FROM public\.income[\s\S]*WHERE user_id = \$1 AND date >= \$2 AND date < \$3/),
       ['uid', '2026-03-01', '2026-04-01']
     )
   })
