@@ -183,6 +183,17 @@ export function buildMonthlySpendTrend(expenses = [], month) {
 }
 
 export function buildActivityFeed(expenses = [], income = []) {
+  const getCreatedSortValue = (value) => {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? 0 : value.getTime()
+    }
+    if (typeof value === 'string') {
+      const timestamp = Date.parse(value)
+      if (!Number.isNaN(timestamp)) return timestamp
+    }
+    return 0
+  }
+
   const expenseEntries = expenses.map((expense) => {
     const categoryName = expense?.category_name || 'Expense'
     const description = expense?.description?.trim()
@@ -195,7 +206,7 @@ export function buildActivityFeed(expenses = [], income = []) {
       chip: displayCategory,
       amount: Number(expense.amount ?? 0),
       occurredOn: expense.date || expense.created_at,
-      sortOn: parseCalendarDate(expense.created_at || expense.date)?.getTime() ?? 0,
+      sortOn: parseCalendarDate(expense.date || expense.created_at)?.getTime() ?? 0,
       note: description ? displayCategory : 'Live expense',
       merchant: description || displayCategory,
       raw: expense,
@@ -213,15 +224,18 @@ export function buildActivityFeed(expenses = [], income = []) {
       title: sourceName,
       chip: displayCategory,
       amount: Number(entry.amount ?? 0),
-      occurredOn: entry.created_at || entry.month,
-      sortOn: parseCalendarDate(entry.created_at || entry.month)?.getTime() ?? 0,
-      note: notes || formatMonthPeriod(entry.month),
+      occurredOn: entry.date || entry.created_at,
+      sortOn: parseCalendarDate(entry.date || entry.created_at)?.getTime() ?? 0,
+      note: notes || '',
       merchant: sourceName,
       raw: entry,
     }
   })
 
-  return [...expenseEntries, ...incomeEntries].sort((left, right) => right.sortOn - left.sortOn)
+  return [...expenseEntries, ...incomeEntries].sort((left, right) => (
+    (right.sortOn - left.sortOn) ||
+    (getCreatedSortValue(right.raw?.created_at) - getCreatedSortValue(left.raw?.created_at))
+  ))
 }
 
 export function groupActivityByDate(entries = []) {
@@ -247,7 +261,7 @@ export function buildIncomeSourceBreakdown(incomeEntries = [], month) {
   const grouped = new Map()
 
   incomeEntries
-    .filter((entry) => isInMonth(entry.month || entry.created_at, month))
+    .filter((entry) => isInMonth(entry.date || entry.created_at, month))
     .forEach((entry) => {
       const label = entry?.source_name || 'Income'
       grouped.set(label, (grouped.get(label) || 0) + Number(entry.amount ?? 0))

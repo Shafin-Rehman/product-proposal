@@ -1,8 +1,9 @@
 import db from './db'
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MONTH_PATTERN = /^\d{4}-\d{2}(-\d{2})?$/
 
-function toMonthStart(value) {
+function getNormalizedDateString(value, { allowMonth = false } = {}) {
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null
     value = `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`
@@ -10,7 +11,10 @@ function toMonthStart(value) {
   if (typeof value === 'string' && value.includes('T')) {
     value = value.slice(0, 10)
   }
-  if (typeof value !== 'string' || !MONTH_PATTERN.test(value)) return null
+  if (allowMonth && typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) {
+    value = `${value}-01`
+  }
+  if (typeof value !== 'string' || !(allowMonth ? MONTH_PATTERN : DATE_PATTERN).test(value)) return null
 
   const [yearPart, monthPart, dayPart = '01'] = value.split('-')
   const year = Number(yearPart)
@@ -27,7 +31,13 @@ function toMonthStart(value) {
   const date = new Date(`${isoDate}T00:00:00Z`)
   if (Number.isNaN(date.getTime())) return null
 
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+function toMonthStart(value) {
+  const normalizedDate = getNormalizedDateString(value, { allowMonth: true })
+  if (!normalizedDate) return null
+  return `${normalizedDate.slice(0, 7)}-01`
 }
 
 function nextMonth(month) {
@@ -42,6 +52,10 @@ function decimalString(value) {
 
 export function normalizeMonth(value) {
   return toMonthStart(value)
+}
+
+export function normalizeDate(value) {
+  return getNormalizedDateString(value)
 }
 
 export async function getMonthlyBudget(userId, month) {
@@ -86,8 +100,8 @@ export async function getMonthlyTotals(userId, month) {
     db.query(
       `SELECT COALESCE(SUM(amount), 0.00)::TEXT AS total_income
        FROM public.income
-       WHERE user_id = $1 AND month = $2`,
-      [userId, month]
+       WHERE user_id = $1 AND date >= $2 AND date < $3`,
+      [userId, month, endMonth]
     ),
   ])
 
