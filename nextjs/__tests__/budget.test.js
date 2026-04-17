@@ -6,6 +6,7 @@ jest.mock('@/lib/budget', () => ({
   upsertMonthlyBudget: jest.fn(),
   evaluateThresholdForMonth: jest.fn(),
   buildBudgetSummary: jest.fn(),
+  isPositiveMoneyValue: jest.fn(),
 }))
 
 const { testApiHandler } = require('next-test-api-route-handler')
@@ -30,8 +31,17 @@ beforeEach(() => {
   budget.upsertMonthlyBudget.mockClear()
   budget.evaluateThresholdForMonth.mockClear()
   budget.buildBudgetSummary.mockClear()
+  budget.isPositiveMoneyValue.mockClear()
   authenticate.mockResolvedValue({ user: authorizedUser })
   budget.normalizeMonth.mockImplementation(value => value)
+  budget.isPositiveMoneyValue.mockImplementation((value) => {
+    if (typeof value === 'number') return Number.isFinite(value) && value > 0
+    if (typeof value !== 'string') return false
+    const trimmedValue = value.trim()
+    if (!trimmedValue) return false
+    const amount = Number(trimmedValue)
+    return Number.isFinite(amount) && amount > 0
+  })
 })
 
 describe('GET /api/expenses/categories', () => {
@@ -161,6 +171,17 @@ describe('POST /api/budget', () => {
       }
     })
   })
+
+  it('returns 400 when monthly_limit is not a positive money value', async () => {
+    await testApiHandler({
+      appHandler: budgetHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ month: '2026-03-01', monthly_limit: 'abc' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('monthly_limit must be greater than 0')
+      }
+    })
+  })
 })
 
 describe('GET /api/budget/summary', () => {
@@ -252,6 +273,22 @@ describe('normalizeDate', () => {
 
   it('rejects invalid dates', () => {
     expect(actualBudget.normalizeDate('2026-02-30')).toBeNull()
+  })
+})
+
+describe('isPositiveMoneyValue', () => {
+  it('accepts positive numbers and numeric strings', () => {
+    expect(actualBudget.isPositiveMoneyValue(25)).toBe(true)
+    expect(actualBudget.isPositiveMoneyValue('25.50')).toBe(true)
+    expect(actualBudget.isPositiveMoneyValue(' 25.50 ')).toBe(true)
+  })
+
+  it('rejects empty, non-numeric, and non-positive values', () => {
+    expect(actualBudget.isPositiveMoneyValue('')).toBe(false)
+    expect(actualBudget.isPositiveMoneyValue('abc')).toBe(false)
+    expect(actualBudget.isPositiveMoneyValue(0)).toBe(false)
+    expect(actualBudget.isPositiveMoneyValue('-5')).toBe(false)
+    expect(actualBudget.isPositiveMoneyValue(null)).toBe(false)
   })
 })
 

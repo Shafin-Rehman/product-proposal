@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
-import { evaluateThresholdForMonth, getMonthlyBudget, normalizeMonth, upsertMonthlyBudget } from '@/lib/budget'
+import { evaluateThresholdForMonth, getMonthlyBudget, isPositiveMoneyValue, normalizeMonth, upsertMonthlyBudget } from '@/lib/budget'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -28,7 +28,7 @@ export async function POST(request) {
   const monthlyLimit = body.monthly_limit
 
   if (!month) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
-  if (monthlyLimit == null || Number.isNaN(Number(monthlyLimit)) || Number(monthlyLimit) <= 0) {
+  if (!isPositiveMoneyValue(monthlyLimit)) {
     return NextResponse.json({ error: 'monthly_limit must be greater than 0' }, { status: 400 })
   }
 

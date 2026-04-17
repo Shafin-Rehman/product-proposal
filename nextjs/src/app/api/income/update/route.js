@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
-import { normalizeDate } from '@/lib/budget'
+import { isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -10,6 +10,10 @@ export async function POST(request) {
   try { body = await request.json() } catch {}
   const { income_id, source_id, amount, date, notes } = body
   if (!income_id) return NextResponse.json({ error: 'income_id required' }, { status: 400 })
+
+  if (amount !== undefined && !isPositiveMoneyValue(amount)) {
+    return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 })
+  }
 
   const normalizedDate = date === undefined ? undefined : normalizeDate(date)
   if (date !== undefined && !normalizedDate) {
