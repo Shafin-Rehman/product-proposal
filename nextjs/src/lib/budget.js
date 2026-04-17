@@ -2,6 +2,8 @@ import db from './db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MONTH_PATTERN = /^\d{4}-\d{2}(-\d{2})?$/
+const MONEY_STRING_PATTERN = /^\d{1,8}(\.\d{1,2})?$/
+const MAX_MONEY_VALUE = 99999999.99
 
 function getNormalizedDateString(value, { allowMonth = false } = {}) {
   if (value instanceof Date) {
@@ -60,16 +62,18 @@ export function normalizeDate(value) {
 
 export function isPositiveMoneyValue(value) {
   if (typeof value === 'number') {
-    return Number.isFinite(value) && value > 0
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_MONEY_VALUE) return false
+    return Number(value.toFixed(2)) === value
   }
 
   if (typeof value !== 'string') return false
 
   const trimmedValue = value.trim()
   if (!trimmedValue) return false
+  if (!MONEY_STRING_PATTERN.test(trimmedValue)) return false
 
   const amount = Number(trimmedValue)
-  return Number.isFinite(amount) && amount > 0
+  return Number.isFinite(amount) && amount > 0 && amount <= MAX_MONEY_VALUE
 }
 
 export async function getMonthlyBudget(userId, month) {

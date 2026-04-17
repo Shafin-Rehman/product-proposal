@@ -1,16 +1,21 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({ signUp: jest.fn(), signIn: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
-jest.mock('@/lib/budget', () => ({
-  evaluateThresholdForMonth: jest.fn(),
-  isPositiveMoneyValue: jest.fn(),
-  normalizeDate: jest.fn(),
-}))
+jest.mock('@/lib/budget', () => {
+  const actual = jest.requireActual('@/lib/budget')
+  return {
+    ...actual,
+    evaluateThresholdForMonth: jest.fn(),
+    isPositiveMoneyValue: jest.fn(actual.isPositiveMoneyValue),
+    normalizeDate: jest.fn(actual.normalizeDate),
+  }
+})
 
 const { testApiHandler } = require('next-test-api-route-handler')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
 const { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } = require('@/lib/budget')
+const actualBudget = jest.requireActual('@/lib/budget')
 const expensesHandler = require('@/app/api/expenses/route')
 const getHandler = require('@/app/api/expenses/get/route')
 const updateHandler = require('@/app/api/expenses/update/route')
@@ -26,15 +31,8 @@ beforeEach(() => {
   normalizeDate.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
   evaluateThresholdForMonth.mockResolvedValue(null)
-  isPositiveMoneyValue.mockImplementation((value) => {
-    if (typeof value === 'number') return Number.isFinite(value) && value > 0
-    if (typeof value !== 'string') return false
-    const trimmedValue = value.trim()
-    if (!trimmedValue) return false
-    const amount = Number(trimmedValue)
-    return Number.isFinite(amount) && amount > 0
-  })
-  normalizeDate.mockImplementation((value) => value)
+  isPositiveMoneyValue.mockImplementation(actualBudget.isPositiveMoneyValue)
+  normalizeDate.mockImplementation(actualBudget.normalizeDate)
 })
 
 describe('POST /api/expenses', () => {
@@ -117,6 +115,18 @@ describe('POST /api/expenses', () => {
       appHandler: expensesHandler,
       async test({ fetch }) {
         const res = await fetch(post({ amount: 0, date: '2026-03-01' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be greater than 0')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects a positive amount with more than 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 0.001, date: '2026-03-01' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be greater than 0')
       }
@@ -276,6 +286,18 @@ describe('POST /api/expenses/update', () => {
       appHandler: updateHandler,
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1, amount: 'abc' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be greater than 0')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an update amount with more than 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, amount: '1.999' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be greater than 0')
       }
