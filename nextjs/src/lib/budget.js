@@ -4,6 +4,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MONTH_PATTERN = /^\d{4}-\d{2}(-\d{2})?$/
 const MONEY_STRING_PATTERN = /^\d{1,8}(\.\d{1,2})?$/
 const MAX_MONEY_VALUE = 99999999.99
+const MONEY_EPSILON = 1e-9
 
 function getNormalizedDateString(value, { allowMonth = false } = {}) {
   if (value instanceof Date) {
@@ -63,7 +64,10 @@ export function normalizeDate(value) {
 export function isPositiveMoneyValue(value) {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0 || value > MAX_MONEY_VALUE) return false
-    return Number(value.toFixed(2)) === value
+
+    const cents = value * 100
+    const roundedCents = Math.round(cents)
+    return Math.abs(cents - roundedCents) <= MONEY_EPSILON
   }
 
   if (typeof value !== 'string') return false

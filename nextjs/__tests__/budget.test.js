@@ -277,6 +277,11 @@ describe('isPositiveMoneyValue', () => {
     expect(actualBudget.isPositiveMoneyValue(' 25.50 ')).toBe(true)
   })
 
+  it('accepts numeric inputs that are valid cent values despite floating-point noise', () => {
+    expect(actualBudget.isPositiveMoneyValue(0.1 + 0.2)).toBe(true)
+    expect(actualBudget.isPositiveMoneyValue(10.23 * 100 / 100)).toBe(true)
+  })
+
   it('rejects empty, non-numeric, and non-positive values', () => {
     expect(actualBudget.isPositiveMoneyValue('')).toBe(false)
     expect(actualBudget.isPositiveMoneyValue('abc')).toBe(false)
