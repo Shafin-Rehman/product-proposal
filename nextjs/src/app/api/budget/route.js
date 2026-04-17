@@ -26,10 +26,11 @@ export async function POST(request) {
 
   const month = normalizeMonth(body.month)
   const monthlyLimit = body.monthly_limit
+  const moneyValidationMessage = 'monthly_limit must be a valid positive money amount'
 
   if (!month) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
   if (!isPositiveMoneyValue(monthlyLimit)) {
-    return NextResponse.json({ error: 'monthly_limit must be greater than 0' }, { status: 400 })
+    return NextResponse.json({ error: moneyValidationMessage }, { status: 400 })
   }
 
   try {

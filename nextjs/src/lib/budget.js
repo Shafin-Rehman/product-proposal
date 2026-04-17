@@ -67,7 +67,7 @@ export function isPositiveMoneyValue(value) {
 
     const cents = value * 100
     const roundedCents = Math.round(cents)
-    return Math.abs(cents - roundedCents) <= MONEY_EPSILON
+    return roundedCents >= 1 && Math.abs(cents - roundedCents) <= MONEY_EPSILON
   }
 
   if (typeof value !== 'string') return false

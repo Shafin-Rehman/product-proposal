@@ -161,7 +161,7 @@ describe('POST /api/budget', () => {
       async test({ fetch }) {
         const res = await fetch(post({ month: '2026-03-01', monthly_limit: 0 }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('monthly_limit must be greater than 0')
+        expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
       }
     })
   })
@@ -172,7 +172,7 @@ describe('POST /api/budget', () => {
       async test({ fetch }) {
         const res = await fetch(post({ month: '2026-03-01', monthly_limit: 'abc' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('monthly_limit must be greater than 0')
+        expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
       }
     })
   })
@@ -291,6 +291,7 @@ describe('isPositiveMoneyValue', () => {
   })
 
   it('rejects positive values that are not storable as NUMERIC(10,2)', () => {
+    expect(actualBudget.isPositiveMoneyValue(1e-12)).toBe(false)
     expect(actualBudget.isPositiveMoneyValue(0.001)).toBe(false)
     expect(actualBudget.isPositiveMoneyValue('0.001')).toBe(false)
     expect(actualBudget.isPositiveMoneyValue('1.999')).toBe(false)

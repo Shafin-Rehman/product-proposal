@@ -116,7 +116,7 @@ describe('POST /api/expenses', () => {
       async test({ fetch }) {
         const res = await fetch(post({ amount: 0, date: '2026-03-01' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be greater than 0')
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }
     })
     expect(db.query).not.toHaveBeenCalled()
@@ -128,7 +128,7 @@ describe('POST /api/expenses', () => {
       async test({ fetch }) {
         const res = await fetch(post({ amount: 0.001, date: '2026-03-01' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be greater than 0')
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }
     })
     expect(db.query).not.toHaveBeenCalled()
@@ -287,7 +287,7 @@ describe('POST /api/expenses/update', () => {
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1, amount: 'abc' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be greater than 0')
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }
     })
     expect(db.query).not.toHaveBeenCalled()
@@ -299,7 +299,7 @@ describe('POST /api/expenses/update', () => {
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1, amount: '1.999' }))
         expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be greater than 0')
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }
     })
     expect(db.query).not.toHaveBeenCalled()

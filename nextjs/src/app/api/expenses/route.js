@@ -27,11 +27,12 @@ export async function POST(request) {
   let body = {}
   try { body = await request.json() } catch {}
   const { category_id, amount, description, date } = body
+  const moneyValidationMessage = 'amount must be a valid positive money amount'
   if (amount == null || date == null) {
     return NextResponse.json({ error: 'amount and date are required' }, { status: 400 })
   }
   if (!isPositiveMoneyValue(amount)) {
-    return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 })
+    return NextResponse.json({ error: moneyValidationMessage }, { status: 400 })
   }
   const normalizedDate = normalizeDate(date)
   if (!normalizedDate) {
