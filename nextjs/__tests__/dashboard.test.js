@@ -37,7 +37,7 @@ jest.mock('@/lib/financeUtils', () => ({
   isInMonth: jest.fn(),
 }))
 
-const { buildDerivedCategoryCards, getBudgetCtaLabel, getCategoryCards } = require('@/components/dashboard-view')
+const { buildDerivedCategoryCards, getBudgetCtaLabel, getBudgetHintText, getCategoryCards } = require('@/components/dashboard-view')
 
 describe('getBudgetCtaLabel', () => {
   it('returns Set budget when only category budgets exist', () => {
@@ -55,6 +55,22 @@ describe('getBudgetCtaLabel', () => {
       monthly_limit: '125.00',
       total_budget: '125.00',
     })).toBe('Edit budget')
+  })
+})
+
+describe('getBudgetHintText', () => {
+  it('explains that the sheet controls the overall monthly cap when no overall limit exists', () => {
+    expect(getBudgetHintText({
+      monthly_limit: null,
+      total_budget: '75.00',
+    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
+  })
+
+  it('shows the current overall monthly limit when one exists', () => {
+    expect(getBudgetHintText({
+      monthly_limit: '125.00',
+      total_budget: '125.00',
+    })).toBe('Current limit: $125.00. Changes take effect immediately.')
   })
 })
 

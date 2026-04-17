@@ -54,6 +54,12 @@ export function getBudgetCtaLabel(summary) {
   return hasOverallMonthlyLimit(summary) ? 'Edit budget' : 'Set budget'
 }
 
+export function getBudgetHintText(summary) {
+  return hasOverallMonthlyLimit(summary)
+    ? `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
+    : 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
+}
+
 function getHeroState(summary) {
   const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
   const spent = Number(summary?.total_expenses ?? 0)
@@ -757,9 +763,7 @@ export default function DashboardView() {
                   <div className="inline-error" role="alert">{budgetSaveError}</div>
                 ) : (
                   <span className="entry-sheet__hint">
-                    {hasOverallMonthlyLimit(summary)
-                      ? `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
-                      : 'Setting a limit enables the budget tracker and spending trend.'}
+                    {getBudgetHintText(summary)}
                   </span>
                 )}
                 <div className="entry-sheet__actions">

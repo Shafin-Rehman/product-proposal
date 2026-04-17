@@ -96,7 +96,9 @@ export async function POST(request) {
       )
     }
 
-    const updatedBudget = await evaluateThresholdForMonth(user.id, month)
+    const updatedBudget = monthlyLimit !== undefined
+      ? await evaluateThresholdForMonth(user.id, month)
+      : null
     const savedBudget = await getMonthlyBudgetConfig(user.id, month)
 
     return NextResponse.json({

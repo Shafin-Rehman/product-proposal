@@ -193,7 +193,6 @@ describe('POST /api/budget', () => {
   it('upserts category budgets without requiring an overall monthly limit', async () => {
     budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID, name: 'Food', icon: '🍔' }])
     budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01', monthly_limit: '40.00' }])
-    budget.evaluateThresholdForMonth.mockResolvedValueOnce(null)
     budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
       month: '2026-03-01',
       monthly_limit: null,
@@ -230,6 +229,7 @@ describe('POST /api/budget', () => {
             },
           ],
         })
+        expect(budget.evaluateThresholdForMonth).not.toHaveBeenCalled()
       }
     })
   })
@@ -279,6 +279,7 @@ describe('POST /api/budget', () => {
             },
           ],
         })
+        expect(budget.evaluateThresholdForMonth).toHaveBeenCalledWith('uid', '2026-03-01')
       }
     })
   })
