@@ -63,6 +63,20 @@ export function normalizeDate(value) {
   return getNormalizedDateString(value)
 }
 
+export function isPositiveMoneyValue(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0
+  }
+
+  if (typeof value !== 'string') return false
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return false
+
+  const amount = Number(trimmedValue)
+  return Number.isFinite(amount) && amount > 0
+}
+
 export async function getMonthlyBudget(userId, month) {
   const { rows } = await db.query(
     `SELECT month, monthly_limit, notified

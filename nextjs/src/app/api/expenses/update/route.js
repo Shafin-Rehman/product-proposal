@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
-import { evaluateThresholdForMonth } from '@/lib/budget'
+import { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -11,7 +11,21 @@ export async function POST(request) {
   const { expense_id, category_id, amount, description, date } = body
   if (!expense_id) return NextResponse.json({ error: 'expense_id required' }, { status: 400 })
 
-  const entries = Object.entries({ category_id, amount, description, date }).filter(([, v]) => v !== undefined)
+  if (amount !== undefined && !isPositiveMoneyValue(amount)) {
+    return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 })
+  }
+
+  const normalizedDate = date === undefined ? undefined : normalizeDate(date)
+  if (date !== undefined && !normalizedDate) {
+    return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
+  }
+
+  const entries = Object.entries({
+    category_id,
+    amount,
+    description,
+    date: normalizedDate,
+  }).filter(([, v]) => v !== undefined)
   if (!entries.length) return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
 
   const fields = entries.map(([k], i) => `${k} = $${i + 1}`)
