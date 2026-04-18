@@ -13,6 +13,7 @@ import {
   getCurrentMonthStart,
 } from '@/lib/financeUtils'
 import {
+  areMoneyDraftValuesEquivalent,
   buildPlannerDraftSnapshot,
   buildCopyLastMonthPayload,
   buildPlannerRows,
@@ -20,6 +21,7 @@ import {
   getCopyLastMonthState,
   getPlannerAdjacentMonths,
   mergePlannerDrafts,
+  normalizeMoneyDraftForSave,
 } from '@/lib/planner'
 
 function areDraftMapsEqual(left = {}, right = {}) {
@@ -329,7 +331,7 @@ export default function PlannerView() {
 
   const handleRowDraftChange = (rowId, value) => {
     const serverValue = serverDraftSnapshot.rowDrafts[rowId] ?? ''
-    if (value === serverValue) {
+    if (areMoneyDraftValuesEquivalent(value, serverValue)) {
       dirtyRowIdsRef.current.delete(rowId)
     } else {
       dirtyRowIdsRef.current.add(rowId)
@@ -350,8 +352,8 @@ export default function PlannerView() {
     event.preventDefault()
     if (isSampleMode || savingTarget) return
 
-    const nextLimit = Number(overallDraft)
-    if (!Number.isFinite(nextLimit) || nextLimit <= 0) return
+    const nextLimit = normalizeMoneyDraftForSave(overallDraft)
+    if (nextLimit == null) return
 
     setSavingTarget('overall')
     try {
@@ -386,8 +388,8 @@ export default function PlannerView() {
     if (isSampleMode || savingTarget || !row.isEditable) return
 
     const draftValue = rowDrafts[row.id]
-    const nextLimit = Number(draftValue)
-    if (!Number.isFinite(nextLimit) || nextLimit <= 0) return
+    const nextLimit = normalizeMoneyDraftForSave(draftValue)
+    if (nextLimit == null) return
 
     setSavingTarget(row.id)
     try {
@@ -548,7 +550,7 @@ export default function PlannerView() {
               min="0.01"
               onChange={(event) => {
                 const nextValue = event.target.value
-                isOverallDirtyRef.current = nextValue !== serverDraftSnapshot.overallDraft
+                isOverallDirtyRef.current = !areMoneyDraftValuesEquivalent(nextValue, serverDraftSnapshot.overallDraft)
                 setOverallDraft(nextValue)
               }}
               placeholder="e.g. 2500"

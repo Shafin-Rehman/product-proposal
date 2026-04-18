@@ -8,6 +8,10 @@ function parseMoneyAmount(value) {
   return Number(amount.toFixed(2))
 }
 
+function isComparableMoneyDraft(rawValue) {
+  return /^(?:\d+|\d*\.\d{1,2})$/.test(rawValue)
+}
+
 function parseSpendAmount(value) {
   if (value == null || value === '') return null
   const amount = Number(value)
@@ -23,6 +27,30 @@ function getPlannerProgressPercentage(plannedAmount, spentAmount) {
   if (spentAmount == null) return 0
   if (plannedAmount == null) return spentAmount > 0 ? 100 : 0
   return Math.min(Number(((spentAmount / plannedAmount) * 100).toFixed(2)), 100)
+}
+
+export function formatMoneyDraftValue(value) {
+  const amount = parseMoneyAmount(value)
+  return amount == null ? '' : amount.toFixed(2)
+}
+
+export function normalizeMoneyDraftForComparison(value) {
+  if (value == null) return ''
+
+  const rawValue = String(value).trim()
+  if (!rawValue) return ''
+  if (!isComparableMoneyDraft(rawValue)) return rawValue
+
+  const amount = parseMoneyAmount(rawValue)
+  return amount == null ? rawValue : amount.toFixed(2)
+}
+
+export function areMoneyDraftValuesEquivalent(left, right) {
+  return normalizeMoneyDraftForComparison(left) === normalizeMoneyDraftForComparison(right)
+}
+
+export function normalizeMoneyDraftForSave(value) {
+  return parseMoneyAmount(value)
 }
 
 export function getPlannerStatus(plannedAmount, spentAmount) {
@@ -156,12 +184,12 @@ export function buildPlannerSummary({ rows = [], summary = null, config = null }
 export function buildPlannerDraftSnapshot(rows = [], overallLimit = null) {
   const rowDrafts = {}
   rows.forEach((row) => {
-    rowDrafts[row.id] = row.plannedAmount != null ? String(row.plannedAmount) : ''
+    rowDrafts[row.id] = formatMoneyDraftValue(row.plannedAmount)
   })
 
   return {
     rowDrafts,
-    overallDraft: overallLimit != null ? String(overallLimit) : '',
+    overallDraft: formatMoneyDraftValue(overallLimit),
   }
 }
 
@@ -178,7 +206,7 @@ export function mergePlannerDrafts({
 
   Object.entries(nextRowDrafts).forEach(([rowId, serverValue]) => {
     const currentValue = currentRowDrafts[rowId] ?? ''
-    if (nextDirtyRowIds.has(rowId) && currentValue !== serverValue) {
+    if (nextDirtyRowIds.has(rowId) && !areMoneyDraftValuesEquivalent(currentValue, serverValue)) {
       mergedRowDrafts[rowId] = currentValue
       return
     }
@@ -187,7 +215,7 @@ export function mergePlannerDrafts({
     nextDirtyRowIds.delete(rowId)
   })
 
-  if (isOverallDirty && currentOverallDraft !== nextOverallDraft) {
+  if (isOverallDirty && !areMoneyDraftValuesEquivalent(currentOverallDraft, nextOverallDraft)) {
     return {
       rowDrafts: mergedRowDrafts,
       overallDraft: currentOverallDraft,

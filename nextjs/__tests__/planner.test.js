@@ -1,11 +1,14 @@
 const {
+  areMoneyDraftValuesEquivalent,
   buildPlannerDraftSnapshot,
   buildCopyLastMonthPayload,
   buildPlannerRows,
   buildPlannerSummary,
+  formatMoneyDraftValue,
   getCopyLastMonthState,
   getPlannerAdjacentMonths,
   mergePlannerDrafts,
+  normalizeMoneyDraftForSave,
 } = require('@/lib/planner')
 
 describe('buildPlannerRows', () => {
@@ -165,6 +168,25 @@ describe('buildPlannerSummary', () => {
 })
 
 describe('planner draft merging', () => {
+  it('serializes planner snapshots with a canonical two-decimal money format', () => {
+    expect(buildPlannerDraftSnapshot([
+      { id: 'cat-food', plannedAmount: 1.1 },
+      { id: 'cat-fun', plannedAmount: 80 },
+    ], 500)).toEqual({
+      rowDrafts: {
+        'cat-food': '1.10',
+        'cat-fun': '80.00',
+      },
+      overallDraft: '500.00',
+    })
+  })
+
+  it('treats equivalent money drafts as equal even when formatting differs', () => {
+    expect(areMoneyDraftValuesEquivalent('1.1', '1.10')).toBe(true)
+    expect(areMoneyDraftValuesEquivalent('01.10', '1.10')).toBe(true)
+    expect(areMoneyDraftValuesEquivalent('1.', '1.00')).toBe(false)
+  })
+
   it('preserves dirty row drafts during background refreshes', () => {
     const snapshot = buildPlannerDraftSnapshot([
       { id: 'cat-food', plannedAmount: 100 },
@@ -173,14 +195,14 @@ describe('planner draft merging', () => {
 
     expect(mergePlannerDrafts({
       currentRowDrafts: { 'cat-food': '145', 'cat-fun': '80' },
-      currentOverallDraft: '500',
+      currentOverallDraft: '500.00',
       nextRowDrafts: snapshot.rowDrafts,
       nextOverallDraft: snapshot.overallDraft,
       dirtyRowIds: new Set(['cat-food']),
       isOverallDirty: false,
     })).toEqual({
-      rowDrafts: { 'cat-food': '145', 'cat-fun': '80' },
-      overallDraft: '500',
+      rowDrafts: { 'cat-food': '145', 'cat-fun': '80.00' },
+      overallDraft: '500.00',
       dirtyRowIds: new Set(['cat-food']),
       isOverallDirty: false,
     })
@@ -188,18 +210,33 @@ describe('planner draft merging', () => {
 
   it('hydrates clean rows from the latest server values and clears resolved dirty flags', () => {
     expect(mergePlannerDrafts({
-      currentRowDrafts: { 'cat-food': '145' },
-      currentOverallDraft: '500',
-      nextRowDrafts: { 'cat-food': '145' },
-      nextOverallDraft: '500',
+      currentRowDrafts: { 'cat-food': '145.0' },
+      currentOverallDraft: '500.0',
+      nextRowDrafts: { 'cat-food': '145.00' },
+      nextOverallDraft: '500.00',
       dirtyRowIds: new Set(['cat-food']),
       isOverallDirty: true,
     })).toEqual({
-      rowDrafts: { 'cat-food': '145' },
-      overallDraft: '500',
+      rowDrafts: { 'cat-food': '145.00' },
+      overallDraft: '500.00',
       dirtyRowIds: new Set(),
       isOverallDirty: false,
     })
+  })
+})
+
+describe('planner money normalization', () => {
+  it('formats valid money drafts with two decimals', () => {
+    expect(formatMoneyDraftValue(1.1)).toBe('1.10')
+    expect(formatMoneyDraftValue('80')).toBe('80.00')
+    expect(formatMoneyDraftValue('')).toBe('')
+  })
+
+  it('normalizes valid save drafts to the stored two-decimal number shape', () => {
+    expect(normalizeMoneyDraftForSave('1.105')).toBe(1.1)
+    expect(normalizeMoneyDraftForSave('80')).toBe(80)
+    expect(normalizeMoneyDraftForSave('1.')).toBe(1)
+    expect(normalizeMoneyDraftForSave('')).toBeNull()
   })
 })
 
