@@ -303,7 +303,7 @@ describe('POST /api/income/update', () => {
     })
   })
 
-  it('rejects update with a non-positive amount', async () => {
+  it('rejects update with a non-numeric amount', async () => {
     await testApiHandler({
       appHandler: updateHandler,
       async test({ fetch }) {

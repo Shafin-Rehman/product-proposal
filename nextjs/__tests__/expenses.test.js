@@ -281,7 +281,7 @@ describe('POST /api/expenses/update', () => {
     })
   })
 
-  it('400 - rejects a non-positive update amount', async () => {
+  it('400 - rejects a non-numeric update amount', async () => {
     await testApiHandler({
       appHandler: updateHandler,
       async test({ fetch }) {
