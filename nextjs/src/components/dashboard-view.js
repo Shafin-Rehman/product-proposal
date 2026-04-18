@@ -50,14 +50,26 @@ export function hasOverallMonthlyLimit(summary) {
   return Number(summary?.monthly_limit ?? 0) > 0
 }
 
+export function hasCategoryBudgets(summary) {
+  return Array.isArray(summary?.category_statuses) && summary.category_statuses.length > 0
+}
+
 export function getBudgetCtaLabel(summary) {
-  return hasOverallMonthlyLimit(summary) ? 'Edit budget' : 'Set budget'
+  if (hasOverallMonthlyLimit(summary)) return 'Edit budget'
+  if (hasCategoryBudgets(summary)) return 'Set overall limit'
+  return 'Set budget'
 }
 
 export function getBudgetHintText(summary) {
-  return hasOverallMonthlyLimit(summary)
-    ? `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
-    : 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
+  if (hasOverallMonthlyLimit(summary)) {
+    return `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
+  }
+
+  if (hasCategoryBudgets(summary)) {
+    return 'Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.'
+  }
+
+  return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
 }
 
 function getHeroState(summary) {
@@ -780,7 +792,7 @@ export default function DashboardView() {
                     disabled={isBudgetSaving || !budgetDraft.monthly_limit || Number(budgetDraft.monthly_limit) <= 0}
                     type="submit"
                   >
-                    {isBudgetSaving ? 'Saving...' : hasOverallMonthlyLimit(summary) ? 'Update budget' : 'Set budget'}
+                    {isBudgetSaving ? 'Saving...' : hasOverallMonthlyLimit(summary) ? 'Update budget' : hasCategoryBudgets(summary) ? 'Set overall limit' : 'Set budget'}
                   </button>
                 </div>
               </div>

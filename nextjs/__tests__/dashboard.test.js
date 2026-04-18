@@ -40,14 +40,22 @@ jest.mock('@/lib/financeUtils', () => ({
 const { buildDerivedCategoryCards, getBudgetCtaLabel, getBudgetHintText, getCategoryCards } = require('@/components/dashboard-view')
 
 describe('getBudgetCtaLabel', () => {
-  it('returns Set budget when only category budgets exist', () => {
+  it('returns Set budget when no budgets exist', () => {
+    expect(getBudgetCtaLabel({
+      monthly_limit: null,
+      total_budget: null,
+      category_statuses: [],
+    })).toBe('Set budget')
+  })
+
+  it('returns Set overall limit when only category budgets exist', () => {
     expect(getBudgetCtaLabel({
       monthly_limit: null,
       total_budget: '75.00',
       category_statuses: [
         { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' },
       ],
-    })).toBe('Set budget')
+    })).toBe('Set overall limit')
   })
 
   it('returns Edit budget when an overall monthly limit exists', () => {
@@ -59,11 +67,22 @@ describe('getBudgetCtaLabel', () => {
 })
 
 describe('getBudgetHintText', () => {
-  it('explains that the sheet controls the overall monthly cap when no overall limit exists', () => {
+  it('explains that the sheet controls the overall monthly cap when no budgets exist', () => {
+    expect(getBudgetHintText({
+      monthly_limit: null,
+      total_budget: null,
+      category_statuses: [],
+    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
+  })
+
+  it('clarifies that category budgets already exist when there is no overall limit', () => {
     expect(getBudgetHintText({
       monthly_limit: null,
       total_budget: '75.00',
-    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
+      category_statuses: [
+        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' },
+      ],
+    })).toBe('Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.')
   })
 
   it('shows the current overall monthly limit when one exists', () => {
