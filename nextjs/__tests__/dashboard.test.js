@@ -48,10 +48,6 @@ describe('getBudgetCtaLabel', () => {
     })).toBe('Set budget')
   })
 
-  it('intentionally fails for CI/CD test', () => {
-    expect(true).toBe(false)
-  })
-
   it('returns Set overall limit when only category budgets exist', () => {
     expect(getBudgetCtaLabel({
       monthly_limit: null,
