@@ -4,12 +4,12 @@ on:
     branches: [main]
     paths:
       - 'nextjs/**'
-      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/ci.yml'
   pull_request_target:
     branches: [main]
     paths:
       - 'nextjs/**'
-      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
