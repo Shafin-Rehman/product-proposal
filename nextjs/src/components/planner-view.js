@@ -545,13 +545,14 @@ export default function PlannerView() {
               className="input-field"
               disabled={isSampleMode}
               inputMode="decimal"
-              min="1"
+              min="0.01"
               onChange={(event) => {
                 const nextValue = event.target.value
                 isOverallDirtyRef.current = nextValue !== serverDraftSnapshot.overallDraft
                 setOverallDraft(nextValue)
               }}
               placeholder="e.g. 2500"
+              step="0.01"
               type="number"
               value={overallDraft}
             />
@@ -656,9 +657,10 @@ export default function PlannerView() {
                         className="input-field"
                         disabled={isSampleMode || !row.isEditable}
                         inputMode="decimal"
-                        min="1"
+                        min="0.01"
                         onChange={(event) => handleRowDraftChange(row.id, event.target.value)}
                         placeholder={row.isEditable ? 'e.g. 250' : 'Read-only'}
+                        step="0.01"
                         type="number"
                         value={rowDraft}
                       />

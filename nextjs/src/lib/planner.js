@@ -19,6 +19,12 @@ function toBudgetKey(categoryId) {
   return categoryId ?? UNCATEGORIZED_KEY
 }
 
+function getPlannerProgressPercentage(plannedAmount, spentAmount) {
+  if (spentAmount == null) return 0
+  if (plannedAmount == null) return spentAmount > 0 ? 100 : 0
+  return Math.min(Number(((spentAmount / plannedAmount) * 100).toFixed(2)), 100)
+}
+
 export function getPlannerStatus(plannedAmount, spentAmount) {
   const planned = parseMoneyAmount(plannedAmount)
   const spent = parseSpendAmount(spentAmount)
@@ -65,9 +71,7 @@ export function buildPlannerRows({
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
       : Number((plannedAmount - spentAmount).toFixed(2))
-    const progressPercentage = plannedAmount == null || spentAmount == null
-      ? 0
-      : Math.min(Number(((spentAmount / plannedAmount) * 100).toFixed(2)), 100)
+    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
     const plannerStatus = spentAmount == null
       ? plannedAmount == null
         ? { label: 'No plan', tone: 'neutral' }
@@ -100,9 +104,7 @@ export function buildPlannerRows({
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
       : Number((plannedAmount - spentAmount).toFixed(2))
-    const progressPercentage = plannedAmount == null || spentAmount == null
-      ? (spentAmount > 0 ? 100 : 0)
-      : Math.min(Number(((spentAmount / plannedAmount) * 100).toFixed(2)), 100)
+    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
     const plannerStatus = spentAmount == null
       ? plannedAmount == null
         ? { label: 'No plan', tone: 'neutral' }
@@ -120,7 +122,7 @@ export function buildPlannerRows({
       progressPercentage,
       statusLabel: plannerStatus.label,
       statusTone: plannerStatus.tone,
-      isEditable: false,
+      isEditable: status.category_id != null,
       hasSavedPlan: plannedAmount != null,
     })
   })

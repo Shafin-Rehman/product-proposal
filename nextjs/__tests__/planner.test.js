@@ -94,6 +94,38 @@ describe('buildPlannerRows', () => {
     }))
   })
 
+  it('shows full progress for unplanned spend rows once money has been spent', () => {
+    const [row] = buildPlannerRows({
+      categories: [{ id: 'cat-food', name: 'Food', icon: null }],
+      categoryBudgets: [],
+      categoryStatuses: [{ category_id: 'cat-food', category_name: 'Food', spent: '18.25', monthly_limit: null }],
+    })
+
+    expect(row).toEqual(expect.objectContaining({
+      plannedAmount: null,
+      spentAmount: 18.25,
+      progressPercentage: 100,
+      statusLabel: 'Unplanned spend',
+      statusTone: 'warning',
+    }))
+  })
+
+  it('keeps summary-only rows editable when they still have a valid category id', () => {
+    const [row] = buildPlannerRows({
+      categories: [],
+      categoryBudgets: [],
+      categoryStatuses: [{ category_id: 'cat-food', category_name: 'Food', spent: '25.00', monthly_limit: '60.00' }],
+    })
+
+    expect(row).toEqual(expect.objectContaining({
+      categoryId: 'cat-food',
+      categoryName: 'Food',
+      plannedAmount: 60,
+      spentAmount: 25,
+      isEditable: true,
+    }))
+  })
+
   it('does not fabricate actual spend when actual summary data is unavailable', () => {
     const [row] = buildPlannerRows({
       categories: [{ id: 'cat-food', name: 'Food', icon: null }],
