@@ -1,19 +1,18 @@
 name: Deploy to Vercel
 
 on:
+  workflow_run:
+    workflows: ["App CI"]
+    types:
+      - completed
   workflow_dispatch:
-  push:
-    branches:
-      - feat/deploy-46
-    paths:
-      - 'nextjs/**'
-      - '.github/workflows/deploy-vercel.yml'
 
 permissions:
   contents: read
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     defaults:
       run:
