@@ -8,10 +8,6 @@ function parseMoneyAmount(value) {
   return Number(amount.toFixed(2))
 }
 
-function isComparableMoneyDraft(rawValue) {
-  return /^(?:\d+|\d*\.\d{1,2})$/.test(rawValue)
-}
-
 function parseSpendAmount(value) {
   if (value == null || value === '') return null
   const amount = Number(value)
@@ -39,7 +35,6 @@ export function normalizeMoneyDraftForComparison(value) {
 
   const rawValue = String(value).trim()
   if (!rawValue) return ''
-  if (!isComparableMoneyDraft(rawValue)) return rawValue
 
   const amount = parseMoneyAmount(rawValue)
   return amount == null ? rawValue : amount.toFixed(2)
@@ -206,7 +201,13 @@ export function mergePlannerDrafts({
 
   Object.entries(nextRowDrafts).forEach(([rowId, serverValue]) => {
     const currentValue = currentRowDrafts[rowId] ?? ''
-    if (nextDirtyRowIds.has(rowId) && !areMoneyDraftValuesEquivalent(currentValue, serverValue)) {
+    if (nextDirtyRowIds.has(rowId)) {
+      if (areMoneyDraftValuesEquivalent(currentValue, serverValue)) {
+        mergedRowDrafts[rowId] = currentValue
+        nextDirtyRowIds.delete(rowId)
+        return
+      }
+
       mergedRowDrafts[rowId] = currentValue
       return
     }
@@ -215,7 +216,16 @@ export function mergePlannerDrafts({
     nextDirtyRowIds.delete(rowId)
   })
 
-  if (isOverallDirty && !areMoneyDraftValuesEquivalent(currentOverallDraft, nextOverallDraft)) {
+  if (isOverallDirty) {
+    if (areMoneyDraftValuesEquivalent(currentOverallDraft, nextOverallDraft)) {
+      return {
+        rowDrafts: mergedRowDrafts,
+        overallDraft: currentOverallDraft,
+        dirtyRowIds: nextDirtyRowIds,
+        isOverallDirty: false,
+      }
+    }
+
     return {
       rowDrafts: mergedRowDrafts,
       overallDraft: currentOverallDraft,

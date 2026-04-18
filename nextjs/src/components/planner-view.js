@@ -14,6 +14,7 @@ import {
 } from '@/lib/financeUtils'
 import {
   areMoneyDraftValuesEquivalent,
+  formatMoneyDraftValue,
   buildPlannerDraftSnapshot,
   buildCopyLastMonthPayload,
   buildPlannerRows,
@@ -95,6 +96,7 @@ export default function PlannerView() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStart)
   const [reloadToken, setReloadToken] = useState(0)
   const [liveState, setLiveState] = useState({
+    month: null,
     status: 'loading',
     message: '',
     categories: [],
@@ -126,12 +128,15 @@ export default function PlannerView() {
     const { previousMonth } = getPlannerAdjacentMonths(selectedMonth)
 
     async function loadPlanner() {
-      setLiveState((current) => ({
-        ...current,
+      setLiveState({
+        month: selectedMonth,
         status: 'loading',
         message: '',
+        categories: [],
+        config: null,
+        summary: null,
         previousConfig: undefined,
-      }))
+      })
 
       const results = await Promise.allSettled([
         apiGet('/api/expenses/categories', {
@@ -166,6 +171,7 @@ export default function PlannerView() {
 
       const failedCount = results.filter((result) => result.status === 'rejected').length
       setLiveState({
+        month: selectedMonth,
         status: failedCount ? (failedCount === results.length ? 'error' : 'partial') : 'ready',
         message: failedCount
           ? failedCount === results.length
@@ -189,6 +195,7 @@ export default function PlannerView() {
       }
 
       setLiveState({
+        month: selectedMonth,
         status: 'error',
         message: getErrorMessage(error),
         categories: [],
@@ -201,10 +208,11 @@ export default function PlannerView() {
     return () => controller.abort()
   }, [isReady, isSampleMode, logout, reloadToken, router, selectedMonth, session?.accessToken])
 
-  const activeCategories = isSampleMode ? buildSampleCategories() : liveState.categories
-  const activeConfig = isSampleMode ? buildSampleConfig() : liveState.config
-  const activeSummary = isSampleMode ? demoBudgetSummary : liveState.summary
-  const previousConfig = isSampleMode ? null : liveState.previousConfig
+  const isLiveMonthCurrent = isSampleMode || liveState.month === selectedMonth
+  const activeCategories = isSampleMode ? buildSampleCategories() : (isLiveMonthCurrent ? liveState.categories : [])
+  const activeConfig = isSampleMode ? buildSampleConfig() : (isLiveMonthCurrent ? liveState.config : null)
+  const activeSummary = isSampleMode ? demoBudgetSummary : (isLiveMonthCurrent ? liveState.summary : null)
+  const previousConfig = isSampleMode ? null : (isLiveMonthCurrent ? liveState.previousConfig : undefined)
 
   const plannerRows = useMemo(() => buildPlannerRows({
     categories: activeCategories,
@@ -273,11 +281,11 @@ export default function PlannerView() {
   const { previousMonth, nextMonth } = getPlannerAdjacentMonths(activeMonth)
   const actualSpendState = isSampleMode
     ? 'ready'
+    : !isLiveMonthCurrent || liveState.status === 'loading'
+      ? 'loading'
     : activeSummary
       ? 'ready'
-      : liveState.status === 'loading'
-        ? 'loading'
-        : 'unavailable'
+      : 'unavailable'
   const copyState = getCopyLastMonthState({
     currentConfig: activeConfig,
     previousConfig,
@@ -362,6 +370,9 @@ export default function PlannerView() {
         { month: activeMonth, monthly_limit: nextLimit },
         { accessToken: session.accessToken }
       )
+      const savedDraft = formatMoneyDraftValue(nextLimit)
+      overallDraftRef.current = savedDraft
+      setOverallDraft(savedDraft)
       isOverallDirtyRef.current = false
       notifyDataChanged()
       setFeedback({
@@ -401,6 +412,16 @@ export default function PlannerView() {
         },
         { accessToken: session.accessToken }
       )
+      const savedDraft = formatMoneyDraftValue(nextLimit)
+      dirtyRowIdsRef.current.delete(row.id)
+      rowDraftsRef.current = {
+        ...rowDraftsRef.current,
+        [row.id]: savedDraft,
+      }
+      setRowDrafts((current) => ({
+        ...current,
+        [row.id]: savedDraft,
+      }))
       notifyDataChanged()
       setFeedback({
         tone: 'success',
@@ -496,7 +517,7 @@ export default function PlannerView() {
         </div>
       </div>
 
-      <LiveNotice message={liveState.message} onRetry={handleRetry} />
+      <LiveNotice message={isLiveMonthCurrent ? liveState.message : ''} onRetry={handleRetry} />
       <PlannerFeedback feedback={feedback} />
 
       <article className="planner-summary">

@@ -184,7 +184,9 @@ describe('planner draft merging', () => {
   it('treats equivalent money drafts as equal even when formatting differs', () => {
     expect(areMoneyDraftValuesEquivalent('1.1', '1.10')).toBe(true)
     expect(areMoneyDraftValuesEquivalent('01.10', '1.10')).toBe(true)
-    expect(areMoneyDraftValuesEquivalent('1.', '1.00')).toBe(false)
+    expect(areMoneyDraftValuesEquivalent('1.', '1.00')).toBe(true)
+    expect(areMoneyDraftValuesEquivalent('1e2', '100.00')).toBe(true)
+    expect(areMoneyDraftValuesEquivalent('.', '1.00')).toBe(false)
   })
 
   it('preserves dirty row drafts during background refreshes', () => {
@@ -217,8 +219,24 @@ describe('planner draft merging', () => {
       dirtyRowIds: new Set(['cat-food']),
       isOverallDirty: true,
     })).toEqual({
-      rowDrafts: { 'cat-food': '145.00' },
-      overallDraft: '500.00',
+      rowDrafts: { 'cat-food': '145.0' },
+      overallDraft: '500.0',
+      dirtyRowIds: new Set(),
+      isOverallDirty: false,
+    })
+  })
+
+  it('clears dirty flags for equivalent values without rewriting in-progress drafts', () => {
+    expect(mergePlannerDrafts({
+      currentRowDrafts: { 'cat-food': '1.' },
+      currentOverallDraft: '5e2',
+      nextRowDrafts: { 'cat-food': '1.00' },
+      nextOverallDraft: '500.00',
+      dirtyRowIds: new Set(['cat-food']),
+      isOverallDirty: true,
+    })).toEqual({
+      rowDrafts: { 'cat-food': '1.' },
+      overallDraft: '5e2',
       dirtyRowIds: new Set(),
       isOverallDirty: false,
     })
