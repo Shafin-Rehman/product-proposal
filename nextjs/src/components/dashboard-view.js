@@ -50,8 +50,13 @@ export function hasOverallMonthlyLimit(summary) {
   return Number(summary?.monthly_limit ?? 0) > 0
 }
 
+function hasBudgetedCategoryStatuses(categoryStatuses) {
+  return Array.isArray(categoryStatuses)
+    && categoryStatuses.some((item) => Number(item?.monthly_limit ?? 0) > 0)
+}
+
 export function hasCategoryBudgets(summary) {
-  return Array.isArray(summary?.category_statuses) && summary.category_statuses.length > 0
+  return hasBudgetedCategoryStatuses(summary?.category_statuses)
 }
 
 export function getBudgetCtaLabel(summary) {
@@ -280,7 +285,7 @@ export function buildDerivedCategoryCards(expenses = []) {
 }
 
 export function getCategoryCards(categoryStatuses, expenses = []) {
-  return Array.isArray(categoryStatuses)
+  return hasBudgetedCategoryStatuses(categoryStatuses)
     ? buildLiveCategoryCards(categoryStatuses)
     : buildDerivedCategoryCards(expenses)
 }

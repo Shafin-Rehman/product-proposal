@@ -58,6 +58,16 @@ describe('getBudgetCtaLabel', () => {
     })).toBe('Set overall limit')
   })
 
+  it('returns Set budget when category statuses only come from spending', () => {
+    expect(getBudgetCtaLabel({
+      monthly_limit: null,
+      total_budget: null,
+      category_statuses: [
+        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' },
+      ],
+    })).toBe('Set budget')
+  })
+
   it('returns Edit budget when an overall monthly limit exists', () => {
     expect(getBudgetCtaLabel({
       monthly_limit: '125.00',
@@ -83,6 +93,16 @@ describe('getBudgetHintText', () => {
         { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' },
       ],
     })).toBe('Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.')
+  })
+
+  it('does not claim category budgets already exist for spend-only statuses', () => {
+    expect(getBudgetHintText({
+      monthly_limit: null,
+      total_budget: null,
+      category_statuses: [
+        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' },
+      ],
+    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
   })
 
   it('shows the current overall monthly limit when one exists', () => {
@@ -120,6 +140,27 @@ describe('getCategoryCards', () => {
       { id: 'e1', category_id: 'cat-other', category_name: 'Other', amount: '999.00' },
     ])).toEqual([
       expect.objectContaining({ name: 'Food', amount: 50, progress: 62.5, note: '$30 left' }),
+    ])
+  })
+
+  it('falls back to derived expense cards when category statuses do not include real budgets', () => {
+    expect(getCategoryCards([
+      {
+        category_id: 'cat-food',
+        category_name: 'Food',
+        category_icon: 'F',
+        monthly_limit: null,
+        spent: '50.00',
+        remaining_budget: null,
+        progress_percentage: 0,
+      },
+    ], [
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '30.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '20.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '50.00' },
+    ])).toEqual([
+      expect.objectContaining({ name: 'Food', amount: 50, progress: 50, note: '50% of spend' }),
+      expect.objectContaining({ name: 'Fun', amount: 50, progress: 50, note: '50% of spend' }),
     ])
   })
 })
