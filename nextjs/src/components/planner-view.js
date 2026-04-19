@@ -300,7 +300,7 @@ export default function PlannerView() {
     currentConfig: activeConfig,
     previousConfig,
     isSampleMode,
-    isPreviousMonthLoading: !isSampleMode && liveState.previousConfigStatus === 'loading',
+    isPreviousMonthLoading: !isSampleMode && (!isLiveMonthCurrent || liveState.previousConfigStatus === 'loading'),
     isPreviousMonthUnavailable: !isSampleMode && liveState.previousConfigStatus === 'unavailable',
   })
   const planDeltaValue = !plannerSummary.hasActualSpendData
