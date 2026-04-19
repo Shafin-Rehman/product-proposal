@@ -4,6 +4,7 @@ import {
   evaluateThresholdForMonth,
   getMonthlyBudgetConfig,
   getOwnedOrGlobalCategoriesByIds,
+  isPositiveMoneyValue,
   normalizeMonth,
   upsertCategoryBudgets,
   upsertMonthlyBudget,
@@ -36,11 +37,13 @@ export async function POST(request) {
   const month = normalizeMonth(body.month)
   const monthlyLimit = body.monthly_limit
   const categoryBudgets = body.category_budgets
+  const monthlyLimitValidationMessage = 'monthly_limit must be a valid positive money amount'
+  const categoryBudgetLimitValidationMessage = 'Each category budget monthly_limit must be a valid positive money amount'
 
   if (!month) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
 
-  if (monthlyLimit !== undefined && (monthlyLimit == null || Number.isNaN(Number(monthlyLimit)) || Number(monthlyLimit) <= 0)) {
-    return NextResponse.json({ error: 'monthly_limit must be greater than 0' }, { status: 400 })
+  if (monthlyLimit !== undefined && !isPositiveMoneyValue(monthlyLimit)) {
+    return NextResponse.json({ error: monthlyLimitValidationMessage }, { status: 400 })
   }
 
   if (categoryBudgets !== undefined && !Array.isArray(categoryBudgets)) {
@@ -64,8 +67,8 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Each category budget requires a valid UUID category_id' }, { status: 400 })
   }
 
-  if (normalizedCategoryBudgets.some((item) => item.monthly_limit == null || Number.isNaN(Number(item.monthly_limit)) || Number(item.monthly_limit) <= 0)) {
-    return NextResponse.json({ error: 'Each category budget monthly_limit must be greater than 0' }, { status: 400 })
+  if (normalizedCategoryBudgets.some((item) => !isPositiveMoneyValue(item.monthly_limit))) {
+    return NextResponse.json({ error: categoryBudgetLimitValidationMessage }, { status: 400 })
   }
 
   const categoryIds = normalizedCategoryBudgets.map((item) => item.category_id)
