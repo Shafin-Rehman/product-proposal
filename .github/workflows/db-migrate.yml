@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
+      - '.github/workflows/db-migrate.yml'
   pull_request_target:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
+      - '.github/workflows/db-migrate.yml'
 
 permissions:
   contents: read
