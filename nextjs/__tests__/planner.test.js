@@ -279,6 +279,22 @@ describe('planner draft merging', () => {
       isOverallDirty: false,
     })
   })
+
+  it('prunes dirty ids for rows that no longer exist in the next snapshot', () => {
+    expect(mergePlannerDrafts({
+      currentRowDrafts: { 'cat-food': '25.00', 'cat-fun': '10.00' },
+      currentOverallDraft: '500.00',
+      nextRowDrafts: { 'cat-food': '25.00' },
+      nextOverallDraft: '500.00',
+      dirtyRowIds: new Set(['cat-fun']),
+      isOverallDirty: false,
+    })).toEqual({
+      rowDrafts: { 'cat-food': '25.00' },
+      overallDraft: '500.00',
+      dirtyRowIds: new Set(),
+      isOverallDirty: false,
+    })
+  })
 })
 
 describe('planner money normalization', () => {

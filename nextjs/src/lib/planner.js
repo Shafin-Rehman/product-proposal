@@ -82,7 +82,6 @@ export function buildPlannerRows({
 } = {}) {
   const rows = []
   const renderedRowIds = new Set()
-  const categoriesById = new Map(categories.map((category) => [category.id, category]))
   const budgetsById = new Map(
     categoryBudgets.map((item) => [toBudgetKey(item.category_id), item])
   )
@@ -237,7 +236,9 @@ export function mergePlannerDrafts({
   dirtyRowIds = new Set(),
   isOverallDirty = false,
 } = {}) {
-  const nextDirtyRowIds = new Set(dirtyRowIds)
+  const nextDirtyRowIds = new Set(
+    [...dirtyRowIds].filter((rowId) => Object.hasOwn(nextRowDrafts, rowId))
+  )
   const mergedRowDrafts = {}
 
   Object.entries(nextRowDrafts).forEach(([rowId, serverValue]) => {
