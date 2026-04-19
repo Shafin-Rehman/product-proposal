@@ -1,12 +1,21 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({ signUp: jest.fn(), signIn: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
-jest.mock('@/lib/budget', () => ({ evaluateThresholdForMonth: jest.fn() }))
+jest.mock('@/lib/budget', () => {
+  const actual = jest.requireActual('@/lib/budget')
+  return {
+    ...actual,
+    evaluateThresholdForMonth: jest.fn(),
+    isPositiveMoneyValue: jest.fn(actual.isPositiveMoneyValue),
+    normalizeDate: jest.fn(actual.normalizeDate),
+  }
+})
 
 const { testApiHandler } = require('next-test-api-route-handler')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
-const { evaluateThresholdForMonth } = require('@/lib/budget')
+const { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } = require('@/lib/budget')
+const actualBudget = jest.requireActual('@/lib/budget')
 const expensesHandler = require('@/app/api/expenses/route')
 const getHandler = require('@/app/api/expenses/get/route')
 const updateHandler = require('@/app/api/expenses/update/route')
@@ -18,8 +27,12 @@ beforeEach(() => {
   db.query.mockClear()
   authenticate.mockClear()
   evaluateThresholdForMonth.mockClear()
+  isPositiveMoneyValue.mockClear()
+  normalizeDate.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
   evaluateThresholdForMonth.mockResolvedValue(null)
+  isPositiveMoneyValue.mockImplementation(actualBudget.isPositiveMoneyValue)
+  normalizeDate.mockImplementation(actualBudget.normalizeDate)
 })
 
 describe('POST /api/expenses', () => {
@@ -55,13 +68,10 @@ describe('POST /api/expenses', () => {
   it('201 - returns a budget alert when the threshold is crossed', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
     evaluateThresholdForMonth.mockResolvedValueOnce({
-      alertTriggered: true,
-      budget_alert: {
-        month: '2026-03-01',
-        monthly_limit: '20.00',
-        total_expenses: '25.00',
-        threshold_exceeded: true,
-      }
+      threshold_exceeded: true,
+      month: '2026-03-01',
+      monthly_limit: '20.00',
+      total_expenses: '25.00',
     })
     await testApiHandler({
       appHandler: expensesHandler,
@@ -98,6 +108,43 @@ describe('POST /api/expenses', () => {
         expect((await res.json()).error).toBe('amount and date are required')
       }
     })
+  })
+
+  it('400 - rejects a non-positive amount', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 0, date: '2026-03-01' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects a positive amount with more than 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 0.001, date: '2026-03-01' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an invalid date', async () => {
+    normalizeDate.mockReturnValueOnce(null)
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 25, date: 'bad-date' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid date is required')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
   })
 })
 
@@ -200,6 +247,29 @@ describe('POST /api/expenses/update', () => {
     })
   })
 
+  it('200 - normalizes a timestamp date before updating', async () => {
+    normalizeDate.mockReturnValueOnce('2026-03-02')
+    db.query
+      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, date: '2026-03-02' }] })
+    evaluateThresholdForMonth
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, date: '2026-03-02T09:15:00Z' }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('UPDATE public.expenses SET'),
+          ['2026-03-02', 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('400 - missing expense_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,
@@ -210,18 +280,57 @@ describe('POST /api/expenses/update', () => {
       }
     })
   })
+
+  it('400 - rejects a non-numeric update amount', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, amount: 'abc' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an update amount with more than 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, amount: '1.999' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an invalid update date', async () => {
+    normalizeDate.mockReturnValueOnce(null)
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, date: 'bad-date' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid date is required')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
 })
 
 describe('POST /api/expenses/delete', () => {
-  it('204 - deleted', async () => {
+  it('200 - deleted with budget alert status', async () => {
     db.query
       .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
       .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+    evaluateThresholdForMonth.mockResolvedValueOnce({ budget_alert: null, alertTriggered: false })
     await testApiHandler({
       appHandler: deleteHandler,
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1 }))
-        expect(res.status).toBe(204)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ id: 1, budget_alert: null })
       }
     })
     expect(evaluateThresholdForMonth).toHaveBeenCalledWith('uid', '2026-03-01')

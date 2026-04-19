@@ -15,11 +15,14 @@ export async function GET(request) {
     return NextResponse.json({
       month: summary.month,
       monthly_limit: summary.monthly_limit,
+      category_budget_total: summary.category_budget_total,
+      total_budget: summary.total_budget,
       total_income: summary.total_income,
       total_expenses: summary.total_expenses,
       remaining_budget: summary.remaining_budget,
       threshold_exceeded: summary.threshold_exceeded,
       notified: summary.notified,
+      category_statuses: summary.category_statuses,
     })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch budget summary' }, { status: 500 })
