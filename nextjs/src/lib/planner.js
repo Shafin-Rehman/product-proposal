@@ -81,6 +81,7 @@ export function buildPlannerRows({
   actualsAvailable = true,
 } = {}) {
   const rows = []
+  const renderedRowIds = new Set()
   const categoriesById = new Map(categories.map((category) => [category.id, category]))
   const budgetsById = new Map(
     categoryBudgets.map((item) => [toBudgetKey(item.category_id), item])
@@ -118,14 +119,16 @@ export function buildPlannerRows({
       isEditable: true,
       hasSavedPlan: plannedAmount != null,
     })
+    renderedRowIds.add(toBudgetKey(category.id))
   })
 
   const extraStatuses = categoryStatuses
-    .filter((status) => !categoriesById.has(status.category_id))
+    .filter((status) => !renderedRowIds.has(toBudgetKey(status.category_id)))
     .sort((left, right) => String(left.category_name || '').localeCompare(String(right.category_name || '')))
 
   extraStatuses.forEach((status) => {
-    const plannedAmount = parseMoneyAmount(status?.monthly_limit)
+    const budget = budgetsById.get(toBudgetKey(status.category_id))
+    const plannedAmount = parseMoneyAmount(budget?.monthly_limit ?? status?.monthly_limit)
     const spentAmount = actualsAvailable ? parseSpendAmount(status?.spent) ?? 0 : null
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
@@ -140,8 +143,8 @@ export function buildPlannerRows({
     rows.push({
       id: toBudgetKey(status.category_id),
       categoryId: status.category_id,
-      categoryName: status.category_name || 'Uncategorized',
-      categoryIcon: status.category_icon || null,
+      categoryName: status.category_name || budget?.category_name || 'Uncategorized',
+      categoryIcon: status.category_icon || budget?.category_icon || null,
       plannedAmount,
       spentAmount,
       remainingAmount,
@@ -151,6 +154,41 @@ export function buildPlannerRows({
       isEditable: status.category_id != null,
       hasSavedPlan: plannedAmount != null,
     })
+    renderedRowIds.add(toBudgetKey(status.category_id))
+  })
+
+  const extraBudgets = categoryBudgets
+    .filter((budget) => !renderedRowIds.has(toBudgetKey(budget.category_id)))
+    .sort((left, right) => String(left.category_name || '').localeCompare(String(right.category_name || '')))
+
+  extraBudgets.forEach((budget) => {
+    const plannedAmount = parseMoneyAmount(budget?.monthly_limit)
+    const spentAmount = actualsAvailable ? 0 : null
+    const remainingAmount = plannedAmount == null || spentAmount == null
+      ? null
+      : Number((plannedAmount - spentAmount).toFixed(2))
+    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
+    const plannerStatus = spentAmount == null
+      ? plannedAmount == null
+        ? { label: 'No plan', tone: 'neutral' }
+        : { label: 'Actual unavailable', tone: 'neutral' }
+      : getPlannerStatus(plannedAmount, spentAmount)
+
+    rows.push({
+      id: toBudgetKey(budget.category_id),
+      categoryId: budget.category_id,
+      categoryName: budget.category_name || 'Uncategorized',
+      categoryIcon: budget.category_icon || null,
+      plannedAmount,
+      spentAmount,
+      remainingAmount,
+      progressPercentage,
+      statusLabel: plannerStatus.label,
+      statusTone: plannerStatus.tone,
+      isEditable: budget.category_id != null,
+      hasSavedPlan: plannedAmount != null,
+    })
+    renderedRowIds.add(toBudgetKey(budget.category_id))
   })
 
   return rows

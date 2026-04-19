@@ -129,6 +129,44 @@ describe('buildPlannerRows', () => {
     }))
   })
 
+  it('renders saved category budgets even when categories and summary are unavailable', () => {
+    const [row] = buildPlannerRows({
+      categories: [],
+      categoryBudgets: [{ category_id: 'cat-food', category_name: 'Food', category_icon: '🍔', monthly_limit: '60.00' }],
+      categoryStatuses: [],
+      actualsAvailable: false,
+    })
+
+    expect(row).toEqual(expect.objectContaining({
+      categoryId: 'cat-food',
+      categoryName: 'Food',
+      categoryIcon: '🍔',
+      plannedAmount: 60,
+      spentAmount: null,
+      statusLabel: 'Actual unavailable',
+      isEditable: true,
+      hasSavedPlan: true,
+    }))
+  })
+
+  it('dedupes budget fallback rows when a summary-backed row for the same category already exists', () => {
+    const rows = buildPlannerRows({
+      categories: [],
+      categoryBudgets: [{ category_id: 'cat-food', category_name: 'Food budget', category_icon: '🍔', monthly_limit: '60.00' }],
+      categoryStatuses: [{ category_id: 'cat-food', category_name: 'Food status', category_icon: '🥗', spent: '25.00', monthly_limit: null }],
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toEqual(expect.objectContaining({
+      categoryId: 'cat-food',
+      categoryName: 'Food status',
+      categoryIcon: '🥗',
+      plannedAmount: 60,
+      spentAmount: 25,
+      isEditable: true,
+    }))
+  })
+
   it('does not fabricate actual spend when actual summary data is unavailable', () => {
     const [row] = buildPlannerRows({
       categories: [{ id: 'cat-food', name: 'Food', icon: null }],
