@@ -293,6 +293,17 @@ describe('getCopyLastMonthState', () => {
     })
   })
 
+  it('disables copy when the previous month is unavailable', () => {
+    expect(getCopyLastMonthState({
+      currentConfig: null,
+      previousConfig: null,
+      isPreviousMonthUnavailable: true,
+    })).toEqual({
+      disabled: true,
+      reason: 'Last month is unavailable right now.',
+    })
+  })
+
   it('disables copy when the target month already has a saved plan', () => {
     expect(getCopyLastMonthState({
       currentConfig: {

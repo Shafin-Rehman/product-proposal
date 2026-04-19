@@ -271,6 +271,7 @@ export function getCopyLastMonthState({
   previousConfig,
   isSampleMode = false,
   isPreviousMonthLoading = false,
+  isPreviousMonthUnavailable = false,
 } = {}) {
   if (isSampleMode) {
     return {
@@ -283,6 +284,13 @@ export function getCopyLastMonthState({
     return {
       disabled: true,
       reason: 'Checking last month for a saved plan.',
+    }
+  }
+
+  if (isPreviousMonthUnavailable) {
+    return {
+      disabled: true,
+      reason: 'Last month is unavailable right now.',
     }
   }
 

@@ -103,6 +103,7 @@ export default function PlannerView() {
     config: null,
     summary: null,
     previousConfig: undefined,
+    previousConfigStatus: 'loading',
   })
   const [rowDrafts, setRowDrafts] = useState({})
   const [overallDraft, setOverallDraft] = useState('')
@@ -128,14 +129,19 @@ export default function PlannerView() {
     const { previousMonth } = getPlannerAdjacentMonths(selectedMonth)
 
     async function loadPlanner() {
-      setLiveState({
-        month: selectedMonth,
-        status: 'loading',
-        message: '',
-        categories: [],
-        config: null,
-        summary: null,
-        previousConfig: undefined,
+      setLiveState((current) => {
+        const isSameMonthReload = current.month === selectedMonth
+
+        return {
+          month: selectedMonth,
+          status: 'loading',
+          message: '',
+          categories: isSameMonthReload ? current.categories : [],
+          config: isSameMonthReload ? current.config : null,
+          summary: isSameMonthReload ? current.summary : null,
+          previousConfig: undefined,
+          previousConfigStatus: 'loading',
+        }
       })
 
       const results = await Promise.allSettled([
@@ -182,6 +188,7 @@ export default function PlannerView() {
         config: results[1].status === 'fulfilled' ? results[1].value : null,
         summary: results[2].status === 'fulfilled' ? results[2].value : null,
         previousConfig: results[3].status === 'fulfilled' ? results[3].value : null,
+        previousConfigStatus: results[3].status === 'fulfilled' ? 'ready' : 'unavailable',
       })
     }
 
@@ -202,6 +209,7 @@ export default function PlannerView() {
         config: null,
         summary: null,
         previousConfig: null,
+        previousConfigStatus: 'unavailable',
       })
     })
 
@@ -290,7 +298,8 @@ export default function PlannerView() {
     currentConfig: activeConfig,
     previousConfig,
     isSampleMode,
-    isPreviousMonthLoading: !isSampleMode && liveState.previousConfig === undefined,
+    isPreviousMonthLoading: !isSampleMode && liveState.previousConfigStatus === 'loading',
+    isPreviousMonthUnavailable: !isSampleMode && liveState.previousConfigStatus === 'unavailable',
   })
   const planDeltaValue = !plannerSummary.hasActualSpendData
     ? actualSpendState === 'loading'
