@@ -27,10 +27,6 @@ jobs:
       - name: Dry-run migrations against staging
         if: github.event_name == 'pull_request_target'
         run: supabase db push --db-url "${{ secrets.STAGING_DATABASE_URL }}" --dry-run
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
       - name: Apply migrations to production
         if: github.event_name == 'push'
         run: supabase db push --db-url "${{ secrets.DATABASE_URL }}" --yes
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
