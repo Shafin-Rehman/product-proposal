@@ -1,6 +1,8 @@
 import { shiftMonth } from './financeUtils'
 
 const UNCATEGORIZED_KEY = '__uncategorized__'
+const MAX_MONEY_CENTS = 9999999999n
+const MAX_EXPANDED_MONEY_LENGTH = 32
 
 function expandScientificNotation(rawValue) {
   if (!/[eE]/.test(rawValue)) return rawValue
@@ -15,6 +17,11 @@ function expandScientificNotation(rawValue) {
   const digits = `${integerPart}${fractionPart}`
   const decimalIndex = integerPart.length
   const shiftedIndex = decimalIndex + exponent
+  const expandedLength = Math.max(shiftedIndex, digits.length, 1) + (shiftedIndex <= 0 ? Math.abs(shiftedIndex) + 2 : 0)
+
+  if (Math.abs(exponent) > MAX_EXPANDED_MONEY_LENGTH || expandedLength > MAX_EXPANDED_MONEY_LENGTH) {
+    return null
+  }
 
   if (shiftedIndex <= 0) {
     return `${sign}0.${'0'.repeat(Math.abs(shiftedIndex))}${digits}`
@@ -49,7 +56,7 @@ function parseMoneyAmount(value) {
     cents += 1n
   }
 
-  if (cents <= 0n || cents > BigInt(Number.MAX_SAFE_INTEGER)) return null
+  if (cents <= 0n || cents > MAX_MONEY_CENTS) return null
   return Number(cents) / 100
 }
 
