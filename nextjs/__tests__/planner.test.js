@@ -305,7 +305,8 @@ describe('planner money normalization', () => {
   })
 
   it('normalizes valid save drafts to the stored two-decimal number shape', () => {
-    expect(normalizeMoneyDraftForSave('1.105')).toBe(1.1)
+    expect(normalizeMoneyDraftForSave('1.005')).toBe(1.01)
+    expect(normalizeMoneyDraftForSave('1.105')).toBe(1.11)
     expect(normalizeMoneyDraftForSave('80')).toBe(80)
     expect(normalizeMoneyDraftForSave('1.')).toBe(1)
     expect(normalizeMoneyDraftForSave('0.004')).toBeNull()

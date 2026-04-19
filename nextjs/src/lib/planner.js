@@ -2,13 +2,55 @@ import { shiftMonth } from './financeUtils'
 
 const UNCATEGORIZED_KEY = '__uncategorized__'
 
-function parseMoneyAmount(value) {
-  const amount = Number(value)
-  if (!Number.isFinite(amount)) return null
+function expandScientificNotation(rawValue) {
+  if (!/[eE]/.test(rawValue)) return rawValue
 
-  const normalizedAmount = Number(amount.toFixed(2))
-  if (normalizedAmount <= 0) return null
-  return normalizedAmount
+  const match = rawValue.match(/^([+-]?)(\d+)(?:\.(\d*))?[eE]([+-]?\d+)$/)
+  if (!match) return null
+
+  const [, sign, integerPart, fractionPart = '', exponentValue] = match
+  const exponent = Number(exponentValue)
+  if (!Number.isInteger(exponent)) return null
+
+  const digits = `${integerPart}${fractionPart}`
+  const decimalIndex = integerPart.length
+  const shiftedIndex = decimalIndex + exponent
+
+  if (shiftedIndex <= 0) {
+    return `${sign}0.${'0'.repeat(Math.abs(shiftedIndex))}${digits}`
+  }
+
+  if (shiftedIndex >= digits.length) {
+    return `${sign}${digits}${'0'.repeat(shiftedIndex - digits.length)}`
+  }
+
+  return `${sign}${digits.slice(0, shiftedIndex)}.${digits.slice(shiftedIndex)}`
+}
+
+function parseMoneyAmount(value) {
+  if (value == null) return null
+
+  const rawValue = String(value).trim()
+  if (!rawValue) return null
+
+  const plainValue = expandScientificNotation(rawValue) ?? rawValue
+  const match = plainValue.match(/^([+-])?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/)
+  if (!match) return null
+
+  const sign = match[1]
+  if (sign === '-') return null
+
+  const integerDigits = match[2] ?? '0'
+  const fractionDigits = match[3] ?? match[4] ?? ''
+  let cents = BigInt(integerDigits) * 100n
+  cents += BigInt((fractionDigits.padEnd(2, '0').slice(0, 2)) || '0')
+
+  if ((fractionDigits[2] ?? '0') >= '5') {
+    cents += 1n
+  }
+
+  if (cents <= 0n || cents > BigInt(Number.MAX_SAFE_INTEGER)) return null
+  return Number(cents) / 100
 }
 
 function parseSpendAmount(value) {
