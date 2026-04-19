@@ -2121,7 +2121,7 @@ html[data-theme='dark'] .mode-toggle {
   left: 50%;
   bottom: max(0.85rem, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem;
   width: min(calc(100% - 1.2rem), calc(var(--shell-width) + 0.4rem));
   transform: translateX(-50%);
@@ -3550,7 +3550,7 @@ html[data-theme='dark'] .settings-item {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
   width: calc(100% - 1rem);
   margin: 0 auto calc(0.7rem + env(safe-area-inset-bottom));
@@ -6042,10 +6042,6 @@ html[data-theme='dark'] .donut-chart__inner {
   .transactions-fab-slot {
     bottom: calc(5.1rem + env(safe-area-inset-bottom));
   }
-}
-
-.bottom-nav {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .planner-screen {

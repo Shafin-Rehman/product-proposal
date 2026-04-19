@@ -4,8 +4,11 @@ const UNCATEGORIZED_KEY = '__uncategorized__'
 
 function parseMoneyAmount(value) {
   const amount = Number(value)
-  if (!Number.isFinite(amount) || amount <= 0) return null
-  return Number(amount.toFixed(2))
+  if (!Number.isFinite(amount)) return null
+
+  const normalizedAmount = Number(amount.toFixed(2))
+  if (normalizedAmount <= 0) return null
+  return normalizedAmount
 }
 
 function parseSpendAmount(value) {

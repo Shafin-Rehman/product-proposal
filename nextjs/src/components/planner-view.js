@@ -320,6 +320,8 @@ export default function PlannerView() {
     : actualSpendState === 'loading'
       ? 'Waiting for the live budget summary to load.'
       : 'The live budget summary is unavailable, so actual spend is not being guessed.'
+  const normalizedOverallDraft = normalizeMoneyDraftForSave(overallDraft)
+  const normalizedOverallLimit = normalizeMoneyDraftForSave(plannerSummary.overallLimit)
   const planDeltaTone = !plannerSummary.hasActualSpendData || plannerSummary.remainingTotal == null
     ? 'neutral'
     : plannerSummary.remainingTotal < 0
@@ -591,9 +593,8 @@ export default function PlannerView() {
             disabled={
               isSampleMode
               || savingTarget === 'overall'
-              || !overallDraft
-              || Number(overallDraft) <= 0
-              || Number(overallDraft) === plannerSummary.overallLimit
+              || normalizedOverallDraft == null
+              || normalizedOverallDraft === normalizedOverallLimit
             }
             type="submit"
           >
@@ -615,9 +616,12 @@ export default function PlannerView() {
             {plannerRows.map((row) => {
               const visual = getCategoryVisual(row.categoryName)
               const rowDraft = rowDrafts[row.id] ?? ''
-              const draftAmount = Number(rowDraft)
-              const hasValidDraft = rowDraft !== '' && Number.isFinite(draftAmount) && draftAmount > 0
-              const isUnchanged = hasValidDraft && row.plannedAmount != null && draftAmount === row.plannedAmount
+              const normalizedRowDraft = normalizeMoneyDraftForSave(rowDraft)
+              const normalizedPlannedAmount = normalizeMoneyDraftForSave(row.plannedAmount)
+              const hasValidDraft = normalizedRowDraft != null
+              const isUnchanged = hasValidDraft
+                && normalizedPlannedAmount != null
+                && normalizedRowDraft === normalizedPlannedAmount
               const remainingLabel = row.spentAmount == null
                 ? actualSpendState === 'loading'
                   ? 'Waiting for actual spend'
