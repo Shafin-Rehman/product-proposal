@@ -33,12 +33,25 @@ export default function AccountPage() {
   const { user, logout } = useAuth()
   const { mode, isSampleMode, setMode } = useDataMode()
   const { theme, setTheme } = useTheme()
+
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [displayName, setDisplayName] = useState(getDisplayName(user?.email))
+  const [isEditing, setIsEditing] = useState(false)
+  const [nameInput, setNameInput] = useState(getDisplayName(user?.email))
+  const [isSaving, setIsSaving] = useState(false)
 
   const handleLogout = () => {
     setIsLoggingOut(true)
     logout()
     router.replace('/login')
+  }
+
+  const handleSaveName = async () => {
+    if (!nameInput.trim()) return
+    setIsSaving(true)
+    setDisplayName(nameInput.trim())
+    setIsEditing(false)
+    setIsSaving(false)
   }
 
   return (
@@ -47,7 +60,52 @@ export default function AccountPage() {
         <div className="account-hero__avatar">{getInitials(user?.email)}</div>
         <div className="account-hero__copy">
           <span className="account-hero__eyebrow">Account settings</span>
-          <h1>{getDisplayName(user?.email)}</h1>
+
+          {isEditing ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+              <input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                style={{
+                  fontSize: '1rem',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid #ccc',
+                  outline: 'none',
+                }}
+                autoFocus
+              />
+              <button onClick={handleSaveName} disabled={isSaving} type="button">
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => setIsEditing(false)} type="button">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <h1>
+              {displayName}
+              <button
+                onClick={() => {
+                  setNameInput(displayName)
+                  setIsEditing(true)
+                }}
+                type="button"
+                style={{
+                  marginLeft: '10px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                }}
+                aria-label="Edit display name"
+              >
+                ✏️
+              </button>
+            </h1>
+          )}
+
           <p>{user?.email || 'No email available'}</p>
         </div>
       </article>
