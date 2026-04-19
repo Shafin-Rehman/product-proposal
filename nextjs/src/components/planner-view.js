@@ -289,11 +289,13 @@ export default function PlannerView() {
   const { previousMonth, nextMonth } = getPlannerAdjacentMonths(activeMonth)
   const actualSpendState = isSampleMode
     ? 'ready'
-    : !isLiveMonthCurrent || liveState.status === 'loading'
+    : !isLiveMonthCurrent
       ? 'loading'
     : activeSummary
       ? 'ready'
-      : 'unavailable'
+      : liveState.status === 'loading'
+        ? 'loading'
+        : 'unavailable'
   const copyState = getCopyLastMonthState({
     currentConfig: activeConfig,
     previousConfig,
@@ -382,6 +384,18 @@ export default function PlannerView() {
         { accessToken: session.accessToken }
       )
       const savedDraft = formatMoneyDraftValue(nextLimit)
+      setLiveState((current) => {
+        if (current.month !== activeMonth) return current
+
+        return {
+          ...current,
+          config: {
+            month: activeMonth,
+            monthly_limit: nextLimit,
+            category_budgets: current.config?.category_budgets ?? [],
+          },
+        }
+      })
       overallDraftRef.current = savedDraft
       setOverallDraft(savedDraft)
       isOverallDirtyRef.current = false
@@ -424,6 +438,34 @@ export default function PlannerView() {
         { accessToken: session.accessToken }
       )
       const savedDraft = formatMoneyDraftValue(nextLimit)
+      setLiveState((current) => {
+        if (current.month !== activeMonth) return current
+
+        const currentBudgets = current.config?.category_budgets ?? []
+        const nextBudget = {
+          category_id: row.categoryId,
+          category_name: row.categoryName,
+          category_icon: row.categoryIcon,
+          monthly_limit: nextLimit,
+        }
+        const budgetExists = currentBudgets.some((budget) => budget.category_id === row.categoryId)
+        const categoryBudgets = budgetExists
+          ? currentBudgets.map((budget) => (
+            budget.category_id === row.categoryId
+              ? { ...budget, ...nextBudget }
+              : budget
+          ))
+          : [...currentBudgets, nextBudget]
+
+        return {
+          ...current,
+          config: {
+            month: activeMonth,
+            monthly_limit: current.config?.monthly_limit ?? null,
+            category_budgets: categoryBudgets,
+          },
+        }
+      })
       dirtyRowIdsRef.current.delete(row.id)
       rowDraftsRef.current = {
         ...rowDraftsRef.current,
@@ -640,6 +682,24 @@ export default function PlannerView() {
                 : row.remainingAmount >= 0
                   ? `${formatCurrency(row.remainingAmount)} left`
                   : `${formatCurrency(Math.abs(row.remainingAmount))} over`
+              const progressAccessibilityProps = row.spentAmount == null
+                ? {
+                    'aria-label': `${row.categoryName} budget progress`,
+                    'aria-valuemin': 0,
+                    'aria-valuemax': 100,
+                    'aria-valuetext': actualSpendState === 'loading'
+                      ? `${row.categoryName} actual spend is loading`
+                      : `${row.categoryName} actual spend is unavailable`,
+                  }
+                : {
+                    'aria-label': `${row.categoryName} budget progress`,
+                    'aria-valuemin': 0,
+                    'aria-valuemax': 100,
+                    'aria-valuenow': Math.round(row.progressPercentage),
+                    'aria-valuetext': row.plannedAmount == null
+                      ? `${formatCurrency(row.spentAmount)} spent without a saved plan`
+                      : `${Math.round(row.progressPercentage)} percent used, ${remainingLabel}`,
+                  }
 
               return (
                 <article className={`planner-row planner-row--${row.statusTone}`} key={row.id}>
@@ -678,7 +738,11 @@ export default function PlannerView() {
                   </div>
 
                   <div className="planner-row__progress">
-                    <div className="planner-row__progress-track" role="presentation">
+                    <div
+                      className="planner-row__progress-track"
+                      role="progressbar"
+                      {...progressAccessibilityProps}
+                    >
                       <span
                         className={`planner-row__progress-fill planner-row__progress-fill--${row.statusTone}`}
                         style={{ width: `${row.progressPercentage}%` }}
