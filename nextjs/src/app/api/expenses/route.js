@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
-import { evaluateThresholdForMonth } from '@/lib/budget'
+import { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -27,12 +27,22 @@ export async function POST(request) {
   let body = {}
   try { body = await request.json() } catch {}
   const { category_id, amount, description, date } = body
-  if (!amount || !date) return NextResponse.json({ error: 'amount and date are required' }, { status: 400 })
+  const moneyValidationMessage = 'amount must be a valid positive money amount'
+  if (amount == null || date == null) {
+    return NextResponse.json({ error: 'amount and date are required' }, { status: 400 })
+  }
+  if (!isPositiveMoneyValue(amount)) {
+    return NextResponse.json({ error: moneyValidationMessage }, { status: 400 })
+  }
+  const normalizedDate = normalizeDate(date)
+  if (!normalizedDate) {
+    return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
+  }
   try {
     const { rows } = await db.query(
       `INSERT INTO public.expenses (user_id, category_id, amount, description, date)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [user.id, category_id ?? null, amount, description ?? null, date]
+      [user.id, category_id ?? null, amount, description ?? null, normalizedDate]
     )
     const { user_id, ...expense } = rows[0]
     const threshold = await evaluateThresholdForMonth(user.id, expense.date)
