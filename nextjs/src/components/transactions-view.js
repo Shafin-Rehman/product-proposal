@@ -172,7 +172,7 @@ function createEditDraft(entry) {
   const base = {
     kind: entry.kind,
     amount: String(entry.amount),
-    category: entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+    category: entry.raw?.category_name || entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
     occurredOn: entry.occurredOn || getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -395,8 +395,8 @@ export default function TransactionsView() {
   const entryTitle = entryDraft.counterparty.trim() || (entryDraft.kind === 'income' ? 'New income' : 'New expense')
   const counterpartyLabel = entryDraft.kind === 'income' ? 'Source' : 'Merchant'
   const entryCategories = entryDraft.kind === 'expense'
-    ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
-    : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
+    ? expenseCategories
+    : incomeCategories
   const selectedNote = selectedEntry && selectedEntry.note && selectedEntry.note !== selectedEntry.chip
     ? selectedEntry.note
     : selectedEntry?.kind === 'income'
@@ -437,11 +437,16 @@ export default function TransactionsView() {
     try {
       if (entryDraft.kind === 'expense') {
         const categoryId = expenseCategories.find((c) => c.name === entryDraft.category)?.id
+         if (!categoryId) {
+          setSaveError('Please select a valid category before saving.')
+          setIsSaving(false)
+          return
+        }
         const body = {
           amount: Number(entryDraft.amount),
           description: entryDraft.counterparty.trim() || undefined,
           date: entryDraft.occurredOn,
-          ...(categoryId ? { category_id: categoryId } : {}),
+          category_id: categoryId,
         }
         if (editingEntry) {
           await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -906,7 +911,7 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
+                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn || !entryCategories.length}
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
