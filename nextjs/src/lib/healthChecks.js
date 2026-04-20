@@ -13,7 +13,7 @@ const checks = [
     name: 'supabase',
     defaultError: 'Supabase unreachable',
     check: async () => {
-      const { error } = await getSupabaseClient().from('users').select('id').limit(1)
+      const { error } = await getSupabaseClient().from('categories').select('id').limit(1)
       if (error) throw new Error(error.message || 'Supabase unreachable')
     },
   },
@@ -25,7 +25,7 @@ export async function runHealthChecks() {
     name,
     status: results[i].status === 'fulfilled' ? 'ok' : 'error',
     message: results[i].status === 'rejected'
-      ? (results[i].reason?.message || defaultError)
+      ? defaultError
       : undefined,
   }))
 }

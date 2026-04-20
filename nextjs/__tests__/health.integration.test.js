@@ -1,79 +1,91 @@
-jest.mock('@/lib/db', () => ({
-  query: jest.fn(),
+jest.mock('@/lib/healthChecks', () => ({
+  runHealthChecks: jest.fn(),
 }))
 
-jest.mock('@/lib/supabaseClient', () => ({
-  getSupabaseClient: jest.fn(),
-}))
-
-const pool = require('@/lib/db')
-const { getSupabaseClient } = require('@/lib/supabaseClient')
+const { testApiHandler } = require('next-test-api-route-handler')
 const { runHealthChecks } = require('@/lib/healthChecks')
+const healthHandler = require('@/app/api/health/route')
 
-describe('runHealthChecks', () => {
+describe('GET /api/health', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it('returns ok for all checks when DB and Supabase are healthy', async () => {
-    pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
-    })
-
-    const results = await runHealthChecks()
-
-    expect(results).toEqual([
+  it('returns 200 with status ok when all checks pass', async () => {
+    runHealthChecks.mockResolvedValue([
       { name: 'database', status: 'ok', message: undefined },
       { name: 'supabase', status: 'ok', message: undefined },
     ])
+    await testApiHandler({
+      appHandler: healthHandler,
+      async test({ fetch }) {
+        const res = await fetch({ method: 'GET' })
+        expect(res.status).toBe(200)
+        const body = await res.json()
+        expect(body).toEqual({ status: 'ok' })
+      },
+    })
   })
 
-  it('returns database error with message when DB is down, Supabase still ok', async () => {
-    pool.query.mockRejectedValue(new Error('connection refused'))
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
+  it('returns 503 with status degraded when database check fails', async () => {
+    runHealthChecks.mockResolvedValue([
+      { name: 'database', status: 'error', message: 'Database unreachable' },
+      { name: 'supabase', status: 'ok', message: undefined },
+    ])
+    await testApiHandler({
+      appHandler: healthHandler,
+      async test({ fetch }) {
+        const res = await fetch({ method: 'GET' })
+        expect(res.status).toBe(503)
+        const body = await res.json()
+        expect(body).toEqual({ status: 'degraded' })
+      },
     })
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'connection refused' })
-    expect(results[1]).toEqual({ name: 'supabase', status: 'ok', message: undefined })
   })
 
-  it('returns supabase error with message when Supabase is down, DB still ok', async () => {
-    pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message: 'service unavailable' } }) }) }),
+  it('returns 503 with status degraded when supabase check fails', async () => {
+    runHealthChecks.mockResolvedValue([
+      { name: 'database', status: 'ok', message: undefined },
+      { name: 'supabase', status: 'error', message: 'Supabase unreachable' },
+    ])
+    await testApiHandler({
+      appHandler: healthHandler,
+      async test({ fetch }) {
+        const res = await fetch({ method: 'GET' })
+        expect(res.status).toBe(503)
+        const body = await res.json()
+        expect(body).toEqual({ status: 'degraded' })
+      },
     })
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'ok', message: undefined })
-    expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'service unavailable' })
   })
 
-  it('returns errors for all checks with messages when both DB and Supabase are down', async () => {
-    pool.query.mockRejectedValue(new Error('DB down'))
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message: 'Supabase down' } }) }) }),
+  it('returns 503 with status degraded when all checks fail', async () => {
+    runHealthChecks.mockResolvedValue([
+      { name: 'database', status: 'error', message: 'Database unreachable' },
+      { name: 'supabase', status: 'error', message: 'Supabase unreachable' },
+    ])
+    await testApiHandler({
+      appHandler: healthHandler,
+      async test({ fetch }) {
+        const res = await fetch({ method: 'GET' })
+        expect(res.status).toBe(503)
+        const body = await res.json()
+        expect(body).toEqual({ status: 'degraded' })
+      },
     })
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'DB down' })
-    expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'Supabase down' })
   })
 
-  it('returns fallback messages when errors have no message', async () => {
-    pool.query.mockRejectedValue(new Error())
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message: '' } }) }) }),
+  it('does not expose internal check details in the response body', async () => {
+    runHealthChecks.mockResolvedValue([
+      { name: 'database', status: 'error', message: 'connection refused at host db.internal' },
+    ])
+    await testApiHandler({
+      appHandler: healthHandler,
+      async test({ fetch }) {
+        const res = await fetch({ method: 'GET' })
+        const body = await res.json()
+        expect(body).not.toHaveProperty('checks')
+      },
     })
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'Database unreachable' })
-    expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'Supabase unreachable' })
   })
 })
