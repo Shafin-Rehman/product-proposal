@@ -44,7 +44,7 @@ async function submitAuthForm(path, payload) {
   return { response, body }
 }
 
-export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = false, showExpiredWarning = false }) {
+export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = false }) {
   const copy = AUTH_COPY[mode]
   const router = useRouter()
   const { setSessionFromAuthResponse } = useAuth()
@@ -53,9 +53,7 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
     email: initialEmail,
     password: '',
   })
-  const [errorMessage, setErrorMessage] = useState(
-    showExpiredWarning ? 'Your session expired. Please log in again.' : ''
-  )
+  const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (event) => {
@@ -83,7 +81,7 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
       if (body?.access_token) {
         const storedSession = setSessionFromAuthResponse(body)
         if (!storedSession) {
-          setErrorMessage("We couldn't securely sign you in completely right now. Please try again.")
+          setErrorMessage("We received your session, but couldn't store it in the browser. Please try again.")
           return
         }
 
@@ -105,8 +103,8 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
       }
 
       setErrorMessage(mode === 'login'
-        ? "We couldn't complete your login right now. Please try again."
-        : "Your account was successfully created, but you'll need to sign in now.")
+        ? 'This login response did not include a valid session token.'
+        : "Your account was created, but you'll need to sign in once your session is available.")
     } catch {
       setErrorMessage(`Something went wrong while trying to ${mode === 'login' ? 'log in' : 'sign up'}.`)
     } finally {

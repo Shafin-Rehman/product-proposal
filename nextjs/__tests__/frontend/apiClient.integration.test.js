@@ -8,10 +8,6 @@ let store = {}
 beforeEach(() => {
   store = {}
   global.window = {
-    location: {
-      pathname: '/',
-      replace: jest.fn()
-    },
     localStorage: {
       getItem: (key) => store[key] ?? null,
       setItem: (key, value) => { store[key] = String(value) },

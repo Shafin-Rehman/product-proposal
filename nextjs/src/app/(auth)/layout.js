@@ -9,7 +9,7 @@ function AuthRouteLoading() {
     <div className="route-shell-loading">
       <section className="route-shell-loading__card surface-card">
         <span className="brand-pill">BudgetBuddy</span>
-        <p>Verifying connection...</p>
+        <p>Checking whether we should take you into the app or keep you on the welcome path.</p>
       </section>
     </div>
   )
