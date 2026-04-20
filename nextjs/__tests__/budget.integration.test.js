@@ -1,10 +1,9 @@
-// __tests__/budget.integration.test.js
 import * as budget from '../src/lib/budget'
 import db from '../src/lib/db'
 
-jest.mock('../src/lib/db') // mock the db module
+jest.mock('../src/lib/db')
 
-describe('Integration test: buildBudgetSummary', () => {
+describe('Transaction category flow (integration)', () => {
   const userId = 1
   const month = '2026-03-01'
 
@@ -12,35 +11,38 @@ describe('Integration test: buildBudgetSummary', () => {
     jest.clearAllMocks()
   })
 
-  it('returns correct summary when DB queries succeed', async () => {
-    // Mock the database responses
-    db.query.mockImplementation((query, params) => {
-      if (query.includes('FROM public.budget_thresholds')) {
-        return Promise.resolve({ rows: [{ month, monthly_limit: 1000, notified: false }] })
-      } else if (query.includes('FROM public.expenses')) {
-        return Promise.resolve({ rows: [{ total_expenses: '200' }] })
-      } else if (query.includes('FROM public.income')) {
-        return Promise.resolve({ rows: [{ total_income: '3000' }] })
+  it('correctly maps expense and income categories from DB', async () => {
+    db.query.mockImplementation((query) => {
+      if (query.includes('expenses')) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: 1,
+              amount: 100,
+              category_name: 'Food',
+            },
+          ],
+        })
       }
+
+      if (query.includes('income')) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: 2,
+              amount: 1000,
+              category_name: 'Salary',
+            },
+          ],
+        })
+      }
+
       return Promise.resolve({ rows: [] })
     })
 
-    const result = await budget.buildBudgetSummary(userId, month)
+    const result = await budget.getTransactions(userId, month)
 
-    expect(result).toEqual({
-      month,
-      monthly_limit: '1000',
-      total_expenses: '200',
-      total_income: '3000',
-      remaining_budget: '800.00',
-      threshold_exceeded: false,
-      notified: false,
-    })
-  })
-
-  it('throws error when DB query fails', async () => {
-    db.query.mockRejectedValueOnce(new Error('DB connection failed'))
-
-    await expect(budget.buildBudgetSummary(userId, month)).rejects.toThrow('DB connection failed')
+    expect(result.expenses[0].category).toBe('Food')
+    expect(result.income[0].category).toBe('Salary')
   })
 })

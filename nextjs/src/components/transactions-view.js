@@ -161,7 +161,7 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: ENTRY_CATEGORY_OPTIONS.expense[0],
+    category: categories?.[0]?.name || "Other",
     occurredOn: getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -172,7 +172,10 @@ function createEditDraft(entry) {
   const base = {
     kind: entry.kind,
     amount: String(entry.amount),
-    category: entry.raw?.category_name || entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+    category: 
+      entry.raw?.category_name || 
+      entry.raw?.category ||
+      (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
     occurredOn: entry.occurredOn || getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -439,7 +442,6 @@ export default function TransactionsView() {
         const categoryId = expenseCategories.find((c) => c.name === entryDraft.category)?.id
          if (!categoryId) {
           setSaveError('Please select a valid category before saving.')
-          setIsSaving(false)
           return
         }
         const body = {
@@ -847,12 +849,16 @@ export default function TransactionsView() {
                     onChange={(event) => updateDraft('category', event.target.value)}
                     value={entryDraft.category}
                   >
-                    {entryCategories.map((option) => (
-                      <option key={option.name} value={option.name}>
-                        {option.icon ? `${option.icon} ${option.name}` : option.name}
-                      </option>
-                    ))}
-                  </select>
+                    {entryCategories.length === 0 ? (
+                    <option disabled>Loading categories...</option>
+                 ) : (
+                   entryCategories.map((option) => (
+                    <option key={option.name} value={option.name}>
+                      {option.icon ? `${option.icon} ${option.name}` : option.name}
+                    </option>
+                  ))
+                )}
+                </select>
                 </label>
 
                 <label className="entry-sheet__field">
