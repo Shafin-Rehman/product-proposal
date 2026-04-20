@@ -1,3 +1,12 @@
+import { clearSession } from '@/lib/session'
+
+function handleSessionFailure() {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    clearSession()
+    window.location.replace('/login?expired=true')
+  }
+}
+
 export class ApiError extends Error {
   constructor(message, { status = 500, body = null } = {}) {
     super(message)
@@ -9,6 +18,7 @@ export class ApiError extends Error {
 
 export async function apiGet(path, { accessToken, signal } = {}) {
   if (!accessToken) {
+    handleSessionFailure()
     throw new ApiError('Missing access token', { status: 401 })
   }
 
@@ -27,6 +37,8 @@ export async function apiGet(path, { accessToken, signal } = {}) {
   } catch {}
 
   if (!response.ok) {
+    if (response.status === 401) handleSessionFailure()
+
     throw new ApiError(body?.error || 'Request failed', {
       status: response.status,
       body,
@@ -38,6 +50,7 @@ export async function apiGet(path, { accessToken, signal } = {}) {
 
 export async function apiPost(path, body, { accessToken, signal } = {}) {
   if (!accessToken) {
+    handleSessionFailure()
     throw new ApiError('Missing access token', { status: 401 })
   }
 
@@ -60,6 +73,8 @@ export async function apiPost(path, body, { accessToken, signal } = {}) {
   } catch {}
 
   if (!response.ok) {
+    if (response.status === 401) handleSessionFailure()
+
     throw new ApiError(responseBody?.error || 'Request failed', {
       status: response.status,
       body: responseBody,
