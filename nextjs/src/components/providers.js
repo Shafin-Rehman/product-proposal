@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { clearSession, readSession, writeSession } from '@/lib/session'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
@@ -56,27 +55,12 @@ function ThemeProvider({ children }) {
 }
 
 function AuthProvider({ children }) {
-  const router = useRouter()
   const [session, setSession] = useState(null)
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     setSession(readSession())
     setIsReady(true)
-
-    const handleStorageChange = (e) => {
-      if (e.key === 'budgetbuddy.session') {
-        const nextSession = readSession()
-        setSession(nextSession)
-        
-        if (!nextSession && window.location.pathname !== '/login') {
-          router.replace('/login')
-        }
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const setSessionFromAuthResponse = (responseBody) => {
@@ -93,7 +77,6 @@ function AuthProvider({ children }) {
   const logout = () => {
     clearSession()
     setSession(null)
-    router.replace('/login')
   }
 
   const value = useMemo(() => ({
