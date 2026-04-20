@@ -7,23 +7,25 @@ const REQUIRED_ENV = [
   { key: 'SUPABASE_SERVICE_ROLE_KEY', format: /^eyJ/,                  hint: 'must be a JWT (starts with eyJ)' },
 ]
 
-const missing = []
-const malformed = []
+if (process.env.NODE_ENV !== 'test') {
+  const missing = []
+  const malformed = []
 
-for (const { key, format, hint } of REQUIRED_ENV) {
-  const val = process.env[key]
-  if (!val) {
-    missing.push(key)
-  } else if (!format.test(val)) {
-    malformed.push(`${key} (${hint})`)
+  for (const { key, format, hint } of REQUIRED_ENV) {
+    const val = process.env[key]
+    if (!val) {
+      missing.push(key)
+    } else if (!format.test(val)) {
+      malformed.push(`${key} (${hint})`)
+    }
   }
-}
 
-if (missing.length > 0) {
-  throw new Error(`[env] Missing required environment variables: ${missing.join(', ')}`)
-}
-if (malformed.length > 0) {
-  throw new Error(`[env] Malformed environment variables:\n  - ${malformed.join('\n  - ')}`)
+  if (missing.length > 0) {
+    throw new Error(`[env] Missing required environment variables: ${missing.join(', ')}`)
+  }
+  if (malformed.length > 0) {
+    throw new Error(`[env] Malformed environment variables:\n  - ${malformed.join('\n  - ')}`)
+  }
 }
 
 const nextConfig = {}
