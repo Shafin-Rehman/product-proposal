@@ -39,9 +39,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npx playwright install chromium --with-deps
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
       - run: npx playwright test --reporter=list
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
