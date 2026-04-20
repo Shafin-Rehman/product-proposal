@@ -10,6 +10,7 @@ export default function LoginPage({ searchParams }) {
       initialEmail={typeof searchParams?.email === 'string' ? searchParams.email : ''}
       mode="login"
       showSignupSuccess={searchParams?.signup === 'success'}
+      showExpiredWarning={searchParams?.expired === 'true'}
     />
   )
 }
