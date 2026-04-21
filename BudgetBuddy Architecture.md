@@ -1,4 +1,5 @@
 ## Step 1
+<img width="3805" height="2088" alt="image" src="https://github.com/user-attachments/assets/72d7ce64-958e-4eef-9d77-7c7af2e88d3b" />
 
 
 Explanation:
@@ -9,6 +10,7 @@ Also, the GitHub Actions workflow has access to DB migrations, as well as runnin
 ---
 
 ## Step 2
+<img width="3925" height="2410" alt="image" src="https://github.com/user-attachments/assets/eb357306-7ccd-4f4b-87ce-50d19a6b453b" />
 
 
 User table represents individual users of the system, and is appointed a uniqueID. All references in other tables of a userID originate from this table.
@@ -28,7 +30,9 @@ category_budgets allows the user to set monthly limits for a specific category, 
 ---
 
 ## Step 3
+<img width="3133" height="1738" alt="image" src="https://github.com/user-attachments/assets/4cf00ac2-3585-40ce-a441-d3319371214a" />
 
+This is the flow for updating budget.
 
 The user in the frontend makes a POST request to /api/budget endpoint. The handler first authenticates the user by calling the authenticate function which is run by Supabase to authenticate. If the token is valid, Supabase returns the User ID, and if invalid, it sends an error.
 
