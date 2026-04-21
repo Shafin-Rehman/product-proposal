@@ -308,7 +308,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function DashboardView() {
   const router = useRouter()
-  const { isReady, logout, session } = useAuth()
+  const { isReady, logout, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { dataChangedToken } = useDataChanged()
   const [currentMonth] = useState(getCurrentMonthStart)
@@ -355,14 +355,9 @@ export default function DashboardView() {
       if (controller.signal.aborted) return
 
       const authFailure = results.find(
-        (result) => result.status === 'rejected' && result.reason instanceof ApiError && result.reason.status === 401
+        (result) => result.status === 'rejected' && handleAuthError(result.reason, router)
       )
-
-      if (authFailure) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (authFailure) return
 
       const summaryResult = results[0]
       const expensesResult = results[1]
@@ -385,11 +380,7 @@ export default function DashboardView() {
     loadLiveDashboard().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setLiveState({
         status: 'error',
@@ -430,11 +421,7 @@ export default function DashboardView() {
       closeBudgetSheet()
       setReloadToken((value) => value + 1)
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
       setBudgetSaveError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
     } finally {
       setIsBudgetSaving(false)
@@ -496,228 +483,228 @@ export default function DashboardView() {
 
   return (
     <>
-    <section className="app-screen dashboard-screen">
-      <div className="screen-topline">
-        <div className="screen-persona">
-          <div className="screen-persona__avatar">{getInitialsLabel(firstName, 'BB')}</div>
-          <div>
-            <span className="screen-persona__eyebrow">Good morning</span>
-            <h1 className="screen-persona__title">{firstName}</h1>
-          </div>
-        </div>
-        <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
-          {isSampleMode ? 'Sample' : 'Live'}
-        </span>
-      </div>
-
-      <LiveNotice
-        message={liveState.message}
-        onRetry={() => setReloadToken((value) => value + 1)}
-      />
-
-      <article className={`budget-hero budget-hero--${heroState.tone}`}>
-        <div className="budget-hero__header">
-          <div className="budget-hero__headline">
-            <h2 className="budget-hero__value">{heroState.value}</h2>
-            <p className="budget-hero__suffix">{heroState.supportingText}</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
-            <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
-            {!isSampleMode && (
-              <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
-                {budgetCtaLabel}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {trendPoints.length ? (
-          <div className="budget-hero__chart">
-            <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
-              <defs>
-                <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
-                  <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
-                </linearGradient>
-                <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
-                  <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
-                </linearGradient>
-              </defs>
-              {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
-              <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
-              {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
-              <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
-              {currentPoint ? (
-                <circle
-                  className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
-                  cx={currentPoint.x}
-                  cy={currentPoint.y}
-                  r="4.5"
-                />
-              ) : null}
-            </svg>
-            {currentPoint && trendPoints.length ? (
-              <div
-                className="budget-hero__callout"
-                style={{
-                  left: currentPointLeft,
-                  top: currentPointTop,
-                }}
-              >
-                {formatCurrency(trendPoints.at(-1) ?? 0)} spent
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="blank-state blank-state--compact">
-            <strong>Waiting on activity</strong>
-            <span>This curve will appear once month-to-date spending lands.</span>
-          </div>
-        )}
-      </article>
-
-      <section className="section-block">
-        <div className="section-headline">
-          <h2>Budgets</h2>
-          <Link className="section-link" href="/planner">
-            View more
-          </Link>
-        </div>
-
-        {categoryCards.length ? (
-          <div className="budget-glance-scroll">
-            <div className="budget-glance">
-              {categoryCards.map((item) => (
-                <div
-                  className="budget-glance__item"
-                  key={item.id}
-                  style={{
-                    '--entry-color': item.color,
-                    '--entry-soft': item.soft,
-                  }}
-                >
-                  <div
-                    className="budget-glance__ring"
-                    style={{
-                      background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
-                    }}
-                  >
-                    <div className="budget-glance__inner">{item.symbol}</div>
-                  </div>
-                  <strong>{item.name}</strong>
-                  <span>{formatCurrency(item.amount)}</span>
-                  <small>{item.note}</small>
-                </div>
-              ))}
+      <section className="app-screen dashboard-screen">
+        <div className="screen-topline">
+          <div className="screen-persona">
+            <div className="screen-persona__avatar">{getInitialsLabel(firstName, 'BB')}</div>
+            <div>
+              <span className="screen-persona__eyebrow">Good morning</span>
+              <h1 className="screen-persona__title">{firstName}</h1>
             </div>
           </div>
-        ) : (
-          <div className="blank-state blank-state--compact">
-            <strong>No categories yet</strong>
-            <span>Category snapshots appear as soon as current-month spending is grouped.</span>
-          </div>
-        )}
-      </section>
+          <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
+            {isSampleMode ? 'Sample' : 'Live'}
+          </span>
+        </div>
 
-      <div className="dashboard-grid">
-        <section className="section-block dashboard-panel dashboard-panel--activity">
+        <LiveNotice
+          message={liveState.message}
+          onRetry={() => setReloadToken((value) => value + 1)}
+        />
+
+        <article className={`budget-hero budget-hero--${heroState.tone}`}>
+          <div className="budget-hero__header">
+            <div className="budget-hero__headline">
+              <h2 className="budget-hero__value">{heroState.value}</h2>
+              <p className="budget-hero__suffix">{heroState.supportingText}</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
+              <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+              {!isSampleMode && (
+                <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
+                  {budgetCtaLabel}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {trendPoints.length ? (
+            <div className="budget-hero__chart">
+              <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
+                <defs>
+                  <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
+                    <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
+                    <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
+                  </linearGradient>
+                  <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
+                    <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
+                    <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
+                  </linearGradient>
+                </defs>
+                {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
+                <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
+                {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
+                <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
+                {currentPoint ? (
+                  <circle
+                    className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
+                    cx={currentPoint.x}
+                    cy={currentPoint.y}
+                    r="4.5"
+                  />
+                ) : null}
+              </svg>
+              {currentPoint && trendPoints.length ? (
+                <div
+                  className="budget-hero__callout"
+                  style={{
+                    left: currentPointLeft,
+                    top: currentPointTop,
+                  }}
+                >
+                  {formatCurrency(trendPoints.at(-1) ?? 0)} spent
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="blank-state blank-state--compact">
+              <strong>Waiting on activity</strong>
+              <span>This curve will appear once month-to-date spending lands.</span>
+            </div>
+          )}
+        </article>
+
+        <section className="section-block">
           <div className="section-headline">
-            <h2>Recent activity</h2>
-            <Link className="section-link" href="/transactions">
+            <h2>Budgets</h2>
+            <Link className="section-link" href="/planner">
               View more
             </Link>
           </div>
 
-          {recentActivity.length ? (
-            <div className="activity-feed">
-              {recentActivity.map((entry) => {
-                const visual = getEntryVisual(entry)
-
-                return (
+          {categoryCards.length ? (
+            <div className="budget-glance-scroll">
+              <div className="budget-glance">
+                {categoryCards.map((item) => (
                   <div
-                    className="activity-feed__row"
-                    key={entry.id}
+                    className="budget-glance__item"
+                    key={item.id}
                     style={{
-                      '--entry-color': visual.color,
-                      '--entry-soft': visual.soft,
+                      '--entry-color': item.color,
+                      '--entry-soft': item.soft,
                     }}
                   >
-                    <div className="entry-avatar">
-                      <span>{visual.symbol}</span>
+                    <div
+                      className="budget-glance__ring"
+                      style={{
+                        background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
+                      }}
+                    >
+                      <div className="budget-glance__inner">{item.symbol}</div>
                     </div>
-
-                    <div className="entry-main">
-                      <strong>{entry.merchant || entry.title}</strong>
-                      <div className="entry-meta">
-                        <span className="entry-chip">{entry.chip}</span>
-                        <span>{formatShortDate(entry.occurredOn)}</span>
-                      </div>
-                    </div>
-
-                    <div className={`entry-amount entry-amount--${entry.kind}`}>
-                      {entry.kind === 'income' ? '+' : '-'}
-                      {formatCurrency(entry.amount)}
-                    </div>
+                    <strong>{item.name}</strong>
+                    <span>{formatCurrency(item.amount)}</span>
+                    <small>{item.note}</small>
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="blank-state blank-state--compact">
-              <strong>No activity yet</strong>
-              <span>New transactions will land here once the month starts moving.</span>
+              <strong>No categories yet</strong>
+              <span>Category snapshots appear as soon as current-month spending is grouped.</span>
             </div>
           )}
         </section>
 
-        <section className="section-block dashboard-panel dashboard-panel--income">
-          <div className="section-headline">
-            <h2>Recent income</h2>
-            <Link className="section-link" href="/transactions">
-              View all
-            </Link>
-          </div>
+        <div className="dashboard-grid">
+          <section className="section-block dashboard-panel dashboard-panel--activity">
+            <div className="section-headline">
+              <h2>Recent activity</h2>
+              <Link className="section-link" href="/transactions">
+                View more
+              </Link>
+            </div>
 
-          {recentIncome.length ? (
-            <div className="activity-feed">
-              {recentIncome.map((entry) => {
-                const visual = getEntryVisual(entry)
-                return (
-                  <div
-                    className="activity-feed__row"
-                    key={entry.id}
-                    style={{
-                      '--entry-color': visual.color,
-                      '--entry-soft': visual.soft,
-                    }}
-                  >
-                    <div className="entry-avatar">
-                      <span>{visual.symbol}</span>
-                    </div>
-                    <div className="entry-main">
-                      <strong>{entry.title}</strong>
-                      <div className="entry-meta">
-                        <span className="entry-chip">{entry.chip}</span>
-                        <span>{formatShortDate(entry.occurredOn)}</span>
+            {recentActivity.length ? (
+              <div className="activity-feed">
+                {recentActivity.map((entry) => {
+                  const visual = getEntryVisual(entry)
+
+                  return (
+                    <div
+                      className="activity-feed__row"
+                      key={entry.id}
+                      style={{
+                        '--entry-color': visual.color,
+                        '--entry-soft': visual.soft,
+                      }}
+                    >
+                      <div className="entry-avatar">
+                        <span>{visual.symbol}</span>
+                      </div>
+
+                      <div className="entry-main">
+                        <strong>{entry.merchant || entry.title}</strong>
+                        <div className="entry-meta">
+                          <span className="entry-chip">{entry.chip}</span>
+                          <span>{formatShortDate(entry.occurredOn)}</span>
+                        </div>
+                      </div>
+
+                      <div className={`entry-amount entry-amount--${entry.kind}`}>
+                        {entry.kind === 'income' ? '+' : '-'}
+                        {formatCurrency(entry.amount)}
                       </div>
                     </div>
-                    <div className="entry-amount entry-amount--income">
-                      +{formatCurrency(entry.amount)}
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="blank-state blank-state--compact">
+                <strong>No activity yet</strong>
+                <span>New transactions will land here once the month starts moving.</span>
+              </div>
+            )}
+          </section>
+
+          <section className="section-block dashboard-panel dashboard-panel--income">
+            <div className="section-headline">
+              <h2>Recent income</h2>
+              <Link className="section-link" href="/transactions">
+                View all
+              </Link>
+            </div>
+
+            {recentIncome.length ? (
+              <div className="activity-feed">
+                {recentIncome.map((entry) => {
+                  const visual = getEntryVisual(entry)
+                  return (
+                    <div
+                      className="activity-feed__row"
+                      key={entry.id}
+                      style={{
+                        '--entry-color': visual.color,
+                        '--entry-soft': visual.soft,
+                      }}
+                    >
+                      <div className="entry-avatar">
+                        <span>{visual.symbol}</span>
+                      </div>
+                      <div className="entry-main">
+                        <strong>{entry.title}</strong>
+                        <div className="entry-meta">
+                          <span className="entry-chip">{entry.chip}</span>
+                          <span>{formatShortDate(entry.occurredOn)}</span>
+                        </div>
+                      </div>
+                      <div className="entry-amount entry-amount--income">
+                        +{formatCurrency(entry.amount)}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="blank-state blank-state--compact">
-              <strong>No income yet</strong>
-              <span>Income entries will show up here as they land.</span>
-            </div>
-          )}
-        </section>
-      </div>
-    </section>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="blank-state blank-state--compact">
+                <strong>No income yet</strong>
+                <span>Income entries will show up here as they land.</span>
+              </div>
+            )}
+          </section>
+        </div>
+      </section>
 
       {isBudgetSheetOpen ? (
         <div className="detail-overlay" role="presentation">

@@ -9,6 +9,7 @@ export default function LoginPage({ searchParams }) {
     <AuthForm
       initialEmail={typeof searchParams?.email === 'string' ? searchParams.email : ''}
       mode="login"
+      showSessionExpired={searchParams?.reason === 'expired'}
       showSignupSuccess={searchParams?.signup === 'success'}
     />
   )

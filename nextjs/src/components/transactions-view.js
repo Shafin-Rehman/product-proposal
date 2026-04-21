@@ -203,7 +203,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function TransactionsView() {
   const router = useRouter()
-  const { isReady, logout, session } = useAuth()
+  const { isReady, logout, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { notifyDataChanged } = useDataChanged()
   const [reloadToken, setReloadToken] = useState(0)
@@ -252,14 +252,9 @@ export default function TransactionsView() {
       if (controller.signal.aborted) return
 
       const authFailure = results.find(
-        (result) => result.status === 'rejected' && result.reason instanceof ApiError && result.reason.status === 401
+        (result) => result.status === 'rejected' && handleAuthError(result.reason, router)
       )
-
-      if (authFailure) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (authFailure) return
 
       const failedCount = results.filter((result) => result.status === 'rejected').length
       setLiveState({
@@ -277,11 +272,7 @@ export default function TransactionsView() {
     loadLiveTransactions().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setLiveState({
         status: 'error',
@@ -354,8 +345,8 @@ export default function TransactionsView() {
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
     const token = session.accessToken
-    apiGet('/api/expenses/categories', { accessToken: token }).then(setExpenseCategories).catch(() => {})
-    apiGet('/api/income/categories', { accessToken: token }).then(setIncomeCategories).catch(() => {})
+    apiGet('/api/expenses/categories', { accessToken: token }).then(setExpenseCategories).catch(() => { })
+    apiGet('/api/income/categories', { accessToken: token }).then(setIncomeCategories).catch(() => { })
   }, [isReady, isSampleMode, session?.accessToken])
 
   if (!isReady || !session?.accessToken) {
@@ -458,11 +449,7 @@ export default function TransactionsView() {
       notifyDataChanged()
       setReloadToken((value) => value + 1)
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
       setSaveError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
     } finally {
       setIsSaving(false)
@@ -483,11 +470,7 @@ export default function TransactionsView() {
       notifyDataChanged()
       setReloadToken((value) => value + 1)
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error)) return
       setDeleteConfirm(false)
     } finally {
       setIsDeleting(false)

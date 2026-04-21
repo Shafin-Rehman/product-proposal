@@ -44,7 +44,17 @@ async function submitAuthForm(path, payload) {
   return { response, body }
 }
 
-export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = false }) {
+const ERROR_MAPPING = {
+  'Invalid login credentials': "We couldn't find an account with those details. Please check your email and password.",
+  'User already registered': 'It looks like you already have an account. Try logging in instead.',
+  'Email not confirmed': 'Please check your inbox and confirm your email before signing in.',
+}
+
+function mapErrorMessage(msg) {
+  return ERROR_MAPPING[msg] || msg
+}
+
+export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = false, showSessionExpired = false }) {
   const copy = AUTH_COPY[mode]
   const router = useRouter()
   const { setSessionFromAuthResponse } = useAuth()
@@ -74,7 +84,7 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
       const { response, body } = await submitAuthForm(`/api/${mode}`, formState)
 
       if (!response.ok) {
-        setErrorMessage(body?.error || `We couldn't ${mode === 'login' ? 'log you in' : 'create your account'} right now.`)
+        setErrorMessage(mapErrorMessage(body?.error) || `We couldn't ${mode === 'login' ? 'log you in' : 'create your account'} right now.`)
         return
       }
 
@@ -147,6 +157,15 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
           <div>
             <strong>Account created</strong>
             <div>{copy.successMessage}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSessionExpired ? (
+        <div className="inline-banner inline-banner--warning" role="status">
+          <div>
+            <strong>Session expired</strong>
+            <div>Your session has timed out. Please sign in again to continue.</div>
           </div>
         </div>
       ) : null}

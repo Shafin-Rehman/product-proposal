@@ -13,15 +13,19 @@ const NAV_ITEMS = [
   { href: '/account', label: 'Account', icon: 'account' },
 ]
 
-function AppLoadingShell() {
+function AppLoadingShell({ isRedirecting = false }) {
   return (
     <div className="route-shell-loading">
       <div className="route-shell-loading__glow route-shell-loading__glow--top" />
       <div className="route-shell-loading__glow route-shell-loading__glow--bottom" />
       <section className="route-shell-loading__card">
         <span className="brand-pill">BudgetBuddy</span>
-        <h1>Loading your budget space</h1>
-        <p>Checking your session and restoring the app shell.</p>
+        <h1>{isRedirecting ? 'One second' : 'Loading your budget space'}</h1>
+        <p>
+          {isRedirecting
+            ? 'We are taking you to the welcome page.'
+            : 'Checking your session and restoring the app shell.'}
+        </p>
       </section>
     </div>
   )
@@ -87,7 +91,7 @@ export default function AppLayout({ children }) {
   }, [isAuthenticated, isReady, router])
 
   if (!isReady || !isAuthenticated) {
-    return <AppLoadingShell />
+    return <AppLoadingShell isRedirecting={isReady && !isAuthenticated} />
   }
 
   return (

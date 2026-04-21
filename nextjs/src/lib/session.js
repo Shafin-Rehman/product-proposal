@@ -51,4 +51,5 @@ export function writeSession({ accessToken, user }) {
 export function clearSession() {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  window.localStorage.removeItem('budgetbuddy.data-mode')
 }

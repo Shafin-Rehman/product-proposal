@@ -4,12 +4,19 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
-function AuthRouteLoading() {
+function AuthRouteLoading({ isRedirecting = false }) {
   return (
     <div className="route-shell-loading">
+      <div className="route-shell-loading__glow route-shell-loading__glow--top" />
+      <div className="route-shell-loading__glow route-shell-loading__glow--bottom" />
       <section className="route-shell-loading__card surface-card">
         <span className="brand-pill">BudgetBuddy</span>
-        <p>Checking whether we should take you into the app or keep you on the welcome path.</p>
+        <h1>{isRedirecting ? 'One second' : 'Welcome'}</h1>
+        <p>
+          {isRedirecting
+            ? 'We are taking you into your budget space.'
+            : 'Checking whether we should take you into the app or keep you on the welcome path.'}
+        </p>
       </section>
     </div>
   )
@@ -25,7 +32,7 @@ export default function AuthLayout({ children }) {
   }, [isAuthenticated, isReady, router])
 
   if (!isReady || isAuthenticated) {
-    return <AuthRouteLoading />
+    return <AuthRouteLoading isRedirecting={isReady && isAuthenticated} />
   }
 
   return (

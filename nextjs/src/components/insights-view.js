@@ -199,7 +199,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function InsightsView() {
   const router = useRouter()
-  const { isReady, logout, session } = useAuth()
+  const { isReady, logout, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const [viewMode, setViewMode] = useState('expenses')
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStart)
@@ -243,14 +243,9 @@ export default function InsightsView() {
       if (controller.signal.aborted) return
 
       const authFailure = results.find(
-        (result) => result.status === 'rejected' && result.reason instanceof ApiError && result.reason.status === 401
+        (result) => result.status === 'rejected' && handleAuthError(result.reason, router)
       )
-
-      if (authFailure) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (authFailure) return
 
       const failedCount = results.filter((result) => result.status === 'rejected').length
       setLiveState((current) => ({
@@ -269,11 +264,7 @@ export default function InsightsView() {
     loadLiveLists().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setLiveState((current) => ({
         ...current,
@@ -318,11 +309,7 @@ export default function InsightsView() {
     loadLiveSummary().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error)) return
 
       setLiveState((current) => ({
         ...current,
