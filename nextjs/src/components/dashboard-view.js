@@ -163,9 +163,9 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
       isNearLimit: false,
       hasBudget: false,
       metrics: [
-        { label: 'Spent', value: formatCurrency(spent), hint: 'Current month' },
-        { label: 'Income', value: formatCurrency(income), hint: 'Current month' },
-        { label: 'Net this month', value: formatCurrency(net), hint: 'Income minus spend' },
+        { label: 'Spent', value: '--', hint: 'Current month' },
+        { label: 'Income', value: '--', hint: 'Current month' },
+        { label: 'Net this month', value: '--', hint: 'Income minus spend' },
       ],
     }
   }

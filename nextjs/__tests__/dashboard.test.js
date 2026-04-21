@@ -213,6 +213,23 @@ describe('getMonthProgressState', () => {
 })
 
 describe('getBudgetHudModel', () => {
+  it('uses placeholder metric values while the live summary is still loading', () => {
+    expect(getBudgetHudModel(null, {
+      month: '2026-03-01',
+      observedDayCount: 0,
+      referenceDate: new Date('2026-03-10T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      tone: 'neutral',
+      badge: 'Waiting',
+      value: 'Waiting on live totals',
+      metrics: [
+        expect.objectContaining({ label: 'Spent', value: '--' }),
+        expect.objectContaining({ label: 'Income', value: '--' }),
+        expect.objectContaining({ label: 'Net this month', value: '--' }),
+      ],
+    }))
+  })
+
   it('returns a no-budget HUD state when only live spend is available', () => {
     expect(getBudgetHudModel({
       month: '2026-03-01',
