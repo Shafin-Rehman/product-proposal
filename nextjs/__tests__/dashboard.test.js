@@ -33,7 +33,7 @@ jest.mock('@/lib/financeUtils', () => ({
   formatCurrency: jest.fn((value) => `$${value}`),
   formatMonthPeriod: jest.fn((value) => value),
   formatShortDate: jest.fn((value) => value),
-  getCurrentMonthStart: jest.fn(() => '2026-03-01'),
+  getCurrentMonthStart: jest.fn((date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`),
   isInMonth: jest.fn(),
 }))
 
@@ -187,7 +187,7 @@ describe('buildDerivedCategoryCards', () => {
 })
 
 describe('getMonthProgressState', () => {
-  it('uses the current UTC date for live current-month days remaining', () => {
+  it('uses the current local date for live current-month days remaining', () => {
     expect(getMonthProgressState('2026-03-01', {
       observedDayCount: 3,
       referenceDate: new Date('2026-03-21T12:00:00Z'),
@@ -210,6 +210,18 @@ describe('getMonthProgressState', () => {
       isCurrentMonth: false,
     })
   })
+
+  it('treats the local month as current near UTC month boundaries', () => {
+    expect(getMonthProgressState('2026-03-01', {
+      observedDayCount: 3,
+      referenceDate: new Date('2026-03-01T00:30:00-05:00'),
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 1,
+      daysRemaining: 31,
+      isCurrentMonth: true,
+    })
+  })
 })
 
 describe('getBudgetHudModel', () => {
@@ -225,6 +237,7 @@ describe('getBudgetHudModel', () => {
       metrics: [
         expect.objectContaining({ label: 'Spent', value: '--' }),
         expect.objectContaining({ label: 'Income', value: '--' }),
+        expect.objectContaining({ label: 'Days left', value: '22' }),
         expect.objectContaining({ label: 'Net this month', value: '--' }),
       ],
     }))
@@ -251,6 +264,7 @@ describe('getBudgetHudModel', () => {
       metrics: [
         expect.objectContaining({ label: 'Spent', value: '$450' }),
         expect.objectContaining({ label: 'Income', value: '$1200' }),
+        expect.objectContaining({ label: 'Days left', value: '22' }),
         expect.objectContaining({ label: 'Net this month', value: '$750' }),
       ],
     }))

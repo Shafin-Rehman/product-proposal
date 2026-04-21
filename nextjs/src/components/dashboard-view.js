@@ -85,8 +85,11 @@ function getSafeMoneyNumber(value) {
 }
 
 export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
-  const monthDate = new Date(`${month}T12:00:00Z`)
-  if (Number.isNaN(monthDate.getTime())) {
+  const monthMatch = typeof month === 'string'
+    ? month.match(/^(\d{4})-(\d{2})-\d{2}$/)
+    : null
+
+  if (!monthMatch) {
     return {
       monthLength: 0,
       activeDay: 0,
@@ -95,21 +98,16 @@ export function getMonthProgressState(month, { observedDayCount = 0, referenceDa
     }
   }
 
-  const monthLength = new Date(Date.UTC(
-    monthDate.getUTCFullYear(),
-    monthDate.getUTCMonth() + 1,
-    0
-  )).getUTCDate()
   const currentDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
-  const isCurrentMonth = (
-    monthDate.getUTCFullYear() === currentDate.getUTCFullYear()
-    && monthDate.getUTCMonth() === currentDate.getUTCMonth()
-  )
+  const monthYear = Number(monthMatch[1])
+  const monthIndex = Number(monthMatch[2]) - 1
+  const monthLength = new Date(monthYear, monthIndex + 1, 0).getDate()
+  const isCurrentMonth = getCurrentMonthStart(currentDate) === month
   const fallbackObservedDays = Number.isFinite(observedDayCount)
     ? Math.max(0, Math.floor(observedDayCount))
     : 0
   const activeDay = isCurrentMonth
-    ? Math.min(Math.max(currentDate.getUTCDate(), 1), monthLength)
+    ? Math.min(Math.max(currentDate.getDate(), 1), monthLength)
     : Math.min(Math.max(fallbackObservedDays || monthLength, 1), monthLength)
   const daysRemaining = isCurrentMonth || fallbackObservedDays
     ? Math.max(monthLength - activeDay + 1, 0)
@@ -165,6 +163,11 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
       metrics: [
         { label: 'Spent', value: '--', hint: 'Current month' },
         { label: 'Income', value: '--', hint: 'Current month' },
+        {
+          label: 'Days left',
+          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
+          hint: 'Including today',
+        },
         { label: 'Net this month', value: '--', hint: 'Income minus spend' },
       ],
     }
@@ -194,6 +197,11 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
       metrics: [
         { label: 'Spent', value: formatCurrency(spent), hint: 'Current month' },
         { label: 'Income', value: formatCurrency(income), hint: 'Current month' },
+        {
+          label: 'Days left',
+          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
+          hint: 'Including today',
+        },
         {
           label: 'Net this month',
           value: formatCurrency(net),
