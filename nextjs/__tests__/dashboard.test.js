@@ -117,6 +117,10 @@ function getMonthStartString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
 }
 
+function createLocalDate(year, monthIndex, day, hour = 12, minute = 0, second = 0) {
+  return new Date(year, monthIndex, day, hour, minute, second)
+}
+
 function createLiveSummary(overrides = {}) {
   return {
     month: TEST_CURRENT_MONTH,
@@ -124,10 +128,10 @@ function createLiveSummary(overrides = {}) {
   }
 }
 
-const TEST_NOW = new Date('2026-03-21T12:00:00Z')
+const TEST_NOW = createLocalDate(2026, 2, 21, 12)
 const TEST_CURRENT_MONTH = getMonthStartString(TEST_NOW)
-const TEST_NEXT_MONTH_DATE = new Date('2026-04-21T12:00:00Z')
-const TEST_NEAR_BOUNDARY_CURRENT_MONTH_DATE = new Date('2026-03-01T00:30:00-05:00')
+const TEST_NEXT_MONTH_DATE = createLocalDate(2026, 3, 21, 12)
+const TEST_NEAR_BOUNDARY_CURRENT_MONTH_DATE = createLocalDate(2026, 2, 1, 0, 30)
 
 function flattenText(node) {
   if (node == null) return ''
@@ -328,6 +332,20 @@ describe('getMonthProgressState', () => {
       daysRemaining: 0,
       isCurrentMonth: false,
     })
+
+    expect(getMonthProgressState('2026-13-01')).toEqual({
+      monthLength: 0,
+      activeDay: 0,
+      daysRemaining: 0,
+      isCurrentMonth: false,
+    })
+
+    expect(getMonthProgressState('2026-02-30')).toEqual({
+      monthLength: 0,
+      activeDay: 0,
+      daysRemaining: 0,
+      isCurrentMonth: false,
+    })
   })
 
   it('uses the current local date for live current-month days remaining', () => {
@@ -362,6 +380,18 @@ describe('getMonthProgressState', () => {
       monthLength: 31,
       activeDay: 1,
       daysRemaining: 31,
+      isCurrentMonth: true,
+    })
+  })
+
+  it('normalizes valid month dates before comparing against the current month', () => {
+    expect(getMonthProgressState('2026-03-15', {
+      observedDayCount: 3,
+      referenceDate: TEST_NOW,
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 21,
+      daysRemaining: 11,
       isCurrentMonth: true,
     })
   })
@@ -404,7 +434,7 @@ describe('getBudgetHudModel', () => {
     expect(getBudgetHudModel(null, {
       month: TEST_CURRENT_MONTH,
       observedDayCount: 0,
-      referenceDate: new Date('2026-03-10T12:00:00Z'),
+      referenceDate: createLocalDate(2026, 2, 10, 12),
     })).toEqual(expect.objectContaining({
       tone: 'neutral',
       badge: 'Waiting',
@@ -429,7 +459,7 @@ describe('getBudgetHudModel', () => {
     }, {
       month: TEST_CURRENT_MONTH,
       observedDayCount: 10,
-      referenceDate: new Date('2026-03-10T12:00:00Z'),
+      referenceDate: createLocalDate(2026, 2, 10, 12),
     })).toEqual(expect.objectContaining({
       tone: 'neutral',
       badge: 'No budget',
@@ -456,7 +486,7 @@ describe('getBudgetHudModel', () => {
     }, {
       month: TEST_CURRENT_MONTH,
       observedDayCount: 20,
-      referenceDate: new Date('2026-03-20T12:00:00Z'),
+      referenceDate: createLocalDate(2026, 2, 20, 12),
     })).toEqual(expect.objectContaining({
       tone: 'warning',
       badge: 'Near limit',
@@ -479,7 +509,7 @@ describe('getBudgetHudModel', () => {
     }, {
       month: TEST_CURRENT_MONTH,
       observedDayCount: 25,
-      referenceDate: new Date('2026-03-25T12:00:00Z'),
+      referenceDate: createLocalDate(2026, 2, 25, 12),
     })).toEqual(expect.objectContaining({
       tone: 'warning',
       badge: 'Over budget',
@@ -501,7 +531,7 @@ describe('getBudgetHudModel', () => {
     }, {
       month: TEST_CURRENT_MONTH,
       observedDayCount: 12,
-      referenceDate: new Date('2026-03-12T12:00:00Z'),
+      referenceDate: createLocalDate(2026, 2, 12, 12),
     })).toEqual(expect.objectContaining({
       tone: 'positive',
       badge: 'On track',

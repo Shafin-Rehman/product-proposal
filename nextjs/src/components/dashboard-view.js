@@ -89,12 +89,38 @@ function getSafeReferenceDate(referenceDate) {
   return Number.isNaN(parsedReferenceDate.getTime()) ? new Date() : parsedReferenceDate
 }
 
-export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
+function getNormalizedMonthDetails(month) {
   const monthMatch = typeof month === 'string'
-    ? month.match(/^(\d{4})-(\d{2})-\d{2}$/)
+    ? month.match(/^(\d{4})-(\d{2})-(\d{2})$/)
     : null
 
-  if (!monthMatch) {
+  if (!monthMatch) return null
+
+  const monthYear = Number(monthMatch[1])
+  const monthNumber = Number(monthMatch[2])
+  const monthDay = Number(monthMatch[3])
+  const parsedMonth = new Date(Date.UTC(monthYear, monthNumber - 1, monthDay, 12))
+
+  if (
+    parsedMonth.getUTCFullYear() !== monthYear
+    || parsedMonth.getUTCMonth() !== monthNumber - 1
+    || parsedMonth.getUTCDate() !== monthDay
+  ) {
+    return null
+  }
+
+  return {
+    normalizedMonth: `${monthMatch[1]}-${monthMatch[2]}-01`,
+    monthYear,
+    monthIndex: monthNumber - 1,
+    monthLength: new Date(Date.UTC(monthYear, monthNumber, 0)).getUTCDate(),
+  }
+}
+
+export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
+  const monthDetails = getNormalizedMonthDetails(month)
+
+  if (!monthDetails) {
     return {
       monthLength: 0,
       activeDay: 0,
@@ -104,10 +130,8 @@ export function getMonthProgressState(month, { observedDayCount = 0, referenceDa
   }
 
   const currentDate = getSafeReferenceDate(referenceDate)
-  const monthYear = Number(monthMatch[1])
-  const monthIndex = Number(monthMatch[2]) - 1
-  const monthLength = new Date(monthYear, monthIndex + 1, 0).getDate()
-  const isCurrentMonth = getCurrentMonthStart(currentDate) === month
+  const { normalizedMonth, monthLength } = monthDetails
+  const isCurrentMonth = getCurrentMonthStart(currentDate) === normalizedMonth
   const fallbackObservedDays = Number.isFinite(observedDayCount)
     ? Math.max(0, Math.floor(observedDayCount))
     : 0
