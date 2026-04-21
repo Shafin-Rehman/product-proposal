@@ -84,6 +84,11 @@ function getSafeMoneyNumber(value) {
   return Number.isFinite(amount) ? amount : 0
 }
 
+function getSafeReferenceDate(referenceDate) {
+  const parsedReferenceDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
+  return Number.isNaN(parsedReferenceDate.getTime()) ? new Date() : parsedReferenceDate
+}
+
 export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
   const monthMatch = typeof month === 'string'
     ? month.match(/^(\d{4})-(\d{2})-\d{2}$/)
@@ -98,7 +103,7 @@ export function getMonthProgressState(month, { observedDayCount = 0, referenceDa
     }
   }
 
-  const currentDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
+  const currentDate = getSafeReferenceDate(referenceDate)
   const monthYear = Number(monthMatch[1])
   const monthIndex = Number(monthMatch[2]) - 1
   const monthLength = new Date(monthYear, monthIndex + 1, 0).getDate()

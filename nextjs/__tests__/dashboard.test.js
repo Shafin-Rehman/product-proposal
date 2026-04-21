@@ -113,6 +113,22 @@ const {
   getMonthProgressState,
 } = require('@/components/dashboard-view')
 
+function getMonthStartString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function createLiveSummary(overrides = {}) {
+  return {
+    month: TEST_CURRENT_MONTH,
+    ...overrides,
+  }
+}
+
+const TEST_NOW = new Date('2026-03-21T12:00:00Z')
+const TEST_CURRENT_MONTH = getMonthStartString(TEST_NOW)
+const TEST_NEXT_MONTH_DATE = new Date('2026-04-21T12:00:00Z')
+const TEST_NEAR_BOUNDARY_CURRENT_MONTH_DATE = new Date('2026-03-01T00:30:00-05:00')
+
 function flattenText(node) {
   if (node == null) return ''
   if (typeof node === 'string') return node
@@ -141,6 +157,8 @@ async function renderDashboard() {
 }
 
 beforeEach(() => {
+  jest.useFakeTimers()
+  jest.setSystemTime(TEST_NOW)
   jest.clearAllMocks()
   useRouter.mockReturnValue({ replace: jest.fn() })
   useAuth.mockReturnValue({
@@ -155,7 +173,12 @@ beforeEach(() => {
   useDataChanged.mockReturnValue({ dataChangedToken: 0 })
   financeUtils.buildActivityFeed.mockReturnValue([])
   financeUtils.buildMonthlySpendTrend.mockReturnValue([])
+  financeUtils.getCurrentMonthStart.mockImplementation((date = new Date()) => getMonthStartString(date))
   financeUtils.isInMonth.mockReturnValue(true)
+})
+
+afterEach(() => {
+  jest.useRealTimers()
 })
 
 describe('getBudgetCtaLabel', () => {
@@ -308,9 +331,9 @@ describe('getMonthProgressState', () => {
   })
 
   it('uses the current local date for live current-month days remaining', () => {
-    expect(getMonthProgressState('2026-03-01', {
+    expect(getMonthProgressState(TEST_CURRENT_MONTH, {
       observedDayCount: 3,
-      referenceDate: new Date('2026-03-21T12:00:00Z'),
+      referenceDate: TEST_NOW,
     })).toEqual({
       monthLength: 31,
       activeDay: 21,
@@ -320,9 +343,9 @@ describe('getMonthProgressState', () => {
   })
 
   it('falls back to observed dashboard trend days for sample or non-current months', () => {
-    expect(getMonthProgressState('2026-03-01', {
+    expect(getMonthProgressState(TEST_CURRENT_MONTH, {
       observedDayCount: 15,
-      referenceDate: new Date('2026-04-21T12:00:00Z'),
+      referenceDate: TEST_NEXT_MONTH_DATE,
     })).toEqual({
       monthLength: 31,
       activeDay: 15,
@@ -332,13 +355,45 @@ describe('getMonthProgressState', () => {
   })
 
   it('treats the local month as current near UTC month boundaries', () => {
-    expect(getMonthProgressState('2026-03-01', {
+    expect(getMonthProgressState(TEST_CURRENT_MONTH, {
       observedDayCount: 3,
-      referenceDate: new Date('2026-03-01T00:30:00-05:00'),
+      referenceDate: TEST_NEAR_BOUNDARY_CURRENT_MONTH_DATE,
     })).toEqual({
       monthLength: 31,
       activeDay: 1,
       daysRemaining: 31,
+      isCurrentMonth: true,
+    })
+  })
+
+  it('falls back to the runtime current date when the provided referenceDate is invalid', () => {
+    expect(getMonthProgressState(TEST_CURRENT_MONTH, {
+      observedDayCount: 8,
+      referenceDate: new Date('not-a-date'),
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 21,
+      daysRemaining: 11,
+      isCurrentMonth: true,
+    })
+
+    expect(getMonthProgressState('2026-04-01', {
+      observedDayCount: 8,
+      referenceDate: 'not-a-date',
+    })).toEqual({
+      monthLength: 30,
+      activeDay: 8,
+      daysRemaining: 23,
+      isCurrentMonth: false,
+    })
+
+    expect(getMonthProgressState(TEST_CURRENT_MONTH, {
+      observedDayCount: 8,
+      referenceDate: 'not-a-date',
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 21,
+      daysRemaining: 11,
       isCurrentMonth: true,
     })
   })
@@ -347,7 +402,7 @@ describe('getMonthProgressState', () => {
 describe('getBudgetHudModel', () => {
   it('uses placeholder metric values while the live summary is still loading', () => {
     expect(getBudgetHudModel(null, {
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       observedDayCount: 0,
       referenceDate: new Date('2026-03-10T12:00:00Z'),
     })).toEqual(expect.objectContaining({
@@ -365,14 +420,14 @@ describe('getBudgetHudModel', () => {
 
   it('returns a no-budget HUD state when only live spend is available', () => {
     expect(getBudgetHudModel({
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       total_income: '1200.00',
       total_expenses: '450.00',
       total_budget: null,
       remaining_budget: null,
       threshold_exceeded: false,
     }, {
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       observedDayCount: 10,
       referenceDate: new Date('2026-03-10T12:00:00Z'),
     })).toEqual(expect.objectContaining({
@@ -392,14 +447,14 @@ describe('getBudgetHudModel', () => {
 
   it('returns a near-limit HUD state at eighty percent used', () => {
     expect(getBudgetHudModel({
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       total_income: '2000.00',
       total_expenses: '800.00',
       total_budget: '1000.00',
       remaining_budget: '200.00',
       threshold_exceeded: false,
     }, {
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       observedDayCount: 20,
       referenceDate: new Date('2026-03-20T12:00:00Z'),
     })).toEqual(expect.objectContaining({
@@ -415,14 +470,14 @@ describe('getBudgetHudModel', () => {
 
   it('returns an over-budget HUD state with a corrective daily allowance', () => {
     expect(getBudgetHudModel({
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       total_income: '900.00',
       total_expenses: '1100.00',
       total_budget: '1000.00',
       remaining_budget: '-100.00',
       threshold_exceeded: true,
     }, {
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       observedDayCount: 25,
       referenceDate: new Date('2026-03-25T12:00:00Z'),
     })).toEqual(expect.objectContaining({
@@ -437,14 +492,14 @@ describe('getBudgetHudModel', () => {
 
   it('returns an on-track HUD state when budget pace is healthy', () => {
     expect(getBudgetHudModel({
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       total_income: '2500.00',
       total_expenses: '500.00',
       total_budget: '1200.00',
       remaining_budget: '700.00',
       threshold_exceeded: false,
     }, {
-      month: '2026-03-01',
+      month: TEST_CURRENT_MONTH,
       observedDayCount: 12,
       referenceDate: new Date('2026-03-12T12:00:00Z'),
     })).toEqual(expect.objectContaining({
@@ -577,8 +632,7 @@ describe('DashboardView', () => {
 
   it('fetches live dashboard data and renders the updated HUD state', async () => {
     apiGet
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
+      .mockResolvedValueOnce(createLiveSummary({
         monthly_limit: '1000.00',
         total_budget: '1000.00',
         total_expenses: '860.00',
@@ -595,7 +649,7 @@ describe('DashboardView', () => {
             progress_percentage: 95,
           },
         ],
-      })
+      }))
       .mockResolvedValueOnce([
         { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
       ])
@@ -614,7 +668,7 @@ describe('DashboardView', () => {
     expect(apiGet).toHaveBeenCalledTimes(3)
     expect(apiGet).toHaveBeenNthCalledWith(
       1,
-      '/api/budget/summary?month=2026-04-01',
+      `/api/budget/summary?month=${TEST_CURRENT_MONTH}`,
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
     expect(text).toContain('Live')
@@ -627,8 +681,7 @@ describe('DashboardView', () => {
 
   it('shows a partial-data notice when some live endpoints fail but others succeed', async () => {
     apiGet
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
+      .mockResolvedValueOnce(createLiveSummary({
         monthly_limit: '900.00',
         total_budget: '900.00',
         total_expenses: '450.00',
@@ -636,7 +689,7 @@ describe('DashboardView', () => {
         remaining_budget: '450.00',
         threshold_exceeded: false,
         category_statuses: [],
-      })
+      }))
       .mockRejectedValueOnce(new Error('expenses unavailable'))
       .mockResolvedValueOnce([])
 
@@ -686,8 +739,7 @@ describe('DashboardView', () => {
 
   it('opens the budget sheet and saves a new monthly limit through the live dashboard flow', async () => {
     apiGet
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
+      .mockResolvedValueOnce(createLiveSummary({
         monthly_limit: '1000.00',
         total_budget: '1000.00',
         total_expenses: '400.00',
@@ -695,11 +747,10 @@ describe('DashboardView', () => {
         remaining_budget: '600.00',
         threshold_exceeded: false,
         category_statuses: [],
-      })
+      }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
+      .mockResolvedValueOnce(createLiveSummary({
         monthly_limit: '3000.00',
         total_budget: '3000.00',
         total_expenses: '400.00',
@@ -707,7 +758,7 @@ describe('DashboardView', () => {
         remaining_budget: '2600.00',
         threshold_exceeded: false,
         category_statuses: [],
-      })
+      }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     apiPost.mockResolvedValueOnce({})
@@ -718,7 +769,7 @@ describe('DashboardView', () => {
       getButtonByText(renderer, 'Edit budget').props.onClick()
     })
     expect(getRenderedText(renderer)).toContain('Monthly spending limit for')
-    expect(getRenderedText(renderer)).toContain('2026-04-01')
+    expect(getRenderedText(renderer)).toContain(TEST_CURRENT_MONTH)
 
     const input = renderer.root.findByType('input')
     await act(async () => {
@@ -733,7 +784,7 @@ describe('DashboardView', () => {
 
     expect(apiPost).toHaveBeenCalledWith(
       '/api/budget',
-      { month: '2026-04-01', monthly_limit: 3000 },
+      { month: TEST_CURRENT_MONTH, monthly_limit: 3000 },
       { accessToken: 'test-token' }
     )
     expect(apiGet).toHaveBeenCalledTimes(6)
