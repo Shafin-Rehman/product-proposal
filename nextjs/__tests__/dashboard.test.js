@@ -37,7 +37,15 @@ jest.mock('@/lib/financeUtils', () => ({
   isInMonth: jest.fn(),
 }))
 
-const { buildDerivedCategoryCards, getBudgetCtaLabel, getBudgetHintText, getCategoryCards } = require('@/components/dashboard-view')
+const {
+  buildDerivedCategoryCards,
+  getBudgetCtaLabel,
+  getBudgetHintText,
+  getBudgetHudModel,
+  getBudgetPressureHighlight,
+  getCategoryCards,
+  getMonthProgressState,
+} = require('@/components/dashboard-view')
 
 describe('getBudgetCtaLabel', () => {
   it('returns Set budget when no budgets exist', () => {
@@ -175,5 +183,148 @@ describe('buildDerivedCategoryCards', () => {
       expect.objectContaining({ name: 'Food', amount: 40, progress: 80, note: '80% of spend' }),
       expect.objectContaining({ name: 'Fun', amount: 10, progress: 20, note: '20% of spend' }),
     ])
+  })
+})
+
+describe('getMonthProgressState', () => {
+  it('uses the current UTC date for live current-month days remaining', () => {
+    expect(getMonthProgressState('2026-03-01', {
+      observedDayCount: 3,
+      referenceDate: new Date('2026-03-21T12:00:00Z'),
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 21,
+      daysRemaining: 11,
+      isCurrentMonth: true,
+    })
+  })
+
+  it('falls back to observed dashboard trend days for sample or non-current months', () => {
+    expect(getMonthProgressState('2026-03-01', {
+      observedDayCount: 15,
+      referenceDate: new Date('2026-04-21T12:00:00Z'),
+    })).toEqual({
+      monthLength: 31,
+      activeDay: 15,
+      daysRemaining: 17,
+      isCurrentMonth: false,
+    })
+  })
+})
+
+describe('getBudgetHudModel', () => {
+  it('returns a no-budget HUD state when only live spend is available', () => {
+    expect(getBudgetHudModel({
+      month: '2026-03-01',
+      total_income: '1200.00',
+      total_expenses: '450.00',
+      total_budget: null,
+      remaining_budget: null,
+      threshold_exceeded: false,
+    }, {
+      month: '2026-03-01',
+      observedDayCount: 10,
+      referenceDate: new Date('2026-03-10T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      tone: 'neutral',
+      badge: 'No budget',
+      value: '$450 spent',
+      hasBudget: false,
+      progressWidth: '0%',
+      metrics: [
+        expect.objectContaining({ label: 'Spent', value: '$450' }),
+        expect.objectContaining({ label: 'Income', value: '$1200' }),
+        expect.objectContaining({ label: 'Net this month', value: '$750' }),
+      ],
+    }))
+  })
+
+  it('returns a near-limit HUD state at eighty percent used', () => {
+    expect(getBudgetHudModel({
+      month: '2026-03-01',
+      total_income: '2000.00',
+      total_expenses: '800.00',
+      total_budget: '1000.00',
+      remaining_budget: '200.00',
+      threshold_exceeded: false,
+    }, {
+      month: '2026-03-01',
+      observedDayCount: 20,
+      referenceDate: new Date('2026-03-20T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      tone: 'warning',
+      badge: 'Near limit',
+      value: '$200 left',
+      progressWidth: '80%',
+      isNearLimit: true,
+      daysRemaining: 12,
+      dailyAllowance: 16.67,
+    }))
+  })
+
+  it('returns an over-budget HUD state with a corrective daily allowance', () => {
+    expect(getBudgetHudModel({
+      month: '2026-03-01',
+      total_income: '900.00',
+      total_expenses: '1100.00',
+      total_budget: '1000.00',
+      remaining_budget: '-100.00',
+      threshold_exceeded: true,
+    }, {
+      month: '2026-03-01',
+      observedDayCount: 25,
+      referenceDate: new Date('2026-03-25T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      tone: 'warning',
+      badge: 'Over budget',
+      value: '$100 over',
+      isOverBudget: true,
+      daysRemaining: 7,
+      dailyAllowance: -14.29,
+    }))
+  })
+})
+
+describe('getBudgetPressureHighlight', () => {
+  it('prioritizes the strongest over-budget category', () => {
+    expect(getBudgetPressureHighlight({
+      category_statuses: [
+        {
+          category_id: 'cat-food',
+          category_name: 'Food',
+          monthly_limit: '100.00',
+          spent: '140.00',
+          remaining_budget: '-40.00',
+          progress_percentage: 140,
+        },
+        {
+          category_id: 'cat-fun',
+          category_name: 'Fun',
+          monthly_limit: '100.00',
+          spent: '120.00',
+          remaining_budget: '-20.00',
+          progress_percentage: 120,
+        },
+      ],
+    })).toEqual({
+      tone: 'warning',
+      label: 'Strongest overspend',
+      title: 'Food',
+      detail: '$40 over budget right now.',
+    })
+  })
+
+  it('falls back to the top spend-share category when no category budgets exist', () => {
+    expect(getBudgetPressureHighlight({
+      category_statuses: [],
+    }, [
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '60.00' },
+      { id: 'e2', category_id: 'cat-fun', category_name: 'Fun', amount: '40.00' },
+    ])).toEqual({
+      tone: 'neutral',
+      label: 'Top spend area',
+      title: 'Food',
+      detail: '60% of spend this month.',
+    })
   })
 })

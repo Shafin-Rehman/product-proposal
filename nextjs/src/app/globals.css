@@ -5990,6 +5990,196 @@ html[data-theme='dark'] .donut-chart__inner {
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
+/* Dashboard HUD refinements */
+
+.budget-hero {
+  gap: 1rem;
+  padding: 1.35rem;
+  border-radius: 2rem;
+}
+
+.budget-hero--risk {
+  border-color: rgba(201, 130, 90, 0.22);
+}
+
+.budget-hero--over {
+  border-color: rgba(201, 130, 90, 0.34);
+  box-shadow: 0 18px 36px rgba(201, 130, 90, 0.14);
+}
+
+.budget-hero__topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.budget-hero__eyebrow {
+  letter-spacing: 0.12em;
+}
+
+.budget-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.budget-hero__badge {
+  position: static;
+  right: auto;
+  top: auto;
+}
+
+.budget-hero__header {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.budget-hero__headline {
+  width: 100%;
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  text-align: left;
+}
+
+.budget-hero__value,
+.budget-hero__suffix {
+  text-align: left;
+}
+
+.budget-hero__progress-block {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.budget-hero__progress {
+  height: 1rem;
+}
+
+.budget-hero__progress-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.budget-hero__progress-copy strong {
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.budget-hero__progress-copy span,
+.budget-hero__pressure p,
+.budget-hero__metric small {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.budget-hero__metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.budget-hero__metric {
+  display: grid;
+  gap: 0.18rem;
+  min-height: 6.2rem;
+}
+
+.budget-hero__metric strong {
+  margin-top: 0.12rem;
+  font-size: 1.12rem;
+}
+
+.budget-hero__pressure {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(86, 96, 90, 0.08);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+html[data-theme='dark'] .budget-hero__pressure {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.budget-hero__pressure--warning {
+  border-color: rgba(201, 130, 90, 0.24);
+  background: rgba(255, 246, 238, 0.9);
+}
+
+html[data-theme='dark'] .budget-hero__pressure--warning {
+  background: rgba(77, 54, 44, 0.34);
+}
+
+.budget-hero__pressure--positive {
+  border-color: rgba(122, 181, 146, 0.2);
+  background: rgba(243, 252, 246, 0.92);
+}
+
+html[data-theme='dark'] .budget-hero__pressure--positive {
+  background: rgba(43, 66, 53, 0.32);
+}
+
+.budget-hero__pressure-label {
+  display: block;
+  margin-bottom: 0.1rem;
+  color: var(--text-tertiary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.budget-hero__pressure strong {
+  display: block;
+  font-size: 1rem;
+  letter-spacing: -0.03em;
+}
+
+@media (max-width: 920px) {
+  .budget-hero__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .budget-hero {
+    padding: 1.1rem;
+  }
+
+  .budget-hero__badge {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+  }
+
+  .budget-hero__topline,
+  .budget-hero__actions {
+    align-items: stretch;
+  }
+
+  .budget-hero__topline {
+    flex-direction: column;
+  }
+
+  .budget-hero__actions {
+    justify-content: space-between;
+  }
+
+  .budget-hero__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-hero__metric {
+    min-height: 0;
+  }
+}
+
 .transactions-fab-slot--hidden,
 .transactions-fab-slot--scrolling {
   opacity: 0;
@@ -6461,4 +6651,3 @@ html[data-theme='dark'] .planner-row__progress-track {
     flex-direction: column;
   }
 }
-
