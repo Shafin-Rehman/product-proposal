@@ -1,4 +1,7 @@
-jest.mock('next/link', () => 'mock-link')
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({ children, href, ...props }) => require('react').createElement('a', { href, ...props }, children),
+}))
 jest.mock('next/navigation', () => ({ useRouter: jest.fn() }))
 jest.mock('@/components/providers', () => ({
   useAuth: jest.fn(),
@@ -6,16 +9,68 @@ jest.mock('@/components/providers', () => ({
   useDataChanged: jest.fn(),
 }))
 jest.mock('@/lib/apiClient', () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(message = 'API error', status) {
+      super(message)
+      this.status = status
+    }
+  },
   apiGet: jest.fn(),
   apiPost: jest.fn(),
 }))
 jest.mock('@/lib/demoData', () => ({
   DEMO_MONTH: '2026-03-01',
-  demoActivity: [],
-  demoBudgetSummary: null,
-  demoBudgetTrend: [],
-  demoCategoryBudgets: [],
+  demoActivity: [
+    {
+      id: 'demo-expense-1',
+      kind: 'expense',
+      merchant: 'Grocer',
+      title: 'Grocer',
+      chip: 'Food',
+      occurredOn: '2026-03-12',
+      amount: 82,
+    },
+    {
+      id: 'demo-income-1',
+      kind: 'income',
+      title: 'Paycheck',
+      chip: 'Income',
+      occurredOn: '2026-03-10',
+      amount: 2400,
+    },
+  ],
+  demoBudgetSummary: {
+    month: '2026-03-01',
+    monthly_limit: '1000.00',
+    total_budget: '1000.00',
+    total_expenses: '820.00',
+    total_income: '2400.00',
+    remaining_budget: '180.00',
+    threshold_exceeded: false,
+    category_statuses: [
+      {
+        category_id: 'food',
+        category_name: 'Food',
+        monthly_limit: '350.00',
+        spent: '320.00',
+        remaining_budget: '30.00',
+        progress_percentage: 91.43,
+      },
+      {
+        category_id: 'fun',
+        category_name: 'Fun',
+        monthly_limit: '250.00',
+        spent: '180.00',
+        remaining_budget: '70.00',
+        progress_percentage: 72,
+      },
+    ],
+  },
+  demoBudgetTrend: [240, 520, 820],
+  demoCategoryBudgets: [
+    { id: 'food', name: 'Food', budget: 350, spent: 320 },
+    { id: 'fun', name: 'Fun', budget: 250, spent: 180 },
+  ],
 }))
 jest.mock('@/lib/financeVisuals', () => ({
   getCategoryVisual: jest.fn((value) => ({
@@ -24,8 +79,12 @@ jest.mock('@/lib/financeVisuals', () => ({
     soft: '#abcdef',
     symbol: value?.[0] || '?',
   })),
-  getEntryVisual: jest.fn(),
-  getInitialsLabel: jest.fn(),
+  getEntryVisual: jest.fn((entry) => ({
+    color: entry.kind === 'income' ? '#0f9d58' : '#123456',
+    soft: '#abcdef',
+    symbol: entry.kind === 'income' ? '+' : '$',
+  })),
+  getInitialsLabel: jest.fn((value, fallback) => value?.slice(0, 2)?.toUpperCase() || fallback),
 }))
 jest.mock('@/lib/financeUtils', () => ({
   buildActivityFeed: jest.fn(),
@@ -37,7 +96,14 @@ jest.mock('@/lib/financeUtils', () => ({
   isInMonth: jest.fn(),
 }))
 
+const React = require('react')
+const { act, create } = require('react-test-renderer')
+const { useRouter } = require('next/navigation')
+const { useAuth, useDataMode, useDataChanged } = require('@/components/providers')
+const { ApiError, apiGet, apiPost } = require('@/lib/apiClient')
+const financeUtils = require('@/lib/financeUtils')
 const {
+  default: DashboardView,
   buildDerivedCategoryCards,
   getBudgetCtaLabel,
   getBudgetHintText,
@@ -46,6 +112,51 @@ const {
   getCategoryCards,
   getMonthProgressState,
 } = require('@/components/dashboard-view')
+
+function flattenText(node) {
+  if (node == null) return ''
+  if (typeof node === 'string') return node
+  if (Array.isArray(node)) return node.map(flattenText).join(' ')
+  return flattenText(node.children)
+}
+
+function getRenderedText(renderer) {
+  return flattenText(renderer.toJSON())
+}
+
+function getButtonByText(renderer, label) {
+  return renderer.root.find((node) => (
+    node.type === 'button'
+    && flattenText(node.props.children).includes(label)
+  ))
+}
+
+async function renderDashboard() {
+  let renderer
+  await act(async () => {
+    renderer = create(React.createElement(DashboardView))
+    await Promise.resolve()
+  })
+  return renderer
+}
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  useRouter.mockReturnValue({ replace: jest.fn() })
+  useAuth.mockReturnValue({
+    isReady: true,
+    logout: jest.fn(),
+    session: {
+      accessToken: 'test-token',
+      user: { email: 'sam.tester@example.com' },
+    },
+  })
+  useDataMode.mockReturnValue({ isSampleMode: false })
+  useDataChanged.mockReturnValue({ dataChangedToken: 0 })
+  financeUtils.buildActivityFeed.mockReturnValue([])
+  financeUtils.buildMonthlySpendTrend.mockReturnValue([])
+  financeUtils.isInMonth.mockReturnValue(true)
+})
 
 describe('getBudgetCtaLabel', () => {
   it('returns Set budget when no budgets exist', () => {
@@ -187,6 +298,15 @@ describe('buildDerivedCategoryCards', () => {
 })
 
 describe('getMonthProgressState', () => {
+  it('returns a safe empty state when the month value is invalid', () => {
+    expect(getMonthProgressState('not-a-month')).toEqual({
+      monthLength: 0,
+      activeDay: 0,
+      daysRemaining: 0,
+      isCurrentMonth: false,
+    })
+  })
+
   it('uses the current local date for live current-month days remaining', () => {
     expect(getMonthProgressState('2026-03-01', {
       observedDayCount: 3,
@@ -314,6 +434,29 @@ describe('getBudgetHudModel', () => {
       dailyAllowance: -14.29,
     }))
   })
+
+  it('returns an on-track HUD state when budget pace is healthy', () => {
+    expect(getBudgetHudModel({
+      month: '2026-03-01',
+      total_income: '2500.00',
+      total_expenses: '500.00',
+      total_budget: '1200.00',
+      remaining_budget: '700.00',
+      threshold_exceeded: false,
+    }, {
+      month: '2026-03-01',
+      observedDayCount: 12,
+      referenceDate: new Date('2026-03-12T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      tone: 'positive',
+      badge: 'On track',
+      value: '$700 left',
+      progressWidth: '41.67%',
+      isNearLimit: false,
+      isOverBudget: false,
+      dailyAllowance: 35,
+    }))
+  })
 })
 
 describe('getBudgetPressureHighlight', () => {
@@ -357,5 +500,243 @@ describe('getBudgetPressureHighlight', () => {
       title: 'Food',
       detail: '60% of spend this month.',
     })
+  })
+
+  it('shows the highest-pressure budget category even when it is not over budget yet', () => {
+    expect(getBudgetPressureHighlight({
+      category_statuses: [
+        {
+          category_id: 'cat-food',
+          category_name: 'Food',
+          monthly_limit: '100.00',
+          spent: '92.00',
+          remaining_budget: '8.00',
+          progress_percentage: 92,
+        },
+        {
+          category_id: 'cat-fun',
+          category_name: 'Fun',
+          monthly_limit: '100.00',
+          spent: '75.00',
+          remaining_budget: '25.00',
+          progress_percentage: 75,
+        },
+      ],
+    })).toEqual({
+      tone: 'warning',
+      label: 'Top category pressure',
+      title: 'Food',
+      detail: '92% used with $8 left.',
+    })
+  })
+
+  it('returns a waiting message when neither budgets nor expenses are available', () => {
+    expect(getBudgetPressureHighlight({
+      category_statuses: [],
+    }, [])).toEqual({
+      tone: 'neutral',
+      label: 'Category pressure',
+      title: 'Waiting on categories',
+      detail: 'Current-month category pressure will show once expenses land.',
+    })
+  })
+})
+
+describe('DashboardView', () => {
+  it('returns nothing until auth readiness and session are available', async () => {
+    useAuth.mockReturnValue({
+      isReady: false,
+      logout: jest.fn(),
+      session: null,
+    })
+
+    const renderer = await renderDashboard()
+
+    expect(renderer.toJSON()).toBeNull()
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('renders the sample dashboard HUD, chart, categories, and activity without calling live APIs', async () => {
+    useDataMode.mockReturnValue({ isSampleMode: true })
+
+    const renderer = await renderDashboard()
+    const text = getRenderedText(renderer)
+
+    expect(apiGet).not.toHaveBeenCalled()
+    expect(text).toContain('Sample')
+    expect(text).toContain('2026-03-01')
+    expect(text).toContain('budget HUD')
+    expect(text).toContain('Near limit')
+    expect(text).toContain('$180 left')
+    expect(text).toContain('Top category pressure')
+    expect(text).toContain('Food')
+    expect(text).toContain('Grocer')
+    expect(text).toContain('Paycheck')
+    expect(text).toContain('$820 spent')
+  })
+
+  it('fetches live dashboard data and renders the updated HUD state', async () => {
+    apiGet
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '860.00',
+        total_income: '2200.00',
+        remaining_budget: '140.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          {
+            category_id: 'food',
+            category_name: 'Food',
+            monthly_limit: '300.00',
+            spent: '285.00',
+            remaining_budget: '15.00',
+            progress_percentage: 95,
+          },
+        ],
+      })
+      .mockResolvedValueOnce([
+        { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
+      ])
+    financeUtils.buildMonthlySpendTrend.mockReturnValue([320, 610, 860])
+    financeUtils.buildActivityFeed.mockReturnValue([
+      { id: 'expense-1', kind: 'expense', merchant: 'Grocer', title: 'Grocer', chip: 'Food', occurredOn: '2026-03-11', amount: 285 },
+      { id: 'income-1', kind: 'income', title: 'Paycheck', chip: 'Income', occurredOn: '2026-03-02', amount: 2200 },
+    ])
+
+    const renderer = await renderDashboard()
+    const text = getRenderedText(renderer)
+
+    expect(apiGet).toHaveBeenCalledTimes(3)
+    expect(apiGet).toHaveBeenNthCalledWith(
+      1,
+      '/api/budget/summary?month=2026-04-01',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(text).toContain('Live')
+    expect(text).toContain('Near limit')
+    expect(text).toContain('$140 left')
+    expect(text).toContain('Top category pressure')
+    expect(text).toContain('Grocer')
+    expect(text).toContain('Paycheck')
+  })
+
+  it('shows a partial-data notice when some live endpoints fail but others succeed', async () => {
+    apiGet
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '900.00',
+        total_budget: '900.00',
+        total_expenses: '450.00',
+        total_income: '1400.00',
+        remaining_budget: '450.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockRejectedValueOnce(new Error('expenses unavailable'))
+      .mockResolvedValueOnce([])
+
+    const renderer = await renderDashboard()
+    const text = getRenderedText(renderer)
+
+    expect(text).toContain('Live data is limited right now')
+    expect(text).toContain('Some live sections are missing for the moment, but the rest of the month is still visible.')
+    expect(text).toContain('On track')
+  })
+
+  it('surfaces the catch-all live error message when dashboard loading throws before settling', async () => {
+    apiGet.mockImplementation(() => {
+      throw new Error('Exploded dashboard request')
+    })
+
+    const renderer = await renderDashboard()
+    const text = getRenderedText(renderer)
+
+    expect(text).toContain('Live data is limited right now')
+    expect(text).toContain('Exploded dashboard request')
+    expect(text).toContain('Waiting on live totals')
+  })
+
+  it('logs out and redirects when a live dashboard request returns unauthorized', async () => {
+    const logout = jest.fn()
+    const replace = jest.fn()
+    useAuth.mockReturnValue({
+      isReady: true,
+      logout,
+      session: {
+        accessToken: 'expired-token',
+        user: { email: 'sam.tester@example.com' },
+      },
+    })
+    useRouter.mockReturnValue({ replace })
+    apiGet
+      .mockRejectedValueOnce(new ApiError('Expired session', 401))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+
+    await renderDashboard()
+
+    expect(logout).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith('/login')
+  })
+
+  it('opens the budget sheet and saves a new monthly limit through the live dashboard flow', async () => {
+    apiGet
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '400.00',
+        total_income: '1500.00',
+        remaining_budget: '600.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '3000.00',
+        total_budget: '3000.00',
+        total_expenses: '400.00',
+        total_income: '1500.00',
+        remaining_budget: '2600.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+    apiPost.mockResolvedValueOnce({})
+
+    const renderer = await renderDashboard()
+
+    await act(async () => {
+      getButtonByText(renderer, 'Edit budget').props.onClick()
+    })
+    expect(getRenderedText(renderer)).toContain('Monthly spending limit for')
+    expect(getRenderedText(renderer)).toContain('2026-04-01')
+
+    const input = renderer.root.findByType('input')
+    await act(async () => {
+      input.props.onChange({ target: { value: '3000' } })
+    })
+
+    const form = renderer.root.findByType('form')
+    await act(async () => {
+      form.props.onSubmit({ preventDefault: jest.fn() })
+      await Promise.resolve()
+    })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/budget',
+      { month: '2026-04-01', monthly_limit: 3000 },
+      { accessToken: 'test-token' }
+    )
+    expect(apiGet).toHaveBeenCalledTimes(6)
+    expect(getRenderedText(renderer)).not.toContain('Current limit:')
   })
 })
