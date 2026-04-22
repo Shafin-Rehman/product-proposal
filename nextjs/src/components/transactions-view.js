@@ -161,7 +161,7 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: categories?.[0]?.name || "Other",
+    category: '',
     occurredOn: getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -173,9 +173,9 @@ function createEditDraft(entry) {
     kind: entry.kind,
     amount: String(entry.amount),
     category: 
-      entry.raw?.category_name || 
-      entry.raw?.category ||
-      (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+       entry.kind === 'income'
+    ? (entry.raw?.source_name || entry.raw?.source || ENTRY_CATEGORY_OPTIONS.income[0])
+    : (entry.raw?.category_name || entry.raw?.category || ENTRY_CATEGORY_OPTIONS.expense[0]),
     occurredOn: entry.occurredOn || getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -185,7 +185,7 @@ function createEditDraft(entry) {
   }
   return {
     ...base,
-    counterparty: entry.raw?.notes || '',
+    counterparty: entry.raw?.source_name || entry.raw?.source || '',
     note: entry.raw?.notes || '',
   }
 }
@@ -422,7 +422,11 @@ export default function TransactionsView() {
   const openEntrySheet = (entryToEdit = null) => {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
-    setEntryDraft(entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft())
+    const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
+    if (!entryToEdit) {
+      draft.category = (draft.kind === 'expense' ? expenseCategories[0]?.name : incomeCategories[0]?.name) || ''
+    }
+    setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
   }
@@ -457,11 +461,15 @@ export default function TransactionsView() {
         }
       } else {
         const sourceId = incomeCategories.find((c) => c.name === entryDraft.category)?.id
+        if (!sourceId) {
+          setSaveError('Please select a valid source before saving.')
+          return
+        }
         const body = {
           amount: Number(entryDraft.amount),
           date: entryDraft.occurredOn,
           notes: (entryDraft.note.trim() || entryDraft.counterparty.trim()) || undefined,
-          ...(sourceId ? { source_id: sourceId } : {}),
+          source_id: sourceId,
         }
         if (editingEntry) {
           await apiPost('/api/income/update', { income_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -850,7 +858,9 @@ export default function TransactionsView() {
                     value={entryDraft.category}
                   >
                     {entryCategories.length === 0 ? (
-                    <option disabled>Loading categories...</option>
+                    <option value="" disabled>
+                      Loading categories...
+                      </option>
                  ) : (
                    entryCategories.map((option) => (
                     <option key={option.name} value={option.name}>
