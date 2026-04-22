@@ -161,7 +161,7 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: categories?.[0]?.name || "Other",
+    category: '',
     occurredOn: getTodayInputValue(),
     repeating: 'off',
     note: '',
@@ -422,7 +422,11 @@ export default function TransactionsView() {
   const openEntrySheet = (entryToEdit = null) => {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
-    setEntryDraft(entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft())
+    const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
+    if (!entryToEdit) {
+      draft.category = expenseCategories[0]?.name || incomeCategories[0]?.name || ''
+    }
+    setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
   }
@@ -850,7 +854,9 @@ export default function TransactionsView() {
                     value={entryDraft.category}
                   >
                     {entryCategories.length === 0 ? (
-                    <option disabled>Loading categories...</option>
+                    <option value="" disabled>
+                      Loading categories...
+                      </option>
                  ) : (
                    entryCategories.map((option) => (
                     <option key={option.name} value={option.name}>
