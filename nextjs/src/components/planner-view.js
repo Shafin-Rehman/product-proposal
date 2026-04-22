@@ -13,6 +13,10 @@ import {
   getCurrentMonthStart,
 } from '@/lib/financeUtils'
 import {
+  buildFinancialHealth,
+  buildOverallBudgetHealth,
+} from '@/lib/budgetHealth'
+import {
   areMoneyDraftValuesEquivalent,
   formatMoneyDraftValue,
   buildPlannerDraftSnapshot,
@@ -296,6 +300,11 @@ export default function PlannerView() {
       : liveState.status === 'loading'
         ? 'loading'
         : 'unavailable'
+  const summaryAvailability = actualSpendState === 'ready'
+    ? 'ready'
+    : actualSpendState === 'loading'
+      ? 'loading'
+      : 'unavailable'
   const copyState = getCopyLastMonthState({
     currentConfig: activeConfig,
     previousConfig,
@@ -347,6 +356,15 @@ export default function PlannerView() {
       : plannerSummary.overallRemaining > 0
         ? 'positive'
         : 'neutral'
+  const overallBudgetHealth = buildOverallBudgetHealth({
+    summary: activeSummary,
+    availability: summaryAvailability,
+    month: activeMonth,
+  })
+  const financialHealth = buildFinancialHealth({
+    summary: activeSummary,
+    availability: summaryAvailability,
+  })
 
   const handleRetry = () => setReloadToken((value) => value + 1)
 
@@ -596,6 +614,21 @@ export default function PlannerView() {
           </div>
         </div>
 
+        <div className="planner-summary__health">
+          <article className={`planner-health-card planner-health-card--${overallBudgetHealth.tone}`}>
+            <span className="planner-health-card__label">Monthly budget health</span>
+            <strong>{overallBudgetHealth.label}</strong>
+            <p>{overallBudgetHealth.primaryValue}</p>
+            <small>{overallBudgetHealth.progressNote}</small>
+          </article>
+          <article className={`planner-health-card planner-health-card--${financialHealth.tone}`}>
+            <span className="planner-health-card__label">Financial health</span>
+            <strong>{financialHealth.label}</strong>
+            <p>{financialHealth.valueText}</p>
+            <small>{financialHealth.detailText}</small>
+          </article>
+        </div>
+
         <div className="planner-summary__stats">
           <article className="planner-metric">
             <span>Category plan</span>
@@ -673,32 +706,19 @@ export default function PlannerView() {
               const isUnchanged = hasValidDraft
                 && normalizedPlannedAmount != null
                 && normalizedRowDraft === normalizedPlannedAmount
-              const remainingLabel = row.spentAmount == null
-                ? actualSpendState === 'loading'
-                  ? 'Waiting for actual spend'
-                  : 'Actual spend unavailable'
-                : row.remainingAmount == null
-                  ? 'Not set'
-                : row.remainingAmount >= 0
-                  ? `${formatCurrency(row.remainingAmount)} left`
-                  : `${formatCurrency(Math.abs(row.remainingAmount))} over`
               const progressAccessibilityProps = row.spentAmount == null
                 ? {
                     'aria-label': `${row.categoryName} budget progress`,
                     'aria-valuemin': 0,
                     'aria-valuemax': 100,
-                    'aria-valuetext': actualSpendState === 'loading'
-                      ? `${row.categoryName} actual spend is loading`
-                      : `${row.categoryName} actual spend is unavailable`,
+                    'aria-valuetext': row.progressAriaValueText,
                   }
                 : {
                     'aria-label': `${row.categoryName} budget progress`,
                     'aria-valuemin': 0,
                     'aria-valuemax': 100,
                     'aria-valuenow': Math.round(row.progressPercentage),
-                    'aria-valuetext': row.plannedAmount == null
-                      ? `${formatCurrency(row.spentAmount)} spent without a saved plan`
-                      : `${Math.round(row.progressPercentage)} percent used, ${remainingLabel}`,
+                    'aria-valuetext': row.progressAriaValueText,
                   }
 
               return (
@@ -733,7 +753,7 @@ export default function PlannerView() {
                     </div>
                     <div>
                       <span>Remaining</span>
-                      <strong>{remainingLabel}</strong>
+                      <strong>{row.remainingText}</strong>
                     </div>
                   </div>
 

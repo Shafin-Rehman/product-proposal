@@ -50,14 +50,18 @@ describe('getExpenseItems', () => {
         amount: 30,
         summaryLine: 'This month: $30',
         detailLine: '2 transactions',
-        secondary: '2 transactions',
+        secondary: '$30 spent unplanned',
+        statusLabel: 'Unplanned spend',
+        statusTone: 'warning',
       }),
       expect.objectContaining({
         name: 'Fun',
         amount: 7,
         summaryLine: 'This month: $7',
         detailLine: '1 transaction',
-        secondary: '1 transaction',
+        secondary: '$7 spent unplanned',
+        statusLabel: 'Unplanned spend',
+        statusTone: 'warning',
       }),
     ])
   })
@@ -81,6 +85,8 @@ describe('getExpenseItems', () => {
         summaryLine: 'This month: $50',
         detailLine: 'Budget: $80.00',
         secondary: '$30 left',
+        statusLabel: 'On track',
+        statusTone: 'positive',
       }),
     ])
   })

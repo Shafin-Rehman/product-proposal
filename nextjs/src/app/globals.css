@@ -2798,6 +2798,10 @@ html[data-theme='dark'] .blank-state {
   border-color: rgba(201, 130, 90, 0.26);
 }
 
+.budget-hero--danger {
+  border-color: rgba(183, 95, 103, 0.3);
+}
+
 .budget-hero__header {
   display: flex;
   align-items: flex-start;
@@ -2855,6 +2859,11 @@ html[data-theme='dark'] .blank-state {
 .budget-hero__badge--warning {
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.budget-hero__badge--danger {
+  background: rgba(183, 95, 103, 0.16);
+  color: var(--danger);
 }
 
 .budget-hero__badge--neutral {
@@ -5049,6 +5058,14 @@ html[data-theme='dark'] .insight-category-card {
   line-height: 1.45;
 }
 
+.insight-category-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.28rem;
+}
+
 .insight-category-card__copy small {
   font-size: 0.82rem;
 }
@@ -5057,6 +5074,133 @@ html[data-theme='dark'] .insight-category-card {
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: -0.03em;
+}
+
+.budget-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.budget-status-pill--positive {
+  background: rgba(79, 123, 97, 0.16);
+  border-color: rgba(79, 123, 97, 0.24);
+  color: var(--success);
+}
+
+.budget-status-pill--neutral {
+  background: rgba(86, 96, 90, 0.08);
+  border-color: rgba(86, 96, 90, 0.12);
+  color: var(--text-secondary);
+}
+
+.budget-status-pill--warning {
+  background: rgba(201, 130, 90, 0.18);
+  border-color: rgba(201, 130, 90, 0.28);
+  color: var(--warning);
+}
+
+.budget-status-pill--danger {
+  background: rgba(183, 95, 103, 0.18);
+  border-color: rgba(183, 95, 103, 0.3);
+  color: var(--danger);
+}
+
+.budget-health-callout {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--divider-soft);
+  border-radius: 1.35rem;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+html[data-theme='dark'] .budget-health-callout {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.budget-health-callout > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.budget-health-callout__label {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.budget-health-callout strong {
+  font-size: 1.02rem;
+  letter-spacing: -0.03em;
+}
+
+.budget-health-callout p {
+  margin: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.budget-health-callout p span {
+  font-weight: 800;
+}
+
+.budget-health-callout p small {
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.budget-health-callout--positive {
+  border-color: rgba(79, 123, 97, 0.22);
+  background: linear-gradient(180deg, rgba(79, 123, 97, 0.1), rgba(255, 255, 255, 0.46));
+}
+
+.budget-health-callout--positive strong,
+.budget-health-callout--positive p span {
+  color: var(--success);
+}
+
+.budget-health-callout--warning {
+  border-color: rgba(201, 130, 90, 0.32);
+  background: linear-gradient(180deg, rgba(201, 130, 90, 0.12), rgba(255, 255, 255, 0.46));
+}
+
+.budget-health-callout--warning strong,
+.budget-health-callout--warning p span {
+  color: var(--warning);
+}
+
+.budget-health-callout--danger {
+  border-color: rgba(183, 95, 103, 0.36);
+  background: linear-gradient(180deg, rgba(183, 95, 103, 0.14), rgba(255, 255, 255, 0.48));
+}
+
+.budget-health-callout--danger strong,
+.budget-health-callout--danger p span {
+  color: var(--danger);
+}
+
+.insight-health-rail {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 880px) {
+  .insight-health-rail {
+    grid-template-columns: 1fr;
+  }
 }
 
 .insight-month-summary__progress {
@@ -5075,6 +5219,24 @@ html[data-theme='dark'] .insight-month-summary__progress {
   background: transparent;
 }
 
+.insight-month-summary__header {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.insight-month-summary__header strong {
+  font-size: clamp(1.65rem, 3vw, 2.15rem);
+  letter-spacing: -0.05em;
+}
+
+.insight-month-summary__header small {
+  max-width: 28rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
 .insight-month-summary__progress-note {
   margin: 0;
   color: var(--text-secondary);
@@ -5090,6 +5252,10 @@ html[data-theme='dark'] .insight-month-summary__progress {
 
 .insight-month-summary__progress-note--warning {
   color: var(--warning);
+}
+
+.insight-month-summary__progress-note--danger {
+  color: var(--danger);
 }
 
 .insight-month-summary {
@@ -5132,6 +5298,10 @@ html[data-theme='dark'] .insight-month-summary__progress {
 
 .insight-month-summary__bubble--warning {
   color: var(--warning);
+}
+
+.insight-month-summary__bubble--danger {
+  color: var(--danger);
 }
 
 .insight-summary-strip {
@@ -5182,6 +5352,10 @@ html[data-theme='dark'] .budget-progress {
 
 .budget-progress__fill--warning {
   background: linear-gradient(135deg, #d9a27f, var(--warning));
+}
+
+.budget-progress__fill--danger {
+  background: linear-gradient(135deg, #e57d88, #b44654);
 }
 
 .budget-progress__fill--neutral {
@@ -6007,8 +6181,8 @@ html[data-theme='dark'] .donut-chart__inner {
 }
 
 .budget-hero--over {
-  border-color: rgba(201, 130, 90, 0.34);
-  box-shadow: 0 18px 36px rgba(201, 130, 90, 0.14);
+  border-color: rgba(183, 95, 103, 0.34);
+  box-shadow: 0 18px 36px rgba(183, 95, 103, 0.14);
 }
 
 .budget-hero__topline {
@@ -6098,6 +6272,10 @@ html[data-theme='dark'] .donut-chart__inner {
   font-size: 1.12rem;
 }
 
+.budget-hero > .budget-health-callout {
+  margin-top: -0.1rem;
+}
+
 .budget-hero__pressure {
   display: grid;
   gap: 0.3rem;
@@ -6127,6 +6305,15 @@ html[data-theme='dark'] .budget-hero__pressure--warning {
 
 html[data-theme='dark'] .budget-hero__pressure--positive {
   background: rgba(43, 66, 53, 0.32);
+}
+
+.budget-hero__pressure--danger {
+  border-color: rgba(183, 95, 103, 0.28);
+  background: rgba(255, 240, 242, 0.94);
+}
+
+html[data-theme='dark'] .budget-hero__pressure--danger {
+  background: rgba(78, 41, 47, 0.38);
 }
 
 .budget-hero__pressure-label {
@@ -6297,6 +6484,81 @@ html[data-theme='dark'] .budget-hero__pressure--positive {
 .planner-section__caption {
   color: var(--text-secondary);
   line-height: 1.45;
+}
+
+.planner-summary__health {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.planner-health-card {
+  display: grid;
+  gap: 0.32rem;
+  min-height: 8.15rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--divider-soft);
+  border-radius: 1.45rem;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+html[data-theme='dark'] .planner-health-card {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.planner-health-card__label {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.planner-health-card strong {
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+}
+
+.planner-health-card p {
+  margin: 0.12rem 0 0;
+  font-size: clamp(1.45rem, 2.6vw, 1.9rem);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+}
+
+.planner-health-card small {
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.planner-health-card--positive {
+  border-color: rgba(79, 123, 97, 0.2);
+  background: linear-gradient(180deg, rgba(79, 123, 97, 0.12), rgba(255, 255, 255, 0.46));
+}
+
+.planner-health-card--positive strong,
+.planner-health-card--positive p {
+  color: var(--success);
+}
+
+.planner-health-card--warning {
+  border-color: rgba(201, 130, 90, 0.32);
+  background: linear-gradient(180deg, rgba(201, 130, 90, 0.14), rgba(255, 255, 255, 0.46));
+}
+
+.planner-health-card--warning strong,
+.planner-health-card--warning p {
+  color: var(--warning);
+}
+
+.planner-health-card--danger {
+  border-color: rgba(183, 95, 103, 0.34);
+  background: linear-gradient(180deg, rgba(183, 95, 103, 0.16), rgba(255, 255, 255, 0.48));
+}
+
+.planner-health-card--danger strong,
+.planner-health-card--danger p {
+  color: var(--danger);
 }
 
 .planner-summary__stats {
@@ -6637,6 +6899,7 @@ html[data-theme='dark'] .planner-row__progress-track {
     justify-items: stretch;
   }
 
+  .planner-summary__health,
   .planner-summary__stats,
   .planner-summary__form,
   .planner-row__metrics,
