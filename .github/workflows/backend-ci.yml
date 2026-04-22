@@ -32,6 +32,11 @@ jobs:
           cache: npm
           cache-dependency-path: nextjs/package-lock.json
       - run: npm ci
+      - run: node scripts/seed-test-user.js
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - run: npm test -- --coverage
       - run: npm run build
         env:
