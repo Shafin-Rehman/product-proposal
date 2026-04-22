@@ -15,13 +15,14 @@ test('Transactions: navigation and MTA entry', async ({ page }) => {
 
   await page.locator('[aria-label="Add transaction"]').click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  const mtaMerchant = `MTA ${Math.random().toString(36).substring(2, 10)}`
   await page.getByLabel('Amount').fill('3.00')
-  await page.getByLabel('Merchant').fill('MTA')
+  await page.getByLabel('Merchant').fill(mtaMerchant)
   await page.getByRole('dialog').getByRole('button', { name: 'Add transaction' }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10_000 })
 
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
-  const mtaRow = page.getByRole('button').filter({ hasText: 'MTA' })
+  const mtaRow = page.getByRole('button').filter({ hasText: mtaMerchant })
   await expect(mtaRow.first()).toBeVisible({ timeout: 10_000 })
   await expect(mtaRow.first()).toContainText('$3.00')
 
@@ -40,7 +41,7 @@ test('Transactions: add expense and verify amount', async ({ page }) => {
   await page.locator('[aria-label="Add transaction"]').click()
   await expect(page.getByRole('dialog')).toBeVisible()
 
-  const merchant = `PW Test Cafe ${Date.now()}`
+  const merchant = `PW Test Cafe ${Math.random().toString(36).substring(2, 10)}`
   await page.getByLabel('Amount').fill('47.53')
   await page.getByLabel('Merchant').fill(merchant)
 
@@ -60,28 +61,29 @@ test('Transactions: add expense and verify amount', async ({ page }) => {
 })
 
 test('Dashboard: set monthly budget and verify limit', async ({ page }) => {
+  const uniqueAmount = String(1000 + Math.floor(Math.random() * 8000))
+  const formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(uniqueAmount))
+
   await expect(page.locator('.budget-hero')).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('button', { name: /set budget|edit budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
-
-  const originalBudget = await page.getByLabel('Monthly limit ($)').inputValue()
-  await page.getByLabel('Monthly limit ($)').fill('2000')
-
+  await page.getByLabel('Monthly limit ($)').fill(uniqueAmount)
   await page.getByRole('dialog').getByRole('button', { name: /set budget|update budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10_000 })
 
-  await expect(page.getByText('out of $2,000.00 budgeted')).toBeVisible({ timeout: 15_000 })
+  // READ: verify the unique amount reflects on dashboard
+  await expect(page.getByText(`out of ${formatted} budgeted`)).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('button', { name: /set budget|edit budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByLabel('Monthly limit ($)').fill(originalBudget)
+  await page.getByLabel('Monthly limit ($)').fill('1')
   await page.getByRole('dialog').getByRole('button', { name: /set budget|update budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10_000 })
 })
 
 test('Dashboard: recent activity shows new transaction', async ({ page }) => {
-  const entryName = `PW Dash ${Date.now()}`
+  const entryName = `PW Dash ${Math.random().toString(36).substring(2, 10)}`
 
   await page.getByRole('link', { name: /transactions/i }).click()
   await expect(page).toHaveURL(/\/transactions/, { timeout: 10_000 })

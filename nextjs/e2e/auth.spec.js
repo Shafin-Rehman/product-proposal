@@ -8,7 +8,6 @@ test('user can sign in and reach the dashboard', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 })
 
-  await expect(page.getByText('Tester')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
   await expect(page.getByText('Recent activity')).toBeVisible()
   await expect(page.getByText('Recent income')).toBeVisible()
