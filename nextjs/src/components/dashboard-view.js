@@ -700,7 +700,10 @@ export default function DashboardView() {
   const recentActivity = activity.slice(0, PREVIEW_LIMIT)
   const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
-  const derivedCategoryCards = isSampleMode ? [] : buildDerivedCategoryCards(currentMonthExpenses)
+  const hasBudgetedStatuses = hasBudgetedCategoryStatuses(summary?.category_statuses)
+  const derivedCategoryCards = !isSampleMode && !hasBudgetedStatuses
+    ? buildDerivedCategoryCards(currentMonthExpenses)
+    : null
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
