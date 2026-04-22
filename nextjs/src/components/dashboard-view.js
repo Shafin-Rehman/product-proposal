@@ -467,13 +467,13 @@ export function buildDerivedCategoryCards(expenses = []) {
   })
 }
 
-export function getCategoryCards(categoryStatuses, expenses = []) {
+export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null) {
   return hasBudgetedCategoryStatuses(categoryStatuses)
     ? buildLiveCategoryCards(categoryStatuses)
-    : buildDerivedCategoryCards(expenses)
+    : Array.isArray(derivedCategoryCards) ? derivedCategoryCards : buildDerivedCategoryCards(expenses)
 }
 
-export function getBudgetPressureHighlight(summary, expenses = []) {
+export function getBudgetPressureHighlight(summary, expenses = [], derivedCategoryCards = null) {
   const budgetedStatuses = Array.isArray(summary?.category_statuses)
     ? summary.category_statuses
       .filter((item) => Number(item?.monthly_limit ?? 0) > 0)
@@ -515,7 +515,9 @@ export function getBudgetPressureHighlight(summary, expenses = []) {
     }
   }
 
-  const spendShareCards = buildDerivedCategoryCards(expenses)
+  const spendShareCards = Array.isArray(derivedCategoryCards)
+    ? derivedCategoryCards
+    : buildDerivedCategoryCards(expenses)
   if (spendShareCards.length) {
     return {
       tone: 'neutral',
@@ -698,6 +700,7 @@ export default function DashboardView() {
   const recentActivity = activity.slice(0, PREVIEW_LIMIT)
   const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
+  const derivedCategoryCards = isSampleMode ? [] : buildDerivedCategoryCards(currentMonthExpenses)
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
@@ -713,7 +716,7 @@ export default function DashboardView() {
         note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
       }
     })
-    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
+    : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
   const budgetCtaLabel = getBudgetCtaLabel(summary)
   const trendPoints = isSampleMode
     ? demoBudgetTrend
@@ -722,7 +725,7 @@ export default function DashboardView() {
     month: chartMonth,
     observedDayCount: trendPoints.length,
   })
-  const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses)
+  const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses, derivedCategoryCards)
   const projectedTrendPoints = buildProjectedTrend(chartMonth, hudState.budget, trendPoints.length)
   const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, hudState.budget)
   const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
