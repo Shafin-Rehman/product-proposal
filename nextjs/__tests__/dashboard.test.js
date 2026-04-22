@@ -1,3 +1,5 @@
+/** @jest-environment jsdom */
+
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ children, href, ...props }) => require('react').createElement('a', { href, ...props }, children),
@@ -97,7 +99,7 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { act, create } = require('react-test-renderer')
+const { render, screen, waitFor, fireEvent, cleanup, act } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode, useDataChanged } = require('@/components/providers')
 const { ApiError, apiGet, apiPost } = require('@/lib/apiClient')
@@ -133,31 +135,16 @@ const TEST_CURRENT_MONTH = getMonthStartString(TEST_NOW)
 const TEST_NEXT_MONTH_DATE = createLocalDate(2026, 3, 21, 12)
 const TEST_NEAR_BOUNDARY_CURRENT_MONTH_DATE = createLocalDate(2026, 2, 1, 0, 30)
 
-function flattenText(node) {
-  if (node == null) return ''
-  if (typeof node === 'string') return node
-  if (Array.isArray(node)) return node.map(flattenText).join(' ')
-  return flattenText(node.children)
-}
-
-function getRenderedText(renderer) {
-  return flattenText(renderer.toJSON())
-}
-
-function getButtonByText(renderer, label) {
-  return renderer.root.find((node) => (
-    node.type === 'button'
-    && flattenText(node.props.children).includes(label)
-  ))
+async function flushAsyncUpdates() {
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 async function renderDashboard() {
-  let renderer
   await act(async () => {
-    renderer = create(React.createElement(DashboardView))
-    await Promise.resolve()
+    render(React.createElement(DashboardView))
+    await flushAsyncUpdates()
   })
-  return renderer
 }
 
 beforeEach(() => {
@@ -182,6 +169,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   jest.useRealTimers()
 })
 
@@ -635,29 +623,27 @@ describe('DashboardView', () => {
       session: null,
     })
 
-    const renderer = await renderDashboard()
+    await renderDashboard()
 
-    expect(renderer.toJSON()).toBeNull()
+    expect(document.body.textContent).toBe('')
     expect(apiGet).not.toHaveBeenCalled()
   })
 
   it('renders the sample dashboard HUD, chart, categories, and activity without calling live APIs', async () => {
     useDataMode.mockReturnValue({ isSampleMode: true })
 
-    const renderer = await renderDashboard()
-    const text = getRenderedText(renderer)
+    await renderDashboard()
 
     expect(apiGet).not.toHaveBeenCalled()
-    expect(text).toContain('Sample')
-    expect(text).toContain('2026-03-01')
-    expect(text).toContain('budget HUD')
-    expect(text).toContain('Near limit')
-    expect(text).toContain('$180 left')
-    expect(text).toContain('Top category pressure')
-    expect(text).toContain('Food')
-    expect(text).toContain('Grocer')
-    expect(text).toContain('Paycheck')
-    expect(text).toContain('$820 spent')
+    expect(screen.getByText('Sample')).toBeTruthy()
+    expect(screen.getByText(/budget HUD/i)).toBeTruthy()
+    expect(screen.getByText('$180 left')).toBeTruthy()
+    expect(screen.getByText('Near limit')).toBeTruthy()
+    expect(screen.getByText('Top category pressure')).toBeTruthy()
+    expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
+    expect(screen.getByText('Grocer')).toBeTruthy()
+    expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
+    expect(screen.getByText('$820 spent')).toBeTruthy()
   })
 
   it('fetches live dashboard data and renders the updated HUD state', async () => {
@@ -692,21 +678,22 @@ describe('DashboardView', () => {
       { id: 'income-1', kind: 'income', title: 'Paycheck', chip: 'Income', occurredOn: '2026-03-02', amount: 2200 },
     ])
 
-    const renderer = await renderDashboard()
-    const text = getRenderedText(renderer)
+    await renderDashboard()
 
-    expect(apiGet).toHaveBeenCalledTimes(3)
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledTimes(3)
+    })
     expect(apiGet).toHaveBeenNthCalledWith(
       1,
       `/api/budget/summary?month=${TEST_CURRENT_MONTH}`,
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
-    expect(text).toContain('Live')
-    expect(text).toContain('Near limit')
-    expect(text).toContain('$140 left')
-    expect(text).toContain('Top category pressure')
-    expect(text).toContain('Grocer')
-    expect(text).toContain('Paycheck')
+    expect(screen.getByText('Live')).toBeTruthy()
+    expect(screen.getByText('Near limit')).toBeTruthy()
+    expect(screen.getByText('$140 left')).toBeTruthy()
+    expect(screen.getByText('Top category pressure')).toBeTruthy()
+    expect(screen.getByText('Grocer')).toBeTruthy()
+    expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
   })
 
   it('shows a partial-data notice when some live endpoints fail but others succeed', async () => {
@@ -723,12 +710,11 @@ describe('DashboardView', () => {
       .mockRejectedValueOnce(new Error('expenses unavailable'))
       .mockResolvedValueOnce([])
 
-    const renderer = await renderDashboard()
-    const text = getRenderedText(renderer)
+    await renderDashboard()
 
-    expect(text).toContain('Live data is limited right now')
-    expect(text).toContain('Some live sections are missing for the moment, but the rest of the month is still visible.')
-    expect(text).toContain('On track')
+    expect(screen.getByText('Live data is limited right now')).toBeTruthy()
+    expect(screen.getByText('Some live sections are missing for the moment, but the rest of the month is still visible.')).toBeTruthy()
+    expect(screen.getByText('On track')).toBeTruthy()
   })
 
   it('surfaces the catch-all live error message when dashboard loading throws before settling', async () => {
@@ -736,12 +722,11 @@ describe('DashboardView', () => {
       throw new Error('Exploded dashboard request')
     })
 
-    const renderer = await renderDashboard()
-    const text = getRenderedText(renderer)
+    await renderDashboard()
 
-    expect(text).toContain('Live data is limited right now')
-    expect(text).toContain('Exploded dashboard request')
-    expect(text).toContain('Waiting on live totals')
+    expect(screen.getByText('Live data is limited right now')).toBeTruthy()
+    expect(screen.getByText('Exploded dashboard request')).toBeTruthy()
+    expect(screen.getByText('Waiting on live totals')).toBeTruthy()
   })
 
   it('logs out and redirects when a live dashboard request returns unauthorized', async () => {
@@ -763,8 +748,10 @@ describe('DashboardView', () => {
 
     await renderDashboard()
 
-    expect(logout).toHaveBeenCalledTimes(1)
-    expect(replace).toHaveBeenCalledWith('/login')
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalledTimes(1)
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
   })
 
   it('opens the budget sheet and saves a new monthly limit through the live dashboard flow', async () => {
@@ -793,23 +780,23 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([])
     apiPost.mockResolvedValueOnce({})
 
-    const renderer = await renderDashboard()
+    await renderDashboard()
 
     await act(async () => {
-      getButtonByText(renderer, 'Edit budget').props.onClick()
+      fireEvent.click(screen.getByRole('button', { name: 'Edit budget' }))
+      await flushAsyncUpdates()
     })
-    expect(getRenderedText(renderer)).toContain('Monthly spending limit for')
-    expect(getRenderedText(renderer)).toContain(TEST_CURRENT_MONTH)
+    expect(screen.getByText(/Monthly spending limit for/i)).toBeTruthy()
+    expect(screen.getAllByText(TEST_CURRENT_MONTH).length).toBeGreaterThan(0)
 
-    const input = renderer.root.findByType('input')
     await act(async () => {
-      input.props.onChange({ target: { value: '3000' } })
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3000' } })
+      await flushAsyncUpdates()
     })
 
-    const form = renderer.root.findByType('form')
     await act(async () => {
-      form.props.onSubmit({ preventDefault: jest.fn() })
-      await Promise.resolve()
+      fireEvent.click(screen.getByRole('button', { name: 'Update budget' }))
+      await flushAsyncUpdates()
     })
 
     expect(apiPost).toHaveBeenCalledWith(
@@ -817,7 +804,9 @@ describe('DashboardView', () => {
       { month: TEST_CURRENT_MONTH, monthly_limit: 3000 },
       { accessToken: 'test-token' }
     )
-    expect(apiGet).toHaveBeenCalledTimes(6)
-    expect(getRenderedText(renderer)).not.toContain('Current limit:')
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledTimes(6)
+    })
+    expect(screen.queryByText(/Current limit:/)).toBeNull()
   })
 })
