@@ -1,12 +1,20 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({ signUp: jest.fn(), signIn: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
-jest.mock('@/lib/budget', () => ({ normalizeDate: jest.fn() }))
+jest.mock('@/lib/budget', () => {
+  const actual = jest.requireActual('@/lib/budget')
+  return {
+    ...actual,
+    isPositiveMoneyValue: jest.fn(actual.isPositiveMoneyValue),
+    normalizeDate: jest.fn(actual.normalizeDate),
+  }
+})
 
 const { testApiHandler } = require('next-test-api-route-handler')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
-const { normalizeDate } = require('@/lib/budget')
+const { isPositiveMoneyValue, normalizeDate } = require('@/lib/budget')
+const actualBudget = jest.requireActual('@/lib/budget')
 const incomeHandler = require('@/app/api/income/route')
 const categoriesHandler = require('@/app/api/income/categories/route')
 const getHandler = require('@/app/api/income/get/route')
@@ -19,8 +27,10 @@ beforeEach(() => {
   db.query.mockClear()
   authenticate.mockClear()
   normalizeDate.mockClear()
+  isPositiveMoneyValue.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
-  normalizeDate.mockImplementation((value) => value)
+  normalizeDate.mockImplementation(actualBudget.normalizeDate)
+  isPositiveMoneyValue.mockImplementation(actualBudget.isPositiveMoneyValue)
 })
 
 describe('POST /api/income', () => {
@@ -88,6 +98,30 @@ describe('POST /api/income', () => {
         expect((await res.json()).error).toBe('Valid date is required')
       }
     })
+  })
+
+  it('rejects request with a non-positive amount', async () => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 0, date: '2026-03-15' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('rejects request with a positive amount that exceeds 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: '0.001', date: '2026-03-15' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
   })
 })
 
@@ -267,6 +301,30 @@ describe('POST /api/income/update', () => {
         expect((await res.json()).error).toBe('Valid date is required')
       }
     })
+  })
+
+  it('rejects update with a non-numeric amount', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, amount: 'abc' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('rejects update with a positive amount that exceeds 2 decimal places', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, amount: '1.999' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
   })
 })
 

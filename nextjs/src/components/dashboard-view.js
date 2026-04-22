@@ -77,11 +77,96 @@ export function getBudgetHintText(summary) {
   return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
 }
 
-function getHeroState(summary) {
-  const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
-  const spent = Number(summary?.total_expenses ?? 0)
-  const income = Number(summary?.total_income ?? 0)
-  const remaining = Number(summary?.remaining_budget ?? 0)
+const BUDGET_NEAR_LIMIT_RATIO = 0.8
+
+function getSafeMoneyNumber(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function getSafeReferenceDate(referenceDate) {
+  const parsedReferenceDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
+  return Number.isNaN(parsedReferenceDate.getTime()) ? new Date() : parsedReferenceDate
+}
+
+function getNormalizedMonthDetails(month) {
+  const monthMatch = typeof month === 'string'
+    ? month.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    : null
+
+  if (!monthMatch) return null
+
+  const monthYear = Number(monthMatch[1])
+  const monthNumber = Number(monthMatch[2])
+  const monthDay = Number(monthMatch[3])
+  const parsedMonth = new Date(Date.UTC(monthYear, monthNumber - 1, monthDay, 12))
+
+  if (
+    parsedMonth.getUTCFullYear() !== monthYear
+    || parsedMonth.getUTCMonth() !== monthNumber - 1
+    || parsedMonth.getUTCDate() !== monthDay
+  ) {
+    return null
+  }
+
+  return {
+    normalizedMonth: `${monthMatch[1]}-${monthMatch[2]}-01`,
+    monthYear,
+    monthIndex: monthNumber - 1,
+    monthLength: new Date(Date.UTC(monthYear, monthNumber, 0)).getUTCDate(),
+  }
+}
+
+export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
+  const monthDetails = getNormalizedMonthDetails(month)
+
+  if (!monthDetails) {
+    return {
+      monthLength: 0,
+      activeDay: 0,
+      daysRemaining: 0,
+      isCurrentMonth: false,
+    }
+  }
+
+  const currentDate = getSafeReferenceDate(referenceDate)
+  const { normalizedMonth, monthLength } = monthDetails
+  const isCurrentMonth = getCurrentMonthStart(currentDate) === normalizedMonth
+  const fallbackObservedDays = Number.isFinite(observedDayCount)
+    ? Math.max(0, Math.floor(observedDayCount))
+    : 0
+  const activeDay = isCurrentMonth
+    ? Math.min(Math.max(currentDate.getDate(), 1), monthLength)
+    : Math.min(Math.max(fallbackObservedDays || monthLength, 1), monthLength)
+  const daysRemaining = isCurrentMonth || fallbackObservedDays
+    ? Math.max(monthLength - activeDay + 1, 0)
+    : 0
+
+  return {
+    monthLength,
+    activeDay,
+    daysRemaining,
+    isCurrentMonth,
+  }
+}
+
+export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date() } = {}) {
+  const budget = getSafeMoneyNumber(summary?.total_budget ?? summary?.monthly_limit)
+  const spent = getSafeMoneyNumber(summary?.total_expenses)
+  const income = getSafeMoneyNumber(summary?.total_income)
+  const remaining = summary?.remaining_budget == null
+    ? (budget > 0 ? Number((budget - spent).toFixed(2)) : 0)
+    : getSafeMoneyNumber(summary.remaining_budget)
+  const progressRaw = budget > 0 ? (spent / budget) * 100 : 0
+  const progressPercentage = budget > 0 ? Math.min(Number(progressRaw.toFixed(2)), 100) : 0
+  const monthState = getMonthProgressState(month || summary?.month, { observedDayCount, referenceDate })
+  const hasBudget = budget > 0
+  const isOverBudget = hasBudget && (remaining < 0 || summary?.threshold_exceeded)
+  const isNearLimit = hasBudget && !isOverBudget && progressRaw >= BUDGET_NEAR_LIMIT_RATIO * 100
+  const dailyAllowance = hasBudget && monthState.daysRemaining > 0
+    ? Number((remaining / monthState.daysRemaining).toFixed(2))
+    : null
+  const net = Number((income - spent).toFixed(2))
 
   if (!summary) {
     return {
@@ -89,33 +174,131 @@ function getHeroState(summary) {
       badge: 'Waiting',
       value: 'Waiting on live totals',
       supportingText: 'Budget snapshot',
+      progressLabel: 'Live summary is loading.',
+      progressNote: 'Budget guidance will appear as soon as the month snapshot loads.',
+      progressWidth: '0%',
+      progressPercentage: 0,
       spent,
       budget,
       income,
+      remaining,
+      net,
+      monthState,
+      daysRemaining: null,
+      dailyAllowance: null,
+      isOverBudget: false,
+      isNearLimit: false,
+      hasBudget: false,
+      metrics: [
+        { label: 'Spent', value: '--', hint: 'Current month' },
+        { label: 'Income', value: '--', hint: 'Current month' },
+        {
+          label: 'Days left',
+          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
+          hint: 'Including today',
+        },
+        { label: 'Net this month', value: '--', hint: 'Income minus spend' },
+      ],
     }
   }
 
-  if (!budget) {
+  if (!hasBudget) {
     return {
       tone: 'neutral',
-      badge: 'Live spend',
+      badge: 'No budget',
       value: `${formatCurrency(spent)} spent`,
       supportingText: `${formatCurrency(income)} in income tracked so far.`,
+      progressLabel: 'No monthly budget set yet.',
+      progressNote: 'Set a budget to unlock left-to-spend guidance, days left, and daily allowance.',
+      progressWidth: '0%',
+      progressPercentage: 0,
       spent,
       budget,
       income,
+      remaining,
+      net,
+      monthState,
+      daysRemaining: null,
+      dailyAllowance: null,
+      isOverBudget: false,
+      isNearLimit: false,
+      hasBudget: false,
+      metrics: [
+        { label: 'Spent', value: formatCurrency(spent), hint: 'Current month' },
+        { label: 'Income', value: formatCurrency(income), hint: 'Current month' },
+        {
+          label: 'Days left',
+          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
+          hint: 'Including today',
+        },
+        {
+          label: 'Net this month',
+          value: formatCurrency(net),
+          hint: net < 0 ? 'Expenses above income' : 'Income minus spend',
+        },
+      ],
     }
   }
 
-  if (remaining < 0 || summary.threshold_exceeded) {
+  const baseState = {
+    progressWidth: `${progressPercentage}%`,
+    progressPercentage,
+    spent,
+    budget,
+    income,
+    remaining,
+    net,
+    monthState,
+    daysRemaining: monthState.daysRemaining,
+    dailyAllowance,
+    isOverBudget,
+    isNearLimit,
+    hasBudget: true,
+    metrics: [
+      {
+        label: 'Spent',
+        value: formatCurrency(spent),
+        hint: `${Math.round(progressRaw)}% of budget used`,
+      },
+      {
+        label: 'Days left',
+        value: String(monthState.daysRemaining),
+        hint: 'Including today',
+      },
+      {
+        label: 'Daily allowance',
+        value: dailyAllowance == null ? '--' : formatCurrency(dailyAllowance),
+        hint: isOverBudget ? 'Needs correction' : 'Left per day',
+      },
+      {
+        label: 'Net this month',
+        value: formatCurrency(net),
+        hint: net < 0 ? 'Expenses above income' : 'Income minus spend',
+      },
+    ],
+  }
+
+  if (isOverBudget) {
     return {
       tone: 'warning',
       badge: 'Over budget',
       value: `${formatCurrency(Math.abs(remaining))} over`,
-      supportingText: `out of ${formatCurrency(budget)} budgeted`,
-      spent,
-      budget,
-      income,
+      supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
+      progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
+      progressNote: 'This month has moved past the budget cap and needs correction at a glance.',
+      ...baseState,
+    }
+  }
+
+  if (isNearLimit) {
+    return {
+      tone: 'warning',
+      badge: 'Near limit',
+      value: `${formatCurrency(remaining)} left`,
+      supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
+      progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
+      progressNote: 'Budget pressure is rising, so the HUD shifts to a stronger warning state.',
+      ...baseState,
     }
   }
 
@@ -123,10 +306,10 @@ function getHeroState(summary) {
     tone: 'positive',
     badge: 'On track',
     value: `${formatCurrency(remaining)} left`,
-    supportingText: `out of ${formatCurrency(budget)} budgeted`,
-    spent,
-    budget,
-    income,
+    supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
+    progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
+    progressNote: 'Budget pace is still healthy for the month so far.',
+    ...baseState,
   }
 }
 
@@ -284,10 +467,72 @@ export function buildDerivedCategoryCards(expenses = []) {
   })
 }
 
-export function getCategoryCards(categoryStatuses, expenses = []) {
+export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null) {
   return hasBudgetedCategoryStatuses(categoryStatuses)
     ? buildLiveCategoryCards(categoryStatuses)
+    : Array.isArray(derivedCategoryCards) ? derivedCategoryCards : buildDerivedCategoryCards(expenses)
+}
+
+export function getBudgetPressureHighlight(summary, expenses = [], derivedCategoryCards = null) {
+  const budgetedStatuses = Array.isArray(summary?.category_statuses)
+    ? summary.category_statuses
+      .filter((item) => Number(item?.monthly_limit ?? 0) > 0)
+      .map((item) => ({
+        name: item.category_name || 'Uncategorized',
+        spent: getSafeMoneyNumber(item.spent),
+        progress: getSafeMoneyNumber(item.progress_percentage),
+        remaining: item.remaining_budget == null ? null : getSafeMoneyNumber(item.remaining_budget),
+      }))
+    : []
+
+  if (budgetedStatuses.length) {
+    const strongestOverspend = [...budgetedStatuses]
+      .filter((item) => item.remaining != null && item.remaining < 0)
+      .sort((left, right) => left.remaining - right.remaining)[0]
+
+    if (strongestOverspend) {
+      return {
+        tone: 'warning',
+        label: 'Strongest overspend',
+        title: strongestOverspend.name,
+        detail: `${formatCurrency(Math.abs(strongestOverspend.remaining))} over budget right now.`,
+      }
+    }
+
+    const highestPressure = [...budgetedStatuses]
+      .sort((left, right) => (
+        right.progress - left.progress
+        || ((left.remaining ?? Number.POSITIVE_INFINITY) - (right.remaining ?? Number.POSITIVE_INFINITY))
+      ))[0]
+
+    return {
+      tone: highestPressure.progress >= BUDGET_NEAR_LIMIT_RATIO * 100 ? 'warning' : 'positive',
+      label: 'Top category pressure',
+      title: highestPressure.name,
+      detail: highestPressure.remaining == null
+        ? `${Math.round(highestPressure.progress)}% of budget used.`
+        : `${Math.round(highestPressure.progress)}% used with ${formatCurrency(Math.abs(highestPressure.remaining))} left.`,
+    }
+  }
+
+  const spendShareCards = Array.isArray(derivedCategoryCards)
+    ? derivedCategoryCards
     : buildDerivedCategoryCards(expenses)
+  if (spendShareCards.length) {
+    return {
+      tone: 'neutral',
+      label: 'Top spend area',
+      title: spendShareCards[0].name,
+      detail: `${spendShareCards[0].note} this month.`,
+    }
+  }
+
+  return {
+    tone: 'neutral',
+    label: 'Category pressure',
+    title: 'Waiting on categories',
+    detail: 'Current-month category pressure will show once expenses land.',
+  }
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -454,6 +699,11 @@ export default function DashboardView() {
     : buildActivityFeed(liveState.expenses, liveState.income)
   const recentActivity = activity.slice(0, PREVIEW_LIMIT)
   const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
+  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
+  const hasBudgetedStatuses = hasBudgetedCategoryStatuses(summary?.category_statuses)
+  const derivedCategoryCards = !isSampleMode && !hasBudgetedStatuses
+    ? buildDerivedCategoryCards(currentMonthExpenses)
+    : null
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
@@ -469,15 +719,18 @@ export default function DashboardView() {
         note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
       }
     })
-    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
-  const heroState = getHeroState(summary)
+    : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
   const budgetCtaLabel = getBudgetCtaLabel(summary)
-  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const trendPoints = isSampleMode
     ? demoBudgetTrend
     : buildMonthlySpendTrend(liveState.expenses, currentMonth)
-  const projectedTrendPoints = buildProjectedTrend(chartMonth, heroState.budget, trendPoints.length)
-  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, heroState.budget)
+  const hudState = getBudgetHudModel(summary, {
+    month: chartMonth,
+    observedDayCount: trendPoints.length,
+  })
+  const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses, derivedCategoryCards)
+  const projectedTrendPoints = buildProjectedTrend(chartMonth, hudState.budget, trendPoints.length)
+  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, hudState.budget)
   const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
   const projectedPath = buildTrendPath(projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
   const areaPath = buildAreaPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
@@ -515,20 +768,65 @@ export default function DashboardView() {
         onRetry={() => setReloadToken((value) => value + 1)}
       />
 
-      <article className={`budget-hero budget-hero--${heroState.tone}`}>
-        <div className="budget-hero__header">
-          <div className="budget-hero__headline">
-            <h2 className="budget-hero__value">{heroState.value}</h2>
-            <p className="budget-hero__suffix">{heroState.supportingText}</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
-            <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+      <article
+        className={`budget-hero budget-hero--${hudState.tone}${hudState.isOverBudget ? ' budget-hero--over' : ''}${hudState.isNearLimit ? ' budget-hero--risk' : ''}`}
+      >
+        <div className="budget-hero__topline">
+          <span className="budget-hero__eyebrow">{formatMonthPeriod(chartMonth)} budget HUD</span>
+          <div className="budget-hero__actions">
+            <span className={`budget-hero__badge budget-hero__badge--${hudState.tone}`}>{hudState.badge}</span>
             {!isSampleMode && (
               <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
                 {budgetCtaLabel}
               </button>
             )}
           </div>
+        </div>
+
+        <div className="budget-hero__header">
+          <div className="budget-hero__headline">
+            <h2 className="budget-hero__value">{hudState.value}</h2>
+            <p className="budget-hero__suffix">{hudState.supportingText}</p>
+          </div>
+        </div>
+
+        <div className="budget-hero__progress-block">
+          <div
+            aria-label="Monthly budget progress"
+            className="budget-progress budget-hero__progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(hudState.progressPercentage)}
+            aria-valuetext={hudState.progressLabel}
+          >
+            <span
+              className={`budget-progress__fill budget-progress__fill--${hudState.tone}`}
+              style={{ width: hudState.progressWidth }}
+            />
+          </div>
+          <div className="budget-hero__progress-copy">
+            <strong>{hudState.progressLabel}</strong>
+            <span>{hudState.progressNote}</span>
+          </div>
+        </div>
+
+        <div className="budget-hero__metrics">
+          {hudState.metrics.map((metric) => (
+            <div className="budget-hero__metric" key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.hint}</small>
+            </div>
+          ))}
+        </div>
+
+        <div className={`budget-hero__pressure budget-hero__pressure--${pressureHighlight.tone}`}>
+          <div>
+            <span className="budget-hero__pressure-label">{pressureHighlight.label}</span>
+            <strong>{pressureHighlight.title}</strong>
+          </div>
+          <p>{pressureHighlight.detail}</p>
         </div>
 
         {trendPoints.length ? (
@@ -580,7 +878,7 @@ export default function DashboardView() {
       <section className="section-block">
         <div className="section-headline">
           <h2>Budgets</h2>
-          <Link className="section-link" href="/insights">
+          <Link className="section-link" href="/planner">
             View more
           </Link>
         </div>

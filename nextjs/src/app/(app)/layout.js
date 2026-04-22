@@ -7,6 +7,7 @@ import { useAuth } from '@/components/providers'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/planner', label: 'Planner', icon: 'planner' },
   { href: '/transactions', label: 'Transactions', icon: 'transactions' },
   { href: '/insights', label: 'Insights', icon: 'insights' },
   { href: '/account', label: 'Account', icon: 'account' },
@@ -44,6 +45,16 @@ function TabIcon({ icon }) {
           <path d="M5 12h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
           <path d="M5 16h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
           <circle cx="17.5" cy="12" fill="currentColor" r="1.2" />
+        </svg>
+      )
+    case 'planner':
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <rect height="14" rx="2.2" stroke="currentColor" strokeWidth="1.8" width="16" x="4" y="6" />
+          <path d="M8 4v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M16 4v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="M8 11.25h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+          <path d="m9 15 1.6 1.6L15 12.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
         </svg>
       )
     case 'insights':
