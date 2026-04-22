@@ -101,16 +101,6 @@ export function normalizeMoneyDraftForSave(value) {
   return parseMoneyAmount(value)
 }
 
-export function getPlannerStatus(plannedAmount, spentAmount) {
-  const health = buildCategoryBudgetHealth({
-    monthlyLimit: plannedAmount,
-    spent: spentAmount,
-    actualsAvailable: true,
-  })
-
-  return { label: health.label, tone: health.tone }
-}
-
 export function buildPlannerRows({
   categories = [],
   categoryBudgets = [],

@@ -308,14 +308,18 @@ describe('getCategoryCards', () => {
 
 describe('buildDerivedCategoryCards', () => {
   it('groups live expenses by category and calculates share-based fallback cards', () => {
-    expect(buildDerivedCategoryCards([
+    const cards = buildDerivedCategoryCards([
       { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '25.00' },
       { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '15.00' },
       { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '10.00' },
-    ])).toEqual([
+    ])
+
+    expect(cards).toEqual([
       expect.objectContaining({ name: 'Food', amount: 40, progress: 80, note: '80% of spend' }),
       expect.objectContaining({ name: 'Fun', amount: 10, progress: 20, note: '20% of spend' }),
     ])
+    expect(cards[0]).not.toHaveProperty('statusLabel')
+    expect(cards[0]).not.toHaveProperty('statusTone')
   })
 })
 
@@ -720,7 +724,10 @@ describe('DashboardView', () => {
 
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0)
     expect(screen.queryByText('No budget')).toBeNull()
+    expect(screen.queryByText('Unplanned spend')).toBeNull()
     expect(screen.getByText('Health unavailable')).toBeTruthy()
+    expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
+    expect(screen.getByText('100% of spend')).toBeTruthy()
   })
 
   it('shows a partial-data notice when some live endpoints fail but others succeed', async () => {

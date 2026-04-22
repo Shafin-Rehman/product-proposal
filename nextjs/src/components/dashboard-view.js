@@ -307,11 +307,6 @@ export function buildDerivedCategoryCards(expenses = []) {
     const visual = getCategoryVisual(item.category_name || 'Uncategorized')
     const amount = Number(item.total_amount ?? 0)
     const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
-    const categoryHealth = buildCategoryBudgetHealth({
-      monthlyLimit: null,
-      spent: item.total_amount,
-      actualsAvailable: true,
-    })
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
@@ -322,8 +317,6 @@ export function buildDerivedCategoryCards(expenses = []) {
       progress: Math.min(share, 100),
       amount,
       note: `${Math.round(share) || 0}% of spend`,
-      statusLabel: categoryHealth.label,
-      statusTone: categoryHealth.tone,
     }
   })
 }
@@ -742,7 +735,9 @@ export default function DashboardView() {
                   >
                     <div className="budget-glance__inner">{item.symbol}</div>
                   </div>
-                  <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
+                  {item.statusLabel ? (
+                    <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
+                  ) : null}
                   <strong>{item.name}</strong>
                   <span>{formatCurrency(item.amount)}</span>
                   <small>{item.note}</small>

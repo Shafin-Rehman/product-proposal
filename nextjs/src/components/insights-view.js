@@ -140,7 +140,7 @@ function buildLiveExpenseBreakdown(expenses = []) {
 }
 
 export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
-  if (Array.isArray(categoryStatuses)) {
+  if (Array.isArray(categoryStatuses) && categoryStatuses.length > 0) {
     return [...categoryStatuses]
       .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
       .slice(0, BREAKDOWN_LIMIT)
@@ -172,22 +172,14 @@ export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
 
   return buildLiveExpenseBreakdown(monthlyExpenses)
     .slice(0, BREAKDOWN_LIMIT)
-    .map((item) => {
-      const categoryHealth = buildCategoryBudgetHealth({
-        monthlyLimit: null,
-        spent: item.amount,
-        actualsAvailable: true,
-      })
-
-      return {
-        ...item,
-        summaryLine: `This month: ${formatCurrency(item.amount)}`,
-        detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-        secondary: categoryHealth.remainingText,
-        statusLabel: categoryHealth.label,
-        statusTone: categoryHealth.tone,
-      }
-    })
+    .map((item) => ({
+      ...item,
+      summaryLine: `This month: ${formatCurrency(item.amount)}`,
+      detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
+      secondary: null,
+      statusLabel: null,
+      statusTone: null,
+    }))
 }
 
 function getCombinedMessage(...messages) {

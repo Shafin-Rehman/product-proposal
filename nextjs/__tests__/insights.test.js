@@ -50,18 +50,45 @@ describe('getExpenseItems', () => {
         amount: 30,
         summaryLine: 'This month: $30',
         detailLine: '2 transactions',
-        secondary: '$30 spent unplanned',
-        statusLabel: 'Unplanned spend',
-        statusTone: 'warning',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
       }),
       expect.objectContaining({
         name: 'Fun',
         amount: 7,
         summaryLine: 'This month: $7',
         detailLine: '1 transaction',
-        secondary: '$7 spent unplanned',
-        statusLabel: 'Unplanned spend',
-        statusTone: 'warning',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
+      }),
+    ])
+  })
+
+  it('treats an empty category status list as no status signal and still falls back to expenses', () => {
+    expect(getExpenseItems([], [
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '7.00' },
+    ])).toEqual([
+      expect.objectContaining({
+        name: 'Food',
+        amount: 30,
+        summaryLine: 'This month: $30',
+        detailLine: '2 transactions',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
+      }),
+      expect.objectContaining({
+        name: 'Fun',
+        amount: 7,
+        summaryLine: 'This month: $7',
+        detailLine: '1 transaction',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
       }),
     ])
   })
