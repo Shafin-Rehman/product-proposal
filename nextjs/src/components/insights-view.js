@@ -139,6 +139,20 @@ function buildLiveExpenseBreakdown(expenses = []) {
     .sort((left, right) => right.amount - left.amount)
 }
 
+export function buildPressureFallbackSpendCards(monthlyExpenses = []) {
+  const breakdown = buildLiveExpenseBreakdown(monthlyExpenses)
+  const totalAmount = breakdown.reduce((sum, item) => sum + item.amount, 0)
+
+  return breakdown.map((item) => {
+    const share = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0
+
+    return {
+      ...item,
+      note: `${Math.round(share) || 0}% of spend`,
+    }
+  })
+}
+
 export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
   if (Array.isArray(categoryStatuses) && categoryStatuses.length > 0) {
     return [...categoryStatuses]
@@ -480,7 +494,7 @@ export default function InsightsView() {
   })
   const pressureHighlight = buildBudgetPressureHighlight({
     categoryStatuses: summary?.category_statuses,
-    fallbackSpendCards: expenseItems,
+    fallbackSpendCards: buildPressureFallbackSpendCards(monthlyExpenses),
   })
 
   return (

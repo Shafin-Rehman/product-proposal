@@ -440,8 +440,8 @@ describe('getBudgetHudModel', () => {
       value: 'Waiting on live totals',
       metrics: [
         expect.objectContaining({ label: 'Spent', value: '--' }),
-        expect.objectContaining({ label: 'Income', value: '--' }),
         expect.objectContaining({ label: 'Days left', value: '22' }),
+        expect.objectContaining({ label: 'Daily allowance', value: '--' }),
         expect.objectContaining({ label: 'Net this month', value: '--' }),
       ],
     }))

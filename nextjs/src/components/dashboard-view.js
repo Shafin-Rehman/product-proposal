@@ -113,12 +113,12 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
   const metrics = overallHealth.key === 'loading' || overallHealth.key === 'unavailable'
     ? [
       { label: 'Spent', value: '--', hint: 'Current month' },
-      { label: 'Income', value: '--', hint: 'Current month' },
       {
         label: 'Days left',
         value: overallHealth.monthState.daysRemaining ? String(overallHealth.monthState.daysRemaining) : '--',
         hint: 'Including today',
       },
+      { label: 'Daily allowance', value: '--', hint: 'Left per day' },
       { label: 'Net this month', value: '--', hint: 'Income minus spend' },
     ]
     : [
