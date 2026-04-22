@@ -5176,6 +5176,10 @@ html[data-theme='dark'] .budget-progress {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
 }
 
+.budget-progress__fill--positive {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
 .budget-progress__fill--warning {
   background: linear-gradient(135deg, #d9a27f, var(--warning));
 }
