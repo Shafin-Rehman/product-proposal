@@ -74,7 +74,7 @@ test('Dashboard: set monthly budget and verify limit', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10_000 })
 
   // READ: verify the unique amount reflects on dashboard
-  await expect(page.getByText(`out of ${formatted} budgeted`)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(new RegExp(`of ${formatted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} budgeted`))).toBeVisible({ timeout: 15_000 })
 
   if (originalBudget && Number(originalBudget) > 0) {
     await page.getByRole('button', { name: /set budget|edit budget|set overall limit/i }).click()
