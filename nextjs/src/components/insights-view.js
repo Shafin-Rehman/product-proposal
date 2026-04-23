@@ -199,7 +199,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function InsightsView() {
   const router = useRouter()
-  const { isReady, logout, session, handleAuthError } = useAuth()
+  const { isReady, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const [viewMode, setViewMode] = useState('expenses')
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStart)
@@ -276,7 +276,7 @@ export default function InsightsView() {
     })
 
     return () => controller.abort()
-  }, [isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [isReady, isSampleMode, reloadToken, router, session?.accessToken])
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -309,7 +309,7 @@ export default function InsightsView() {
     loadLiveSummary().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (handleAuthError(error)) return
+      if (handleAuthError(error, router)) return
 
       setLiveState((current) => ({
         ...current,
@@ -320,7 +320,7 @@ export default function InsightsView() {
     })
 
     return () => controller.abort()
-  }, [activeMonth, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [activeMonth, isReady, isSampleMode, reloadToken, router, session?.accessToken])
 
   if (!isReady || !session?.accessToken) {
     return null
@@ -455,7 +455,7 @@ export default function InsightsView() {
       : `${formatCurrency(Math.abs(remainingBudget))} over`
 
   return (
-    <section className="app-screen insights-screen">
+    <section className="app-screen insights-screen screen-rise">
       <div className="insights-screen__masthead">
         <div className="insights-screen__masthead-row">
           <div className="screen-heading insights-screen__heading">

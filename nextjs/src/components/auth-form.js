@@ -51,7 +51,15 @@ const ERROR_MAPPING = {
 }
 
 function mapErrorMessage(msg) {
-  return ERROR_MAPPING[msg] || msg
+  if (ERROR_MAPPING[msg]) {
+    return ERROR_MAPPING[msg]
+  }
+
+  if (msg) {
+    console.error('Unmapped auth error message:', msg)
+  }
+
+  return 'Something went wrong. Please try again.'
 }
 
 export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = false, showSessionExpired = false }) {

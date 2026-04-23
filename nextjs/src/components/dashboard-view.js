@@ -308,7 +308,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function DashboardView() {
   const router = useRouter()
-  const { isReady, logout, session, handleAuthError } = useAuth()
+  const { isReady, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { dataChangedToken } = useDataChanged()
   const [currentMonth] = useState(getCurrentMonthStart)
@@ -392,7 +392,7 @@ export default function DashboardView() {
     })
 
     return () => controller.abort()
-  }, [currentMonth, dataChangedToken, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [currentMonth, dataChangedToken, isReady, isSampleMode, reloadToken, router, session?.accessToken])
 
   const openBudgetSheet = () => {
     const currentLimit = isSampleMode
@@ -483,7 +483,7 @@ export default function DashboardView() {
 
   return (
     <>
-      <section className="app-screen dashboard-screen">
+      <section className="app-screen dashboard-screen screen-rise">
         <div className="screen-topline">
           <div className="screen-persona">
             <div className="screen-persona__avatar">{getInitialsLabel(firstName, 'BB')}</div>

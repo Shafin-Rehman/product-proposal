@@ -83,12 +83,13 @@ function TabIcon({ icon }) {
 export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isReady, isAuthenticated } = useAuth()
+  const { isReady, isAuthenticated, authReason } = useAuth()
 
   useEffect(() => {
     if (!isReady || isAuthenticated) return
-    router.replace('/login')
-  }, [isAuthenticated, isReady, router])
+    const search = authReason ? `?reason=${authReason}` : ''
+    router.replace(`/login${search}`)
+  }, [isAuthenticated, isReady, router, authReason])
 
   if (!isReady || !isAuthenticated) {
     return <AppLoadingShell isRedirecting={isReady && !isAuthenticated} />

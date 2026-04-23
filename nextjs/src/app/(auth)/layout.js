@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
 function AuthRouteLoading({ isRedirecting = false }) {
@@ -24,12 +24,15 @@ function AuthRouteLoading({ isRedirecting = false }) {
 
 export default function AuthLayout({ children }) {
   const router = useRouter()
-  const { isReady, isAuthenticated } = useAuth()
+  const searchParams = useSearchParams()
+  const { isReady, isAuthenticated, authReason } = useAuth()
+  
+  const hasExpiredReason = searchParams.get('reason') === 'expired'
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated) return
+    if (!isReady || !isAuthenticated || authReason || hasExpiredReason) return
     router.replace('/dashboard')
-  }, [isAuthenticated, isReady, router])
+  }, [isAuthenticated, isReady, router, authReason, hasExpiredReason])
 
   if (!isReady || isAuthenticated) {
     return <AuthRouteLoading isRedirecting={isReady && isAuthenticated} />

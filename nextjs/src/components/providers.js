@@ -5,7 +5,7 @@ import { clearSession, readSession, writeSession } from '@/lib/session'
 import { ApiError } from '@/lib/apiClient'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
-const DATA_MODE_STORAGE_KEY = 'budgetbuddy.data-mode'
+import { DATA_MODE_STORAGE_KEY } from '@/lib/constants'
 const AuthContext = createContext(null)
 const ThemeContext = createContext(null)
 const DataModeContext = createContext(null)
@@ -57,6 +57,7 @@ function ThemeProvider({ children }) {
 
 function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
+  const [authReason, setAuthReason] = useState(null)
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
@@ -72,17 +73,19 @@ function AuthProvider({ children }) {
 
     if (!nextSession) return null
     setSession(nextSession)
+    setAuthReason(null)
     return nextSession
   }
 
-  const logout = useCallback(() => {
+  const logout = useCallback((reason = null) => {
     clearSession()
     setSession(null)
+    setAuthReason(reason)
   }, [])
 
   const handleAuthError = useCallback((error, router) => {
     if (error instanceof ApiError && error.status === 401) {
-      logout()
+      logout('expired')
       if (router) {
         router.replace('/login?reason=expired')
       }
@@ -96,10 +99,11 @@ function AuthProvider({ children }) {
     user: session?.user ?? null,
     isReady,
     isAuthenticated: Boolean(session?.accessToken),
+    authReason,
     setSessionFromAuthResponse,
     logout,
     handleAuthError,
-  }), [isReady, session, logout, handleAuthError])
+  }), [isReady, session, authReason, logout, handleAuthError])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

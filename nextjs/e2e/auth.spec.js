@@ -15,11 +15,12 @@ test.describe('Authentication Stabilization', () => {
     // Start signed out
     await page.goto('/dashboard')
     
-    // Should show the loading/redirecting shell
-    await expect(page.getByText('One second')).toBeVisible()
+    // Should NOT show protected content
+    await expect(page.getByText('Good morning')).not.toBeVisible()
     
     // Should end up at login
     await expect(page).toHaveURL(/\/login/)
+    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible()
   })
 
   test('user can log out cleanly', async ({ page }) => {
@@ -49,13 +50,13 @@ test.describe('Authentication Stabilization', () => {
     // 1. Setup an authenticated state with a token that will fail
     await page.addInitScript(() => {
       window.localStorage.setItem('budgetbuddy.session', JSON.stringify({
-        user: { name: 'Tester', email: 'tester@gmail.com' },
+        user: { id: 'test-user-1', name: 'Tester', email: 'tester@gmail.com' },
         accessToken: 'expired-token-123'
       }))
     })
 
-    // 2. Mock the dashboard API to return 401
-    await page.route('**/api/budget/summary**', async route => {
+    // 2. Mock all API calls made during dashboard load to return 401
+    await page.route('**/api/**', async route => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
@@ -72,6 +73,9 @@ test.describe('Authentication Stabilization', () => {
     // 5. Verify the "Session expired" banner is visible
     await expect(page.getByText('Session expired')).toBeVisible()
     await expect(page.getByText('Your session has timed out')).toBeVisible()
+
+    // 6. Verify the URL remains stable (not overwritten by a plain /login redirect)
+    await expect(page).toHaveURL(/\/login\?reason=expired/)
   })
 
   test('invalid credentials show polished error message', async ({ page }) => {

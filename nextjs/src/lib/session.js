@@ -1,4 +1,4 @@
-const SESSION_STORAGE_KEY = 'budgetbuddy.session'
+import { SESSION_STORAGE_KEY, DATA_MODE_STORAGE_KEY } from './constants'
 
 const pickUser = (user) => {
   if (!user?.id || !user?.email) return null
@@ -51,5 +51,5 @@ export function writeSession({ accessToken, user }) {
 export function clearSession() {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(SESSION_STORAGE_KEY)
-  window.localStorage.removeItem('budgetbuddy.data-mode')
+  window.localStorage.removeItem(DATA_MODE_STORAGE_KEY)
 }

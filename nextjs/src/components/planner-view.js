@@ -90,7 +90,7 @@ function PlannerFeedback({ feedback }) {
 
 export default function PlannerView() {
   const router = useRouter()
-  const { isReady, logout, session, handleAuthError } = useAuth()
+  const { isReady, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { notifyDataChanged } = useDataChanged()
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStart)
@@ -205,7 +205,7 @@ export default function PlannerView() {
     })
 
     return () => controller.abort()
-  }, [isReady, isSampleMode, logout, reloadToken, router, selectedMonth, session?.accessToken])
+  }, [isReady, isSampleMode, reloadToken, router, selectedMonth, session?.accessToken])
 
   const isLiveMonthCurrent = isSampleMode || liveState.month === selectedMonth
   const activeCategories = isSampleMode ? buildSampleCategories() : (isLiveMonthCurrent ? liveState.categories : [])
@@ -499,7 +499,7 @@ export default function PlannerView() {
       })
       handleRetry()
     } catch (error) {
-      if (handleAuthError(error)) return
+      if (handleAuthError(error, router)) return
 
       setFeedback({
         tone: 'warning',
@@ -511,7 +511,7 @@ export default function PlannerView() {
   }
 
   return (
-    <section className="app-screen planner-screen">
+    <section className="app-screen planner-screen screen-rise">
       <div className="planner-screen__masthead">
         <div className="screen-heading">
           <h1 className="screen-heading__title">Planner</h1>

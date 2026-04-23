@@ -203,7 +203,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function TransactionsView() {
   const router = useRouter()
-  const { isReady, logout, session, handleAuthError } = useAuth()
+  const { isReady, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { notifyDataChanged } = useDataChanged()
   const [reloadToken, setReloadToken] = useState(0)
@@ -283,7 +283,7 @@ export default function TransactionsView() {
     })
 
     return () => controller.abort()
-  }, [isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
+  }, [isReady, isSampleMode, reloadToken, router, session?.accessToken])
 
   useEffect(() => {
     if (!selectedEntry && !isEntrySheetOpen) return undefined
@@ -470,7 +470,7 @@ export default function TransactionsView() {
       notifyDataChanged()
       setReloadToken((value) => value + 1)
     } catch (error) {
-      if (handleAuthError(error)) return
+      if (handleAuthError(error, router)) return
       setDeleteConfirm(false)
     } finally {
       setIsDeleting(false)
