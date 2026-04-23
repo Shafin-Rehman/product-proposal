@@ -156,4 +156,41 @@ describe('PlannerView', () => {
     expect(screen.getByText('Category progress')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
   })
+
+  it('shows a partial-data notice and does not invent actuals when the live summary request fails', async () => {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('planner summary timed out'))
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+
+    await renderPlanner()
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledTimes(4)
+    })
+
+    expect(screen.getByText('Planner data is limited right now')).toBeTruthy()
+    expect(screen.getByText('Some planner details are missing right now, but you can still review the rest of the month.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0)
+    expect(screen.getByText('Budget unavailable')).toBeTruthy()
+    expect(screen.getByText('Health unavailable')).toBeTruthy()
+    expect(screen.getByText('Actual spend unavailable')).toBeTruthy()
+    expect(screen.getByText('Actual spend')).toBeTruthy()
+    expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
+    expect(screen.getByText('Save update')).toBeTruthy()
+  })
 })
