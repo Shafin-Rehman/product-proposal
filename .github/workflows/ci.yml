@@ -4,11 +4,13 @@ on:
     branches: [main]
     paths:
       - 'nextjs/**'
+      - 'supabase/**'
       - '.github/workflows/ci.yml'
   pull_request_target:
     branches: [main]
     paths:
       - 'nextjs/**'
+      - 'supabase/**'
       - '.github/workflows/ci.yml'
 
 permissions:
@@ -31,8 +33,21 @@ jobs:
           cache: npm
           cache-dependency-path: nextjs/package-lock.json
       - run: npm ci
+      - run: node scripts/seed-test-user.js
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - run: npm test -- --coverage
       - run: npm run build
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npx playwright install chromium --with-deps
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+      - run: npx playwright test
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
