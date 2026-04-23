@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - 'nextjs/**'
+      - 'supabase/**'
       - '.github/workflows/ci.yml'
 
 permissions:
