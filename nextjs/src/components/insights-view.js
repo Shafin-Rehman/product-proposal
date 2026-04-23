@@ -23,6 +23,12 @@ import {
   isInMonth,
   shiftMonth,
 } from '@/lib/financeUtils'
+import {
+  buildBudgetPressureHighlight,
+  buildCategoryBudgetHealth,
+  buildFinancialHealth,
+  buildOverallBudgetHealth,
+} from '@/lib/budgetHealth'
 
 const BREAKDOWN_LIMIT = 6
 const SIDEBAR_LIMIT = 4
@@ -133,15 +139,33 @@ function buildLiveExpenseBreakdown(expenses = []) {
     .sort((left, right) => right.amount - left.amount)
 }
 
+export function buildPressureFallbackSpendCards(monthlyExpenses = []) {
+  const breakdown = buildLiveExpenseBreakdown(monthlyExpenses)
+  const totalAmount = breakdown.reduce((sum, item) => sum + item.amount, 0)
+
+  return breakdown.map((item) => {
+    const share = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0
+
+    return {
+      ...item,
+      note: `${Math.round(share) || 0}% of spend`,
+    }
+  })
+}
+
 export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
-  if (Array.isArray(categoryStatuses)) {
+  if (Array.isArray(categoryStatuses) && categoryStatuses.length > 0) {
     return [...categoryStatuses]
       .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
       .slice(0, BREAKDOWN_LIMIT)
       .map((item) => {
         const visual = getCategoryVisual(item.category_name)
         const spent = Number(item.spent ?? 0)
-        const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
+        const categoryHealth = buildCategoryBudgetHealth({
+          monthlyLimit: item.monthly_limit,
+          spent: item.spent,
+          actualsAvailable: true,
+        })
         return {
           id: item.category_id ?? item.category_name,
           name: item.category_name,
@@ -150,9 +174,9 @@ export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
           detailLine: item.monthly_limit == null
             ? 'No budget set'
             : `Budget: ${formatCurrency(item.monthly_limit)}`,
-          secondary: item.monthly_limit == null
-            ? 'No budget set'
-            : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
+          secondary: categoryHealth.remainingText,
+          statusLabel: categoryHealth.label,
+          statusTone: categoryHealth.tone,
           color: visual.color,
           soft: visual.soft,
           symbol: item.category_icon || visual.symbol,
@@ -166,7 +190,9 @@ export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
       ...item,
       summaryLine: `This month: ${formatCurrency(item.amount)}`,
       detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-      secondary: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
+      secondary: null,
+      statusLabel: null,
+      statusTone: null,
     }))
 }
 
@@ -350,13 +376,20 @@ export default function InsightsView() {
   const expenseItems = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
+      const categoryHealth = buildCategoryBudgetHealth({
+        monthlyLimit: item.budget,
+        spent: item.spent,
+        actualsAvailable: true,
+      })
       return {
         id: item.id,
         name: visual.label,
         amount: item.spent,
         summaryLine: `This month: ${formatCurrency(item.spent)}`,
         detailLine: `Budget: ${formatCurrency(item.budget)}`,
-        secondary: `${formatCurrency(Math.abs(item.budget - item.spent))} ${item.budget - item.spent < 0 ? 'over' : 'left'}`,
+        secondary: categoryHealth.remainingText,
+        statusLabel: categoryHealth.label,
+        statusTone: categoryHealth.tone,
         color: visual.color,
         soft: visual.soft,
         symbol: visual.symbol,
@@ -410,16 +443,15 @@ export default function InsightsView() {
     ? Number(demoBudgetSummary.total_income)
     : monthlyIncome.reduce((sum, entry) => sum + Number(entry.amount ?? 0), 0)
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
+  const summaryAvailability = isSampleMode
+    ? 'ready'
+    : liveState.summary
+      ? 'ready'
+      : liveState.summaryStatus === 'loading'
+        ? 'loading'
+        : 'unavailable'
   const spentValue = summary ? Number(summary.total_expenses ?? derivedSpent) : derivedSpent
   const incomeValue = summary ? Number(summary.total_income ?? derivedIncome) : derivedIncome
-  const budgetLimit = summary?.total_budget == null
-    ? (summary?.monthly_limit == null ? null : Number(summary.monthly_limit))
-    : Number(summary.total_budget)
-  const remainingBudget = budgetLimit == null
-    ? null
-    : summary?.remaining_budget != null
-      ? Number(summary.remaining_budget)
-      : budgetLimit - spentValue
   const netBalance = incomeValue - spentValue
   const activeMonthLabel = formatMonthLabel(activeMonth)
   const topExpenses = monthlyActivity
@@ -428,16 +460,6 @@ export default function InsightsView() {
     .slice(0, SIDEBAR_LIMIT)
   const topExpensesCopy = `Highest spending items in ${activeMonthLabel}.`
   const topExpensesEmptyCopy = 'Top expenses will appear once the selected month has spending.'
-  const budgetProgress = budgetLimit && budgetLimit > 0
-    ? Math.min((spentValue / budgetLimit) * 100, 100)
-    : 0
-  const budgetTone = budgetLimit == null ? 'neutral' : remainingBudget >= 0 ? 'positive' : 'warning'
-  const monthSummaryText = budgetLimit == null
-    ? 'Set a budget to compare this month against a target.'
-    : remainingBudget >= 0
-      ? `${formatCurrency(remainingBudget)} left out of ${formatCurrency(budgetLimit)} budgeted`
-      : `${formatCurrency(Math.abs(remainingBudget))} over ${formatCurrency(budgetLimit)} budgeted`
-  const budgetProgressWidth = budgetLimit && budgetLimit > 0 ? `${budgetProgress}%` : '0%'
   const donutSegments = buildDonutSegments(activeItems)
   const donutPatternScope = `donut-${getPatternToken(activeMonth)}-${getPatternToken(viewMode)}`
   const donutSegmentsWithPattern = donutSegments.map((item, index) => ({
@@ -448,11 +470,19 @@ export default function InsightsView() {
   const liveMessage = getCombinedMessage(liveState.summaryMessage, liveState.listMessage)
   const centerLabel = viewMode === 'expenses' ? 'Spent this month' : 'Income this month'
   const centerLabelWords = centerLabel.split(' ')
-  const budgetStatusValue = budgetLimit == null
-    ? 'Budget not set'
-    : remainingBudget >= 0
-      ? `${formatCurrency(remainingBudget)} left`
-      : `${formatCurrency(Math.abs(remainingBudget))} over`
+  const overallBudgetHealth = buildOverallBudgetHealth({
+    summary,
+    availability: summaryAvailability,
+    month: activeMonth,
+  })
+  const financialHealth = buildFinancialHealth({
+    summary,
+    availability: summaryAvailability,
+  })
+  const pressureHighlight = buildBudgetPressureHighlight({
+    categoryStatuses: summary?.category_statuses,
+    fallbackSpendCards: buildPressureFallbackSpendCards(monthlyExpenses),
+  })
 
   return (
     <section className="app-screen insights-screen screen-rise">
@@ -603,6 +633,12 @@ export default function InsightsView() {
                         <strong>{item.name}</strong>
                         <span>{item.summaryLine}</span>
                         <small>{item.detailLine}</small>
+                        {item.statusLabel ? (
+                          <div className="insight-category-card__meta">
+                            <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
+                            <small>{item.secondary}</small>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </article>
@@ -624,20 +660,47 @@ export default function InsightsView() {
 
         <article aria-label="Monthly summary" className="insight-card insight-month-summary insight-card--budget-rail">
           <div className="insight-month-summary__progress">
-            <div className={`insight-month-summary__bubble insight-month-summary__bubble--${budgetTone}`}>
-              {budgetStatusValue}
+            <div className="insight-month-summary__header">
+              <span className={`budget-status-pill budget-status-pill--${overallBudgetHealth.tone}`}>{overallBudgetHealth.label}</span>
+              <strong>{overallBudgetHealth.primaryValue}</strong>
+              <small>{overallBudgetHealth.supportingText}</small>
+            </div>
+            <div className={`insight-month-summary__bubble insight-month-summary__bubble--${overallBudgetHealth.tone}`}>
+              {overallBudgetHealth.label}
             </div>
             <div className="budget-progress" role="presentation">
               <span
-                className={`budget-progress__fill budget-progress__fill--${budgetTone}`}
-                style={{ width: budgetProgressWidth }}
+                className={`budget-progress__fill budget-progress__fill--${overallBudgetHealth.tone}`}
+                style={{ width: `${overallBudgetHealth.progressPercentage}%` }}
               />
             </div>
-            <p className={`insight-month-summary__progress-note insight-month-summary__progress-note--${budgetTone}`}>
-              {monthSummaryText}
+            <p className={`insight-month-summary__progress-note insight-month-summary__progress-note--${overallBudgetHealth.tone}`}>
+              {overallBudgetHealth.progressNote}
             </p>
           </div>
         </article>
+
+        <div className="insight-health-rail">
+          <article className={`budget-health-callout budget-health-callout--${financialHealth.tone}`}>
+            <div>
+              <span className="budget-health-callout__label">Financial health</span>
+              <strong>{financialHealth.label}</strong>
+            </div>
+            <p>
+              <span>{financialHealth.valueText}</span>
+              <small>{financialHealth.detailText}</small>
+            </p>
+          </article>
+          <article className={`budget-health-callout budget-health-callout--${pressureHighlight.tone}`}>
+            <div>
+              <span className="budget-health-callout__label">{pressureHighlight.label}</span>
+              <strong>{pressureHighlight.title}</strong>
+            </div>
+            <p>
+              <span>{pressureHighlight.detail}</span>
+            </p>
+          </article>
+        </div>
 
         <div className="insight-summary-strip insight-summary-strip--pills">
           <div className="insight-summary-strip__item">

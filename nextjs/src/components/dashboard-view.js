@@ -22,6 +22,13 @@ import {
   getCurrentMonthStart,
   isInMonth,
 } from '@/lib/financeUtils'
+import {
+  buildBudgetPressureHighlight as buildSharedBudgetPressureHighlight,
+  buildCategoryBudgetHealth,
+  buildFinancialHealth,
+  buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
+  getMonthProgressState as getSharedMonthProgressState,
+} from '@/lib/budgetHealth'
 const PREVIEW_LIMIT = 4
 const INCOME_LIMIT = 4
 const CHART_WIDTH = 312
@@ -77,56 +84,83 @@ export function getBudgetHintText(summary) {
   return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
 }
 
-function getHeroState(summary) {
-  const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
-  const spent = Number(summary?.total_expenses ?? 0)
-  const income = Number(summary?.total_income ?? 0)
-  const remaining = Number(summary?.remaining_budget ?? 0)
+function getSafeMoneyNumber(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : 0
+}
 
-  if (!summary) {
-    return {
-      tone: 'neutral',
-      badge: 'Waiting',
-      value: 'Waiting on live totals',
-      supportingText: 'Budget snapshot',
-      spent,
-      budget,
-      income,
-    }
-  }
+export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
+  return getSharedMonthProgressState(month, { observedDayCount, referenceDate })
+}
 
-  if (!budget) {
-    return {
-      tone: 'neutral',
-      badge: 'Live spend',
-      value: `${formatCurrency(spent)} spent`,
-      supportingText: `${formatCurrency(income)} in income tracked so far.`,
-      spent,
-      budget,
-      income,
-    }
-  }
+export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date(), availability = summary ? 'ready' : 'loading' } = {}) {
+  const overallHealth = buildSharedOverallBudgetHealth({
+    summary,
+    availability,
+    month,
+    observedDayCount,
+    referenceDate,
+  })
+  const financialHealth = buildFinancialHealth({ summary, availability })
+  const budget = overallHealth.totalBudget ?? 0
+  const spent = overallHealth.spent ?? 0
+  const income = getSafeMoneyNumber(summary?.total_income)
+  const net = financialHealth.netAmount ?? (income != null && overallHealth.spent != null
+    ? Number((income - overallHealth.spent).toFixed(2))
+    : 0)
+  const hasBudget = overallHealth.key !== 'no_budget' && overallHealth.key !== 'loading' && overallHealth.key !== 'unavailable'
 
-  if (remaining < 0 || summary.threshold_exceeded) {
-    return {
-      tone: 'warning',
-      badge: 'Over budget',
-      value: `${formatCurrency(Math.abs(remaining))} over`,
-      supportingText: `out of ${formatCurrency(budget)} budgeted`,
-      spent,
-      budget,
-      income,
-    }
-  }
+  const metrics = overallHealth.key === 'loading' || overallHealth.key === 'unavailable'
+    ? [
+      { label: 'Spent', value: '--', hint: 'Current month' },
+      {
+        label: 'Days left',
+        value: overallHealth.monthState.daysRemaining ? String(overallHealth.monthState.daysRemaining) : '--',
+        hint: 'Including today',
+      },
+      { label: 'Daily allowance', value: '--', hint: 'Left per day' },
+      { label: 'Net this month', value: '--', hint: 'Income minus spend' },
+    ]
+    : [
+      {
+        label: 'Spent',
+        value: formatCurrency(spent),
+        hint: hasBudget ? `${Math.round(overallHealth.progressPercentage)}% of budget used` : 'Current month',
+      },
+      {
+        label: 'Days left',
+        value: overallHealth.daysRemaining == null ? '--' : String(overallHealth.daysRemaining),
+        hint: 'Including today',
+      },
+      {
+        label: 'Daily allowance',
+        value: overallHealth.dailyAllowance == null ? '--' : formatCurrency(overallHealth.dailyAllowance),
+        hint: overallHealth.key === 'over_budget' ? 'Needs correction' : 'Left per day',
+      },
+      {
+        label: 'Net this month',
+        value: financialHealth.netAmount == null ? '--' : formatCurrency(financialHealth.netAmount),
+        hint: financialHealth.key === 'negative_cash_flow'
+          ? 'Expenses above income'
+          : 'Income minus spend',
+      },
+    ]
 
   return {
-    tone: 'positive',
-    badge: 'On track',
-    value: `${formatCurrency(remaining)} left`,
-    supportingText: `out of ${formatCurrency(budget)} budgeted`,
-    spent,
+    ...overallHealth,
+    badge: overallHealth.label,
+    value: overallHealth.primaryValue,
+    progressWidth: `${overallHealth.progressPercentage}%`,
     budget,
-    income,
+    spent,
+    income: income ?? 0,
+    remaining: overallHealth.remaining,
+    net,
+    daysRemaining: overallHealth.daysRemaining,
+    hasBudget,
+    isOverBudget: overallHealth.key === 'over_budget',
+    isNearLimit: overallHealth.key === 'near_limit',
+    metrics,
   }
 }
 
@@ -219,8 +253,11 @@ function buildLiveCategoryCards(categoryStatuses = []) {
     const displayName = item.category_name || 'Uncategorized'
     const visual = getCategoryVisual(displayName)
     const amount = Number(item.spent ?? 0)
-    const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
-    const progress = item.monthly_limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
+    const categoryHealth = buildCategoryBudgetHealth({
+      monthlyLimit: item.monthly_limit,
+      spent: item.spent,
+      actualsAvailable: true,
+    })
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
@@ -228,11 +265,11 @@ function buildLiveCategoryCards(categoryStatuses = []) {
       symbol: item.category_icon || visual.symbol,
       color: visual.color,
       soft: visual.soft,
-      progress,
+      progress: categoryHealth.progressPercentage,
       amount,
-      note: item.monthly_limit == null
-        ? 'No budget set'
-        : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
+      note: categoryHealth.remainingText,
+      statusLabel: categoryHealth.label,
+      statusTone: categoryHealth.tone,
     }
   })
 }
@@ -284,10 +321,21 @@ export function buildDerivedCategoryCards(expenses = []) {
   })
 }
 
-export function getCategoryCards(categoryStatuses, expenses = []) {
+export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null) {
   return hasBudgetedCategoryStatuses(categoryStatuses)
     ? buildLiveCategoryCards(categoryStatuses)
+    : Array.isArray(derivedCategoryCards) ? derivedCategoryCards : buildDerivedCategoryCards(expenses)
+}
+
+export function getBudgetPressureHighlight(summary, expenses = [], derivedCategoryCards = null) {
+  const spendShareCards = Array.isArray(derivedCategoryCards)
+    ? derivedCategoryCards
     : buildDerivedCategoryCards(expenses)
+
+  return buildSharedBudgetPressureHighlight({
+    categoryStatuses: summary?.category_statuses,
+    fallbackSpendCards: spendShareCards,
+  })
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -433,6 +481,13 @@ export default function DashboardView() {
   }
 
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
+  const summaryAvailability = isSampleMode
+    ? 'ready'
+    : liveState.summary
+      ? 'ready'
+      : liveState.status === 'loading'
+        ? 'loading'
+        : 'unavailable'
   const currentMonthExpenses = isSampleMode
     ? []
     : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
@@ -441,30 +496,49 @@ export default function DashboardView() {
     : buildActivityFeed(liveState.expenses, liveState.income)
   const recentActivity = activity.slice(0, PREVIEW_LIMIT)
   const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
+  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
+  const hasBudgetedStatuses = hasBudgetedCategoryStatuses(summary?.category_statuses)
+  const derivedCategoryCards = !isSampleMode && !hasBudgetedStatuses
+    ? buildDerivedCategoryCards(currentMonthExpenses)
+    : null
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
-      const remaining = item.budget - item.spent
+      const categoryHealth = buildCategoryBudgetHealth({
+        monthlyLimit: item.budget,
+        spent: item.spent,
+        actualsAvailable: true,
+      })
       return {
         id: item.id,
         name: visual.label,
         symbol: visual.symbol,
         color: visual.color,
         soft: visual.soft,
-        progress: Math.min((item.spent / item.budget) * 100, 100),
+        progress: categoryHealth.progressPercentage,
         amount: item.spent,
-        note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
+        note: categoryHealth.remainingText,
+        statusLabel: categoryHealth.label,
+        statusTone: categoryHealth.tone,
       }
     })
-    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
-  const heroState = getHeroState(summary)
+    : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
   const budgetCtaLabel = getBudgetCtaLabel(summary)
-  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const trendPoints = isSampleMode
     ? demoBudgetTrend
     : buildMonthlySpendTrend(liveState.expenses, currentMonth)
-  const projectedTrendPoints = buildProjectedTrend(chartMonth, heroState.budget, trendPoints.length)
-  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, heroState.budget)
+  const hudState = getBudgetHudModel(summary, {
+    month: chartMonth,
+    observedDayCount: trendPoints.length,
+    availability: summaryAvailability,
+  })
+  const financialHealth = buildFinancialHealth({
+    summary,
+    availability: summaryAvailability,
+  })
+  const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses, derivedCategoryCards)
+  const projectedTrendPoints = buildProjectedTrend(chartMonth, hudState.budget, trendPoints.length)
+  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, hudState.budget)
   const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
   const projectedPath = buildTrendPath(projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
   const areaPath = buildAreaPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
@@ -518,33 +592,121 @@ export default function DashboardView() {
             </div>
           </div>
 
-          {trendPoints.length ? (
-            <div className="budget-hero__chart">
-              <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
-                <defs>
-                  <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
-                    <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
-                    <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
-                  </linearGradient>
-                  <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
-                    <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
-                    <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
-                  </linearGradient>
-                </defs>
-                {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
-                <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
-                {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
-                <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
-                {currentPoint ? (
-                  <circle
-                    className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
-                    cx={currentPoint.x}
-                    cy={currentPoint.y}
-                    r="4.5"
-                  />
-                ) : null}
-              </svg>
-              {currentPoint && trendPoints.length ? (
+        <div className="budget-hero__header">
+          <div className="budget-hero__headline">
+            <h2 className="budget-hero__value">{hudState.value}</h2>
+            <p className="budget-hero__suffix">{hudState.supportingText}</p>
+          </div>
+        </div>
+
+        <div className="budget-hero__progress-block">
+          <div
+            aria-label="Monthly budget progress"
+            className="budget-progress budget-hero__progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(hudState.progressPercentage)}
+            aria-valuetext={hudState.progressLabel}
+          >
+            <span
+              className={`budget-progress__fill budget-progress__fill--${hudState.tone}`}
+              style={{ width: hudState.progressWidth }}
+            />
+          </div>
+          <div className="budget-hero__progress-copy">
+            <strong>{hudState.progressLabel}</strong>
+            <span>{hudState.progressNote}</span>
+          </div>
+        </div>
+
+        <div className="budget-hero__metrics">
+          {hudState.metrics.map((metric) => (
+            <div className="budget-hero__metric" key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.hint}</small>
+            </div>
+          ))}
+        </div>
+
+        <div className={`budget-health-callout budget-health-callout--${financialHealth.tone}`}>
+          <div>
+            <span className="budget-health-callout__label">Financial health</span>
+            <strong>{financialHealth.label}</strong>
+          </div>
+          <p>
+            <span>{financialHealth.valueText}</span>
+            <small>{financialHealth.detailText}</small>
+          </p>
+        </div>
+
+        <div className={`budget-hero__pressure budget-hero__pressure--${pressureHighlight.tone}`}>
+          <div>
+            <span className="budget-hero__pressure-label">{pressureHighlight.label}</span>
+            <strong>{pressureHighlight.title}</strong>
+          </div>
+          <p>{pressureHighlight.detail}</p>
+        </div>
+
+        {trendPoints.length ? (
+          <div className="budget-hero__chart">
+            <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
+              <defs>
+                <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
+                  <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
+                </linearGradient>
+                <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
+                  <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
+                </linearGradient>
+              </defs>
+              {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
+              <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
+              {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
+              <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
+              {currentPoint ? (
+                <circle
+                  className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
+                  cx={currentPoint.x}
+                  cy={currentPoint.y}
+                  r="4.5"
+                />
+              ) : null}
+            </svg>
+            {currentPoint && trendPoints.length ? (
+              <div
+                className="budget-hero__callout"
+                style={{
+                  left: currentPointLeft,
+                  top: currentPointTop,
+                }}
+              >
+                {formatCurrency(trendPoints.at(-1) ?? 0)} spent
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="blank-state blank-state--compact">
+            <strong>Waiting on activity</strong>
+            <span>This curve will appear once month-to-date spending lands.</span>
+          </div>
+        )}
+      </article>
+
+      <section className="section-block">
+        <div className="section-headline">
+          <h2>Budgets</h2>
+          <Link className="section-link" href="/planner">
+            View more
+          </Link>
+        </div>
+
+        {categoryCards.length ? (
+          <div className="budget-glance-scroll">
+            <div className="budget-glance">
+              {categoryCards.map((item) => (
                 <div
                   className="budget-hero__callout"
                   style={{
@@ -552,7 +714,20 @@ export default function DashboardView() {
                     top: currentPointTop,
                   }}
                 >
-                  {formatCurrency(trendPoints.at(-1) ?? 0)} spent
+                  <div
+                    className="budget-glance__ring"
+                    style={{
+                      background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
+                    }}
+                  >
+                    <div className="budget-glance__inner">{item.symbol}</div>
+                  </div>
+                  {item.statusLabel ? (
+                    <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
+                  ) : null}
+                  <strong>{item.name}</strong>
+                  <span>{formatCurrency(item.amount)}</span>
+                  <small>{item.note}</small>
                 </div>
               ) : null}
             </div>
