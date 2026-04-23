@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
@@ -22,7 +22,7 @@ function AuthRouteLoading({ isRedirecting = false }) {
   )
 }
 
-export default function AuthLayout({ children }) {
+function AuthLayoutInner({ children }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isReady, isAuthenticated, authReason } = useAuth()
@@ -44,5 +44,13 @@ export default function AuthLayout({ children }) {
       <div className="auth-shell__glow auth-shell__glow--right" />
       <div className="auth-shell__inner">{children}</div>
     </div>
+  )
+}
+
+export default function AuthLayout({ children }) {
+  return (
+    <Suspense fallback={<AuthRouteLoading isRedirecting={false} />}>
+      <AuthLayoutInner>{children}</AuthLayoutInner>
+    </Suspense>
   )
 }
