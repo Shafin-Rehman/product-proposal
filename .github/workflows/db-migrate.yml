@@ -16,19 +16,29 @@ permissions:
   contents: read
 
 jobs:
-  migrate:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+  test-migration:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: supabase/setup-cli@v1
         with:
           version: latest
       - name: Dry-run migrations
-        if: github.event_name == 'pull_request_target'
         run: supabase db push --db-url "${{ secrets.DATABASE_URL }}" --dry-run
+
+  deploy-production:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
       - name: Apply migrations to production
-        if: github.event_name == 'push'
         run: supabase db push --db-url "${{ secrets.DATABASE_URL }}" --yes
