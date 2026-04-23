@@ -154,7 +154,7 @@ beforeEach(() => {
   useRouter.mockReturnValue({ replace: jest.fn() })
   useAuth.mockReturnValue({
     isReady: true,
-    logout: jest.fn(),
+    handleAuthError: jest.fn(),
     session: {
       accessToken: 'test-token',
       user: { email: 'sam.tester@example.com' },
@@ -764,11 +764,11 @@ describe('DashboardView', () => {
   })
 
   it('logs out and redirects when a live dashboard request returns unauthorized', async () => {
-    const logout = jest.fn()
+    const handleAuthError = jest.fn().mockReturnValue(true)
     const replace = jest.fn()
     useAuth.mockReturnValue({
       isReady: true,
-      logout,
+      handleAuthError,
       session: {
         accessToken: 'expired-token',
         user: { email: 'sam.tester@example.com' },
@@ -783,8 +783,7 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(logout).toHaveBeenCalledTimes(1)
-      expect(replace).toHaveBeenCalledWith('/login')
+      expect(handleAuthError).toHaveBeenCalled()
     })
   })
 

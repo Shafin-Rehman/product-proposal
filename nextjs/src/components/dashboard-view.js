@@ -576,14 +576,13 @@ export default function DashboardView() {
           onRetry={() => setReloadToken((value) => value + 1)}
         />
 
-        <article className={`budget-hero budget-hero--${heroState.tone}`}>
-          <div className="budget-hero__header">
-            <div className="budget-hero__headline">
-              <h2 className="budget-hero__value">{heroState.value}</h2>
-              <p className="budget-hero__suffix">{heroState.supportingText}</p>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
-              <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+        <article
+          className={`budget-hero budget-hero--${hudState.tone}${hudState.isOverBudget ? ' budget-hero--over' : ''}${hudState.isNearLimit ? ' budget-hero--risk' : ''}`}
+        >
+          <div className="budget-hero__topline">
+            <span className="budget-hero__eyebrow">{formatMonthPeriod(chartMonth)} budget HUD</span>
+            <div className="budget-hero__actions">
+              <span className={`budget-hero__badge budget-hero__badge--${hudState.tone}`}>{hudState.badge}</span>
               {!isSampleMode && (
                 <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
                   {budgetCtaLabel}
@@ -592,12 +591,12 @@ export default function DashboardView() {
             </div>
           </div>
 
-        <div className="budget-hero__header">
-          <div className="budget-hero__headline">
-            <h2 className="budget-hero__value">{hudState.value}</h2>
-            <p className="budget-hero__suffix">{hudState.supportingText}</p>
+          <div className="budget-hero__header">
+            <div className="budget-hero__headline">
+              <h2 className="budget-hero__value">{hudState.value}</h2>
+              <p className="budget-hero__suffix">{hudState.supportingText}</p>
+            </div>
           </div>
-        </div>
 
         <div className="budget-hero__progress-block">
           <div
@@ -695,49 +694,6 @@ export default function DashboardView() {
         )}
       </article>
 
-      <section className="section-block">
-        <div className="section-headline">
-          <h2>Budgets</h2>
-          <Link className="section-link" href="/planner">
-            View more
-          </Link>
-        </div>
-
-        {categoryCards.length ? (
-          <div className="budget-glance-scroll">
-            <div className="budget-glance">
-              {categoryCards.map((item) => (
-                <div
-                  className="budget-hero__callout"
-                  style={{
-                    left: currentPointLeft,
-                    top: currentPointTop,
-                  }}
-                >
-                  <div
-                    className="budget-glance__ring"
-                    style={{
-                      background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
-                    }}
-                  >
-                    <div className="budget-glance__inner">{item.symbol}</div>
-                  </div>
-                  {item.statusLabel ? (
-                    <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
-                  ) : null}
-                  <strong>{item.name}</strong>
-                  <span>{formatCurrency(item.amount)}</span>
-                  <small>{item.note}</small>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="blank-state blank-state--compact">
-              <strong>Waiting on activity</strong>
-              <span>This curve will appear once month-to-date spending lands.</span>
-            </div>
-          )}
-        </article>
 
         <section className="section-block">
           <div className="section-headline">

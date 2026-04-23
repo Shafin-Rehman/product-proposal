@@ -74,7 +74,7 @@ beforeEach(() => {
   useRouter.mockReturnValue({ replace: jest.fn() })
   useAuth.mockReturnValue({
     isReady: true,
-    logout: jest.fn(),
+    handleAuthError: jest.fn(),
     session: {
       accessToken: 'test-token',
       user: { email: 'sam.tester@example.com' },
