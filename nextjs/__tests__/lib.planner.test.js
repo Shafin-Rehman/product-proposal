@@ -10,6 +10,7 @@ const {
   mergePlannerDrafts,
   normalizeMoneyDraftForSave,
 } = require('@/lib/planner')
+const { buildOverallBudgetHealth } = require('@/lib/budgetHealth')
 
 describe('buildPlannerRows', () => {
   it('builds an empty editable row when a category has no spend and no plan', () => {
@@ -27,7 +28,8 @@ describe('buildPlannerRows', () => {
         spentAmount: 0,
         remainingAmount: null,
         progressPercentage: 0,
-        statusLabel: 'No plan',
+        statusLabel: 'No budget',
+        remainingText: 'No budget set',
         isEditable: true,
       }),
     ])
@@ -144,6 +146,7 @@ describe('buildPlannerRows', () => {
       plannedAmount: 60,
       spentAmount: null,
       statusLabel: 'Actual unavailable',
+      remainingText: 'Actual spend unavailable',
       isEditable: true,
       hasSavedPlan: true,
     }))
@@ -181,7 +184,32 @@ describe('buildPlannerRows', () => {
       remainingAmount: null,
       progressPercentage: 0,
       statusLabel: 'Actual unavailable',
+      remainingText: 'Actual spend unavailable',
       statusTone: 'neutral',
+    }))
+  })
+})
+
+describe('planner monthly health semantics', () => {
+  it('builds real overall budget health from category totals when no explicit overall cap exists', () => {
+    expect(buildOverallBudgetHealth({
+      summary: {
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '240.00',
+        total_income: '1000.00',
+        total_expenses: '192.00',
+        remaining_budget: '48.00',
+        threshold_exceeded: false,
+      },
+      availability: 'ready',
+      month: '2026-03-01',
+      referenceDate: new Date('2026-03-12T12:00:00Z'),
+    })).toEqual(expect.objectContaining({
+      key: 'near_limit',
+      label: 'Near limit',
+      budgetSource: 'category_total',
+      primaryValue: '$48.00 left',
     }))
   })
 })
