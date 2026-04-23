@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useTheme } from '@/components/providers'
 
@@ -35,10 +35,22 @@ export default function AccountPage() {
   const { theme, setTheme } = useTheme()
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [displayName, setDisplayName] = useState(getDisplayName(user?.email))
   const [isEditing, setIsEditing] = useState(false)
-  const [nameInput, setNameInput] = useState(getDisplayName(user?.email))
+  const [displayName, setDisplayName] = useState('')
+  const [nameInput, setNameInput] = useState('')
+  const [nameError, setNameError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [resetStatus, setResetStatus] = useState('')
+  const [isResetting, setIsResetting] = useState(false)
+
+  // Sync display name when user loads
+  useEffect(() => {
+    if (user?.email && !displayName) {
+      const derived = getDisplayName(user.email)
+      setDisplayName(derived)
+      setNameInput(derived)
+    }
+  }, [user?.email])
 
   const handleLogout = () => {
     setIsLoggingOut(true)
@@ -47,11 +59,40 @@ export default function AccountPage() {
   }
 
   const handleSaveName = async () => {
-    if (!nameInput.trim()) return
+    if (!nameInput.trim()) {
+      setNameError('Name cannot be empty.')
+      return
+    }
+    setNameError('')
     setIsSaving(true)
-    setDisplayName(nameInput.trim())
-    setIsEditing(false)
-    setIsSaving(false)
+    try {
+      setDisplayName(nameInput.trim())
+      setIsEditing(false)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) return
+    setIsResetting(true)
+    setResetStatus('')
+    try {
+      const response = await fetch('/api/password-reset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      })
+      if (response.ok) {
+        setResetStatus('success')
+      } else {
+        setResetStatus('error')
+      }
+    } catch {
+      setResetStatus('error')
+    } finally {
+      setIsResetting(false)
+    }
   }
 
   return (
@@ -64,21 +105,30 @@ export default function AccountPage() {
           {isEditing ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
               <input
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                style={{
-                  fontSize: '1rem',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #ccc',
-                  outline: 'none',
-                }}
+                aria-label="Edit display name"
                 autoFocus
+                className="input-field"
+                onChange={(e) => setNameInput(e.target.value)}
+                style={{ fontSize: '1rem', maxWidth: '200px' }}
+                value={nameInput}
               />
-              <button onClick={handleSaveName} disabled={isSaving} type="button">
+              <button
+                className="button-primary"
+                disabled={isSaving}
+                onClick={handleSaveName}
+                type="button"
+              >
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
-              <button onClick={() => setIsEditing(false)} type="button">
+              <button
+                className="button-secondary"
+                onClick={() => {
+                  setIsEditing(false)
+                  setNameError('')
+                  setNameInput(displayName)
+                }}
+                type="button"
+              >
                 Cancel
               </button>
             </div>
@@ -86,11 +136,11 @@ export default function AccountPage() {
             <h1>
               {displayName}
               <button
+                aria-label="Edit display name"
                 onClick={() => {
                   setNameInput(displayName)
                   setIsEditing(true)
                 }}
-                type="button"
                 style={{
                   marginLeft: '10px',
                   fontSize: '0.75rem',
@@ -99,11 +149,17 @@ export default function AccountPage() {
                   border: 'none',
                   padding: 0,
                 }}
-                aria-label="Edit display name"
+                type="button"
               >
                 ✏️
               </button>
             </h1>
+          )}
+
+          {nameError && (
+            <div className="inline-error" role="alert" style={{ marginTop: '4px' }}>
+              {nameError}
+            </div>
           )}
 
           <p>{user?.email || 'No email available'}</p>
@@ -142,7 +198,7 @@ export default function AccountPage() {
               <div aria-hidden="true" className="settings-item__icon">{isSampleMode ? '\u2726' : '\u25CF'}</div>
               <div className="settings-item__copy">
                 <strong>Data mode</strong>
-                <span>{isSampleMode ? 'Sample data' : 'Live data'}</span>
+                <span>{isSampleMode ? 'Sample data — exploring with demo content' : 'Live data — your real transactions'}</span>
               </div>
               <div className="segment-control segment-control--mini" role="group" aria-label="Data mode">
                 <button
@@ -197,12 +253,26 @@ export default function AccountPage() {
             </div>
           </div>
 
-          <div className="settings-item settings-item--static">
+          <div className="settings-item">
             <div aria-hidden="true" className="settings-item__icon">{'\u{1F6E1}'}</div>
             <div className="settings-item__copy">
-              <strong>Security</strong>
-              <span>Sign-in protection stays on while you switch between live and sample data.</span>
+              <strong>Password recovery</strong>
+              <span>
+                {resetStatus === 'success'
+                  ? `Recovery email sent to ${user?.email}. Check your inbox.`
+                  : resetStatus === 'error'
+                    ? 'Failed to send recovery email. Please try again.'
+                    : 'Send a password reset link to your email address.'}
+              </span>
             </div>
+            <button
+              className="button-secondary"
+              disabled={isResetting}
+              onClick={handlePasswordReset}
+              type="button"
+            >
+              {isResetting ? 'Sending...' : 'Send reset email'}
+            </button>
           </div>
 
           <div className="settings-item settings-item--static">
@@ -217,9 +287,14 @@ export default function AccountPage() {
 
       <section className="account-group">
         <span className="account-group__label">Actions</span>
-        <button className="logout-action" disabled={isLoggingOut} onClick={handleLogout} type="button">
+        <button
+          className="logout-action"
+          disabled={isLoggingOut}
+          onClick={handleLogout}
+          type="button"
+        >
           <span aria-hidden="true" className="logout-action__icon">{'\u21A9'}</span>
-          <span>{isLoggingOut ? 'Signing out...' : 'Log out'}</span>
+          <span>{isLoggingOut ? 'Signing you out...' : 'Log out'}</span>
         </button>
       </section>
 
