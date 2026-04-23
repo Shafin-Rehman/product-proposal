@@ -155,7 +155,7 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: ENTRY_CATEGORY_OPTIONS.expense[0],
+    category: '',
     occurredOn: getTodayInputValue(),
     note: '',
   }
@@ -165,7 +165,10 @@ function createEditDraft(entry) {
   const base = {
     kind: entry.kind,
     amount: String(entry.amount),
-    category: entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+    category: 
+      entry.raw?.category_name || 
+      entry.raw?.category ||
+      (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
     occurredOn: entry.occurredOn || getTodayInputValue(),
     note: '',
   }
@@ -387,8 +390,8 @@ export default function TransactionsView() {
   const entryTitle = entryDraft.counterparty.trim() || (entryDraft.kind === 'income' ? 'New income' : 'New expense')
   const counterpartyLabel = entryDraft.kind === 'income' ? 'Source' : 'Merchant'
   const entryCategories = entryDraft.kind === 'expense'
-    ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
-    : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
+    ? expenseCategories
+    : incomeCategories
   const selectedNote = selectedEntry && selectedEntry.note && selectedEntry.note !== selectedEntry.chip
     ? selectedEntry.note
     : selectedEntry?.kind === 'income'
@@ -411,7 +414,11 @@ export default function TransactionsView() {
   const openEntrySheet = (entryToEdit = null) => {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
-    setEntryDraft(entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft())
+    const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
+    if (!entryToEdit) {
+      draft.category = expenseCategories[0]?.name || incomeCategories[0]?.name || ''
+    }
+    setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
   }
@@ -429,11 +436,15 @@ export default function TransactionsView() {
     try {
       if (entryDraft.kind === 'expense') {
         const categoryId = expenseCategories.find((c) => c.name === entryDraft.category)?.id
+         if (!categoryId) {
+          setSaveError('Please select a valid category before saving.')
+          return
+        }
         const body = {
           amount: Number(entryDraft.amount),
           description: entryDraft.counterparty.trim() || undefined,
           date: entryDraft.occurredOn,
-          ...(categoryId ? { category_id: categoryId } : {}),
+          category_id: categoryId,
         }
         if (editingEntry) {
           await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -834,12 +845,18 @@ export default function TransactionsView() {
                     onChange={(event) => updateDraft('category', event.target.value)}
                     value={entryDraft.category}
                   >
-                    {entryCategories.map((option) => (
-                      <option key={option.name} value={option.name}>
-                        {option.icon ? `${option.icon} ${option.name}` : option.name}
+                    {entryCategories.length === 0 ? (
+                    <option value="" disabled>
+                      Loading categories...
                       </option>
-                    ))}
-                  </select>
+                 ) : (
+                   entryCategories.map((option) => (
+                    <option key={option.name} value={option.name}>
+                      {option.icon ? `${option.icon} ${option.name}` : option.name}
+                    </option>
+                  ))
+                )}
+                </select>
                 </label>
 
                 <label className="entry-sheet__field">
@@ -882,7 +899,7 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
+                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn || !entryCategories.length}
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
