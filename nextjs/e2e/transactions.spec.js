@@ -68,6 +68,7 @@ test('Dashboard: set monthly budget and verify limit', async ({ page }) => {
 
   await page.getByRole('button', { name: /set budget|edit budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  const originalBudget = await page.getByLabel('Monthly limit ($)').inputValue()
   await page.getByLabel('Monthly limit ($)').fill(uniqueAmount)
   await page.getByRole('dialog').getByRole('button', { name: /set budget|update budget|set overall limit/i }).click()
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 10_000 })
@@ -75,7 +76,6 @@ test('Dashboard: set monthly budget and verify limit', async ({ page }) => {
   // READ: verify the unique amount reflects on dashboard
   await expect(page.getByText(`out of ${formatted} budgeted`)).toBeVisible({ timeout: 15_000 })
 
-  const originalBudget = uniqueAmount;
   if (originalBudget && Number(originalBudget) > 0) {
     await page.getByRole('button', { name: /set budget|edit budget|set overall limit/i }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
