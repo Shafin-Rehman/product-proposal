@@ -94,7 +94,7 @@ function PlannerFeedback({ feedback }) {
 
 export default function PlannerView() {
   const router = useRouter()
-  const { isReady, logout, session } = useAuth()
+  const { isReady, session, handleAuthError } = useAuth()
   const { isSampleMode } = useDataMode()
   const { notifyDataChanged } = useDataChanged()
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthStart)
@@ -170,14 +170,9 @@ export default function PlannerView() {
       if (controller.signal.aborted) return
 
       const authFailure = results.find(
-        (result) => result.status === 'rejected' && result.reason instanceof ApiError && result.reason.status === 401
+        (result) => result.status === 'rejected' && handleAuthError(result.reason, router)
       )
-
-      if (authFailure) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (authFailure) return
 
       const failedCount = results.filter((result) => result.status === 'rejected').length
       setLiveState({
@@ -199,11 +194,7 @@ export default function PlannerView() {
     loadPlanner().catch((error) => {
       if (controller.signal.aborted) return
 
-      if (error instanceof ApiError && error.status === 401) {
-        logout()
-        router.replace('/login')
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setLiveState({
         month: selectedMonth,
@@ -218,7 +209,7 @@ export default function PlannerView() {
     })
 
     return () => controller.abort()
-  }, [isReady, isSampleMode, logout, reloadToken, router, selectedMonth, session?.accessToken])
+  }, [isReady, isSampleMode, reloadToken, router, selectedMonth, session?.accessToken])
 
   const isLiveMonthCurrent = isSampleMode || liveState.month === selectedMonth
   const activeCategories = isSampleMode ? buildSampleCategories() : (isLiveMonthCurrent ? liveState.categories : [])
@@ -382,10 +373,6 @@ export default function PlannerView() {
     }))
   }
 
-  const handleAuthError = () => {
-    logout()
-    router.replace('/login')
-  }
 
   const handleSaveOverall = async (event) => {
     event.preventDefault()
@@ -424,10 +411,7 @@ export default function PlannerView() {
       })
       handleRetry()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        handleAuthError()
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setFeedback({
         tone: 'warning',
@@ -500,10 +484,7 @@ export default function PlannerView() {
       })
       handleRetry()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        handleAuthError()
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setFeedback({
         tone: 'warning',
@@ -536,10 +517,7 @@ export default function PlannerView() {
       })
       handleRetry()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        handleAuthError()
-        return
-      }
+      if (handleAuthError(error, router)) return
 
       setFeedback({
         tone: 'warning',
@@ -551,7 +529,7 @@ export default function PlannerView() {
   }
 
   return (
-    <section className="app-screen planner-screen">
+    <section className="app-screen planner-screen screen-rise">
       <div className="planner-screen__masthead">
         <div className="screen-heading">
           <h1 className="screen-heading__title">Planner</h1>
@@ -706,20 +684,33 @@ export default function PlannerView() {
               const isUnchanged = hasValidDraft
                 && normalizedPlannedAmount != null
                 && normalizedRowDraft === normalizedPlannedAmount
+              const remainingLabel = row.spentAmount == null
+                ? actualSpendState === 'loading'
+                  ? 'Waiting for actual spend'
+                  : 'Actual spend unavailable'
+                : row.remainingAmount == null
+                  ? 'Not set'
+                  : row.remainingAmount >= 0
+                    ? `${formatCurrency(row.remainingAmount)} left`
+                    : `${formatCurrency(Math.abs(row.remainingAmount))} over`
               const progressAccessibilityProps = row.spentAmount == null
                 ? {
-                    'aria-label': `${row.categoryName} budget progress`,
-                    'aria-valuemin': 0,
-                    'aria-valuemax': 100,
-                    'aria-valuetext': row.progressAriaValueText,
-                  }
+                  'aria-label': `${row.categoryName} budget progress`,
+                  'aria-valuemin': 0,
+                  'aria-valuemax': 100,
+                  'aria-valuetext': actualSpendState === 'loading'
+                    ? `${row.categoryName} actual spend is loading`
+                    : `${row.categoryName} actual spend is unavailable`,
+                }
                 : {
-                    'aria-label': `${row.categoryName} budget progress`,
-                    'aria-valuemin': 0,
-                    'aria-valuemax': 100,
-                    'aria-valuenow': Math.round(row.progressPercentage),
-                    'aria-valuetext': row.progressAriaValueText,
-                  }
+                  'aria-label': `${row.categoryName} budget progress`,
+                  'aria-valuemin': 0,
+                  'aria-valuemax': 100,
+                  'aria-valuenow': Math.round(row.progressPercentage),
+                  'aria-valuetext': row.plannedAmount == null
+                    ? `${formatCurrency(row.spentAmount)} spent without a saved plan`
+                    : `${Math.round(row.progressPercentage)} percent used, ${remainingLabel}`,
+                }
 
               return (
                 <article className={`planner-row planner-row--${row.statusTone}`} key={row.id}>

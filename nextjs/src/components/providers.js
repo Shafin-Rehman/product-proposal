@@ -2,9 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { clearSession, readSession, writeSession } from '@/lib/session'
+import { ApiError } from '@/lib/apiClient'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
-const DATA_MODE_STORAGE_KEY = 'budgetbuddy.data-mode'
+import { DATA_MODE_STORAGE_KEY } from '@/lib/constants'
 const AuthContext = createContext(null)
 const ThemeContext = createContext(null)
 const DataModeContext = createContext(null)
@@ -42,7 +43,7 @@ function ThemeProvider({ children }) {
     setThemeState(safeTheme)
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, safeTheme)
-    } catch {}
+    } catch { }
     setDocumentTheme(safeTheme)
   }
 
@@ -56,6 +57,7 @@ function ThemeProvider({ children }) {
 
 function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
+  const [authReason, setAuthReason] = useState(null)
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
@@ -71,22 +73,37 @@ function AuthProvider({ children }) {
 
     if (!nextSession) return null
     setSession(nextSession)
+    setAuthReason(null)
     return nextSession
   }
 
-  const logout = () => {
+  const logout = useCallback((reason = null) => {
     clearSession()
     setSession(null)
-  }
+    setAuthReason(reason)
+  }, [])
+
+  const handleAuthError = useCallback((error, router) => {
+    if (error instanceof ApiError && error.status === 401) {
+      logout('expired')
+      if (router) {
+        router.replace('/login?reason=expired')
+      }
+      return true
+    }
+    return false
+  }, [logout])
 
   const value = useMemo(() => ({
     session,
     user: session?.user ?? null,
     isReady,
     isAuthenticated: Boolean(session?.accessToken),
+    authReason,
     setSessionFromAuthResponse,
     logout,
-  }), [isReady, session])
+    handleAuthError,
+  }), [isReady, session, authReason, logout, handleAuthError])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
@@ -104,7 +121,7 @@ function DataModeProvider({ children }) {
 
     try {
       window.localStorage.setItem(DATA_MODE_STORAGE_KEY, safeMode)
-    } catch {}
+    } catch { }
   }
 
   const value = useMemo(() => ({

@@ -6,12 +6,17 @@ import { useAuth } from '@/components/providers'
 
 export default function Home() {
   const router = useRouter()
-  const { isReady, isAuthenticated } = useAuth()
+  const { isReady, isAuthenticated, authReason } = useAuth()
 
   useEffect(() => {
     if (!isReady) return
-    router.replace(isAuthenticated ? '/dashboard' : '/login')
-  }, [isAuthenticated, isReady, router])
+    if (isAuthenticated) {
+      router.replace('/dashboard')
+    } else {
+      const search = authReason ? `?reason=${authReason}` : ''
+      router.replace(`/login${search}`)
+    }
+  }, [isAuthenticated, isReady, router, authReason])
 
   return (
     <main className="launch-screen" aria-busy="true">
