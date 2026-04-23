@@ -5,7 +5,7 @@ Use this checklist
 ## Pre-Deployment
 
 - [ ] All CI checks pass on the `main` branch
-- [ ] All tests pass locally (`npm test`)
+- [ ] All tests pass locally (`npm test --coverage`)
 - [ ] No uncommitted changes on the release branch
 - [ ] Environment variables are set in Vercel for the production environment:
   - [ ] `SUPABASE_URL`
