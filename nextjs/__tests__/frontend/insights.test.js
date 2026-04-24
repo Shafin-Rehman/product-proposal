@@ -9,133 +9,136 @@ jest.mock('@/lib/apiClient', () => ({
 }))
 jest.mock('@/lib/demoData', () => ({
   DEMO_MONTH: '2026-03-01',
-  demoActivity: [],
-  demoBudgetSummary: null,
-  demoCategoryBudgets: [],
-  demoIncomeSources: [],
-  demoRecurringCharges: [],
-}))
-jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value || 'Uncategorized',
-    color: '#123456',
-    soft: '#abcdef',
-    symbol: value?.[0] || '?',
-  })),
-  getEntryVisual: jest.fn(),
+  demoInsightsSnapshot: {
+    comparisonMetrics: [
+      { id: 'income', label: 'Income', currentAmount: 3229, previousAmount: 3010, deltaAmount: 219, deltaPercentage: 7.3, deltaTone: 'positive' },
+      { id: 'expenses', label: 'Expenses', currentAmount: 1011.36, previousAmount: 934.18, deltaAmount: 77.18, deltaPercentage: 8.3, deltaTone: 'warning' },
+      { id: 'net', label: 'Net cash flow', currentAmount: 2217.64, previousAmount: 2075.82, deltaAmount: 141.82, deltaPercentage: 6.8, deltaTone: 'positive' },
+      { id: 'budget-left', label: 'Budget left', currentAmount: 1588.64, previousAmount: 1665.82, deltaAmount: -77.18, deltaPercentage: -4.6, deltaTone: 'warning' },
+    ],
+    expenseBreakdown: [
+      { id: 'shopping', name: 'Shopping', amount: 347, symbol: 'S', share: 34, tone: 'caution', statusLabel: 'Watch', progressValue: 69, progressLabel: '69% used', supportingText: '$153.00 left of $500.00', color: '#c9869e', soft: 'rgba(201,134,158,0.18)' },
+      { id: 'groceries', name: 'Groceries', amount: 289, symbol: 'G', share: 29, tone: 'warning', statusLabel: 'Near limit', progressValue: 80, progressLabel: '80% used', supportingText: '$71.00 left of $360.00', color: '#6faa80', soft: 'rgba(111,170,128,0.18)' },
+    ],
+    incomeBreakdown: [
+      { id: 'income-campus', name: 'Campus job', amount: 3200, symbol: 'C', share: 99, tone: 'positive', statusLabel: 'Income share', progressValue: 99, progressLabel: '99% of income', supportingText: '1 deposit', color: '#77b68d', soft: 'rgba(119,182,141,0.18)' },
+    ],
+    cashFlowSeries: [
+      { month: '2025-10-01', label: 'Oct', incomeAmount: 2890, expenseAmount: 980, netAmount: 1910 },
+      { month: '2025-11-01', label: 'Nov', incomeAmount: 3015, expenseAmount: 1160, netAmount: 1855 },
+      { month: '2025-12-01', label: 'Dec', incomeAmount: 3102, expenseAmount: 1288, netAmount: 1814 },
+      { month: '2026-01-01', label: 'Jan', incomeAmount: 2988, expenseAmount: 1064, netAmount: 1924 },
+      { month: '2026-02-01', label: 'Feb', incomeAmount: 3010, expenseAmount: 934.18, netAmount: 2075.82 },
+      { month: '2026-03-01', label: 'Mar', incomeAmount: 3229, expenseAmount: 1011.36, netAmount: 2217.64 },
+    ],
+    cashFlowRangeLabel: 'Oct 2025 - Mar 2026',
+    cashFlowSummary: { totalIncome: 18234, totalExpenses: 6437.54, totalNet: 11796.46, averageNet: 1966.08 },
+    budgetHealth: {
+      tone: 'positive',
+      statusLabel: 'On track',
+      budgetAmount: 2600,
+      spentAmount: 1011.36,
+      remainingAmount: 1588.64,
+      progressValue: 38.9,
+      pressureCategories: [
+        { id: 'groceries', name: 'Groceries', amount: 289, symbol: 'G', tone: 'warning', statusLabel: 'Near limit', progressValue: 80, progressLabel: '80% used', supportingText: '$71.00 left of $360.00', color: '#6faa80', soft: 'rgba(111,170,128,0.18)' },
+      ],
+    },
+    categoryMovers: [
+      { id: 'shopping', name: 'Shopping', amount: 347, previousAmount: 271, deltaAmount: 76, deltaTone: 'danger', statusLabel: 'Watch', tone: 'caution', symbol: 'S', color: '#c9869e', soft: 'rgba(201,134,158,0.18)' },
+    ],
+    dailySpend: {
+      totalAmount: 1011.36,
+      averageAmount: 33.71,
+      activeDayAverage: 101.14,
+      activeDays: 10,
+      peakDay: { day: 30, key: '2026-03-30', amount: 310.76 },
+      series: Array.from({ length: 30 }, (_, index) => ({ day: index + 1, key: `2026-03-${String(index + 1).padStart(2, '0')}`, amount: index === 29 ? 310.76 : index === 20 ? 147 : 0 })),
+      details: [
+        { id: 'expense-1', key: '2026-03-22', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201,134,158,0.18)', symbol: 'S' },
+      ],
+    },
+    topExpenses: [
+      { id: 'expense-1', title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', amount: 147, symbol: 'S', color: '#c9869e', soft: 'rgba(201,134,158,0.18)' },
+    ],
+  },
 }))
 jest.mock('@/lib/financeUtils', () => ({
-  buildActivityFeed: jest.fn(),
-  buildIncomeSourceBreakdown: jest.fn(),
-  formatCurrency: jest.fn((value) => `$${value}`),
-  formatMonthLabel: jest.fn((value) => value),
-  formatPercentage: jest.fn((value) => `${value}%`),
+  formatCurrency: jest.fn((value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value ?? 0))),
+  formatMonthLabel: jest.fn((value) => {
+    const date = new Date(`${value}T12:00:00Z`)
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  }),
+  formatPercentage: jest.fn((value) => `${Math.round(Number(value ?? 0))}%`),
+  formatShortDate: jest.fn((value) => {
+    const date = new Date(`${String(value).slice(0, 10)}T12:00:00Z`)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  }),
+  formatLongDate: jest.fn((value) => {
+    const date = new Date(`${String(value).slice(0, 10)}T12:00:00Z`)
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  }),
   getCurrentMonthStart: jest.fn(() => '2026-03-01'),
-  getMonthStartValue: jest.fn(),
-  isInMonth: jest.fn(),
-  shiftMonth: jest.fn(),
+  shiftMonth: jest.fn((value, offset) => {
+    const date = new Date(`${value}T12:00:00Z`)
+    date.setUTCMonth(date.getUTCMonth() + offset)
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
+  }),
 }))
 
-const { buildPressureFallbackSpendCards, getExpenseItems } = require('@/components/insights-view')
+const React = require('react')
+const { renderToStaticMarkup } = require('react-dom/server')
+const { useRouter } = require('next/navigation')
+const { useAuth, useDataMode } = require('@/components/providers')
+const { getActiveBreakdownItems, default: InsightsView } = require('@/components/insights-view')
 
-describe('getExpenseItems', () => {
-  it('falls back to a derived expense breakdown when category statuses are unavailable', () => {
-    expect(getExpenseItems(undefined, [
-      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
-      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
-      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '7.00' },
-    ])).toEqual([
-      expect.objectContaining({
-        name: 'Food',
-        amount: 30,
-        summaryLine: 'This month: $30',
-        detailLine: '2 transactions',
-        secondary: null,
-        statusLabel: null,
-        statusTone: null,
-      }),
-      expect.objectContaining({
-        name: 'Fun',
-        amount: 7,
-        summaryLine: 'This month: $7',
-        detailLine: '1 transaction',
-        secondary: null,
-        statusLabel: null,
-        statusTone: null,
-      }),
-    ])
+describe('getActiveBreakdownItems', () => {
+  it('returns expense breakdown by default', () => {
+    const snapshot = {
+      expenseBreakdown: [{ id: 'shopping' }],
+      incomeBreakdown: [{ id: 'income' }],
+    }
+
+    expect(getActiveBreakdownItems(snapshot)).toEqual([{ id: 'shopping' }])
   })
 
-  it('treats an empty category status list as no status signal and still falls back to expenses', () => {
-    expect(getExpenseItems([], [
-      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
-      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
-      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '7.00' },
-    ])).toEqual([
-      expect.objectContaining({
-        name: 'Food',
-        amount: 30,
-        summaryLine: 'This month: $30',
-        detailLine: '2 transactions',
-        secondary: null,
-        statusLabel: null,
-        statusTone: null,
-      }),
-      expect.objectContaining({
-        name: 'Fun',
-        amount: 7,
-        summaryLine: 'This month: $7',
-        detailLine: '1 transaction',
-        secondary: null,
-        statusLabel: null,
-        statusTone: null,
-      }),
-    ])
+  it('returns income breakdown when income mode is selected', () => {
+    const snapshot = {
+      expenseBreakdown: [{ id: 'shopping' }],
+      incomeBreakdown: [{ id: 'income' }],
+    }
+
+    expect(getActiveBreakdownItems(snapshot, 'income')).toEqual([{ id: 'income' }])
   })
 
-  it('prefers summary-backed category statuses when available', () => {
-    expect(getExpenseItems([
-      {
-        category_id: 'cat-food',
-        category_name: 'Food',
-        category_icon: 'F',
-        monthly_limit: '80.00',
-        spent: '50.00',
-        remaining_budget: '30.00',
-      },
-    ], [
-      { id: 'e1', category_id: 'cat-other', category_name: 'Other', amount: '999.00' },
-    ])).toEqual([
-      expect.objectContaining({
-        name: 'Food',
-        amount: 50,
-        summaryLine: 'This month: $50',
-        detailLine: 'Budget: $80.00',
-        secondary: '$30 left',
-        statusLabel: 'On track',
-        statusTone: 'positive',
-      }),
-    ])
+  it('returns an empty array without a snapshot', () => {
+    expect(getActiveBreakdownItems(null)).toEqual([])
   })
 })
 
-describe('buildPressureFallbackSpendCards', () => {
-  it('builds spend-share notes for the pressure highlight fallback', () => {
-    expect(buildPressureFallbackSpendCards([
-      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
-      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
-      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '10.00' },
-    ])).toEqual([
-      expect.objectContaining({
-        name: 'Food',
-        amount: 30,
-        note: '75% of spend',
-      }),
-      expect.objectContaining({
-        name: 'Fun',
-        amount: 10,
-        note: '25% of spend',
-      }),
-    ])
+describe('InsightsView rendering', () => {
+  beforeEach(() => {
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({
+      isReady: true,
+      logout: jest.fn(),
+      session: { accessToken: 'token' },
+    })
+    useDataMode.mockReturnValue({ isSampleMode: true })
+  })
+
+  it('renders the restored issue 57 insights modules and cash-flow hotspot labels', () => {
+    const markup = renderToStaticMarkup(React.createElement(InsightsView))
+
+    expect(markup).toContain('Shopping')
+    expect(markup).toContain('34%')
+    expect(markup).toContain('vs last month')
+    expect(markup).toContain('Spend / active day')
+    expect(markup).toContain('Open March 2026 month view')
+    expect(markup).toContain('Top expenses')
+    expect(markup).toContain('aria-label="Mar cash flow details: income $3,229.00, expenses $1,011.36, net +$2,217.64"')
+    expect(markup).toMatch(/<strong>\d+%<\/strong>\s+of (category budget|monthly spend|largest purchase)/)
+    expect(markup).toContain('insights-v57__sparkline')
+    expect(markup).toContain('insights-v57__cashflow-peak')
   })
 })
