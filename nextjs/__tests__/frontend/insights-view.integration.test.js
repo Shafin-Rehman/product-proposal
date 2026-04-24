@@ -1,3 +1,5 @@
+/** @jest-environment jsdom */
+
 jest.mock('next/navigation', () => ({ useRouter: jest.fn() }))
 jest.mock('@/components/providers', () => ({
   useAuth: jest.fn(),
@@ -87,7 +89,7 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { renderToStaticMarkup } = require('react-dom/server')
+const { render, screen } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode } = require('@/components/providers')
 const { getActiveBreakdownItems, default: InsightsView } = require('@/components/insights-view')
@@ -116,7 +118,7 @@ describe('getActiveBreakdownItems', () => {
   })
 })
 
-describe('InsightsView rendering', () => {
+describe('InsightsView (sample data)', () => {
   beforeEach(() => {
     useRouter.mockReturnValue({ replace: jest.fn() })
     useAuth.mockReturnValue({
@@ -127,18 +129,20 @@ describe('InsightsView rendering', () => {
     useDataMode.mockReturnValue({ isSampleMode: true })
   })
 
-  it('renders the restored issue 57 insights modules and cash-flow hotspot labels', () => {
-    const markup = renderToStaticMarkup(React.createElement(InsightsView))
+  it('renders insights-view modules, cash-flow details, and rhythm copy visible in the document', () => {
+    const { container } = render(React.createElement(InsightsView))
 
-    expect(markup).toContain('Shopping')
-    expect(markup).toContain('34%')
-    expect(markup).toContain('vs last month')
-    expect(markup).toContain('Spend / active day')
-    expect(markup).toContain('Open March 2026 month view')
-    expect(markup).toContain('Top expenses')
-    expect(markup).toContain('aria-label="Mar cash flow details: income $3,229.00, expenses $1,011.36, net +$2,217.64"')
-    expect(markup).toMatch(/<strong>\d+%<\/strong>\s+of (category budget|monthly spend|largest purchase)/)
-    expect(markup).toContain('insights-v57__sparkline')
-    expect(markup).toContain('insights-v57__cashflow-peak')
+    expect(screen.getAllByText('Shopping').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('34%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('vs last month').length).toBeGreaterThan(0)
+    expect(screen.getByText('Spend / active day')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Open March 2026 month view/ })).toBeTruthy()
+    expect(screen.getByText('Top expenses')).toBeTruthy()
+    expect(
+      screen.getByLabelText('Mar cash flow details: income $3,229.00, expenses $1,011.36, net +$2,217.64')
+    ).toBeTruthy()
+    expect(screen.getByText(/of category budget|of monthly spend|vs largest purchase/)).toBeTruthy()
+    expect(container.querySelector('.insights-v57__sparkline')).toBeTruthy()
+    expect(container.querySelector('.insights-v57__cashflow-peak')).toBeTruthy()
   })
 })

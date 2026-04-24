@@ -97,8 +97,23 @@ function buildShareBreakdown(items = []) {
   }))
 }
 
-function buildDailySpendDetails(rows = []) {
+function buildDailyExpenseEntryId(row, dayKey, fallbackOrdinalByKey) {
+  if (row.id != null && row.id !== '') {
+    return String(row.id)
+  }
+  const amount = toAmount(row.amount)
+  const title = String(row.title ?? '').trim()
+  const category = String(row.category_name ?? '').trim()
+  const dedupeKey = `${dayKey}\t${amount}\t${title}\t${category}`
+  const ordinal = (fallbackOrdinalByKey.get(dedupeKey) ?? 0) + 1
+  fallbackOrdinalByKey.set(dedupeKey, ordinal)
+  const ordinalSuffix = ordinal > 1 ? `:${ordinal}` : ''
+  return `daily-expense-fallback:${dayKey}:${amount}:${title}:${category}${ordinalSuffix}`
+}
+
+export function buildDailySpendDetails(rows = []) {
   const grouped = new Map()
+  const fallbackOrdinalByKey = new Map()
 
   rows.forEach((row, index) => {
     const key = formatDayKey(row.occurred_on)
@@ -106,7 +121,7 @@ function buildDailySpendDetails(rows = []) {
 
     const visual = getCategoryVisual(row.category_name || row.title || `Expense ${index + 1}`)
     const nextEntry = {
-      id: row.id ?? `daily-expense-${index}`,
+      id: buildDailyExpenseEntryId(row, key, fallbackOrdinalByKey),
       key,
       amount: toAmount(row.amount),
       title: row.title,
