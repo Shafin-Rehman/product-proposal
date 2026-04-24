@@ -6,7 +6,7 @@ on:
     types:
       - completed
     branches:
-      - main
+      - feat/fix-cd-issue-46
 
 permissions:
   contents: read
