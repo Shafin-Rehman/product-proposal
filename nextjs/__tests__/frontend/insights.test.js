@@ -11,7 +11,7 @@ jest.mock('@/lib/demoData', () => ({
   DEMO_MONTH: '2026-03-01',
   demoActivity: [],
   demoBudgetSummary: null,
-  demoCategoryBudgets: [],
+  demoCategoryBudgets: [], 
   demoIncomeSources: [],
   demoRecurringCharges: [],
 }))
