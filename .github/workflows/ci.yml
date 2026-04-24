@@ -1,7 +1,7 @@
 name: App CI
 on:
   push:
-    branches: [feat/fix-cd-issue-46]
+    branches: [main]
     paths:
       - 'nextjs/**'
       - 'supabase/**'
