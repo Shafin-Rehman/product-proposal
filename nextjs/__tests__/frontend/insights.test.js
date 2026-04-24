@@ -36,7 +36,7 @@ jest.mock('@/lib/financeUtils', () => ({
   shiftMonth: jest.fn(),
 }))
 
-const { getExpenseItems } = require('@/components/insights-view')
+const { buildPressureFallbackSpendCards, getExpenseItems } = require('@/components/insights-view')
 
 describe('getExpenseItems', () => {
   it('falls back to a derived expense breakdown when category statuses are unavailable', () => {
@@ -50,14 +50,45 @@ describe('getExpenseItems', () => {
         amount: 30,
         summaryLine: 'This month: $30',
         detailLine: '2 transactions',
-        secondary: '2 transactions',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
       }),
       expect.objectContaining({
         name: 'Fun',
         amount: 7,
         summaryLine: 'This month: $7',
         detailLine: '1 transaction',
-        secondary: '1 transaction',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
+      }),
+    ])
+  })
+
+  it('treats an empty category status list as no status signal and still falls back to expenses', () => {
+    expect(getExpenseItems([], [
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '7.00' },
+    ])).toEqual([
+      expect.objectContaining({
+        name: 'Food',
+        amount: 30,
+        summaryLine: 'This month: $30',
+        detailLine: '2 transactions',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
+      }),
+      expect.objectContaining({
+        name: 'Fun',
+        amount: 7,
+        summaryLine: 'This month: $7',
+        detailLine: '1 transaction',
+        secondary: null,
+        statusLabel: null,
+        statusTone: null,
       }),
     ])
   })
@@ -81,6 +112,29 @@ describe('getExpenseItems', () => {
         summaryLine: 'This month: $50',
         detailLine: 'Budget: $80.00',
         secondary: '$30 left',
+        statusLabel: 'On track',
+        statusTone: 'positive',
+      }),
+    ])
+  })
+})
+
+describe('buildPressureFallbackSpendCards', () => {
+  it('builds spend-share notes for the pressure highlight fallback', () => {
+    expect(buildPressureFallbackSpendCards([
+      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '18.00' },
+      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '12.00' },
+      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '10.00' },
+    ])).toEqual([
+      expect.objectContaining({
+        name: 'Food',
+        amount: 30,
+        note: '75% of spend',
+      }),
+      expect.objectContaining({
+        name: 'Fun',
+        amount: 10,
+        note: '25% of spend',
       }),
     ])
   })

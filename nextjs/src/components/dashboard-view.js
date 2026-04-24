@@ -22,6 +22,13 @@ import {
   getCurrentMonthStart,
   isInMonth,
 } from '@/lib/financeUtils'
+import {
+  buildBudgetPressureHighlight as buildSharedBudgetPressureHighlight,
+  buildCategoryBudgetHealth,
+  buildFinancialHealth,
+  buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
+  getMonthProgressState as getSharedMonthProgressState,
+} from '@/lib/budgetHealth'
 const PREVIEW_LIMIT = 4
 const INCOME_LIMIT = 4
 const CHART_WIDTH = 312
@@ -77,239 +84,83 @@ export function getBudgetHintText(summary) {
   return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
 }
 
-const BUDGET_NEAR_LIMIT_RATIO = 0.8
-
 function getSafeMoneyNumber(value) {
   const amount = Number(value)
   return Number.isFinite(amount) ? amount : 0
 }
 
-function getSafeReferenceDate(referenceDate) {
-  const parsedReferenceDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
-  return Number.isNaN(parsedReferenceDate.getTime()) ? new Date() : parsedReferenceDate
-}
-
-function getNormalizedMonthDetails(month) {
-  const monthMatch = typeof month === 'string'
-    ? month.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    : null
-
-  if (!monthMatch) return null
-
-  const monthYear = Number(monthMatch[1])
-  const monthNumber = Number(monthMatch[2])
-  const monthDay = Number(monthMatch[3])
-  const parsedMonth = new Date(Date.UTC(monthYear, monthNumber - 1, monthDay, 12))
-
-  if (
-    parsedMonth.getUTCFullYear() !== monthYear
-    || parsedMonth.getUTCMonth() !== monthNumber - 1
-    || parsedMonth.getUTCDate() !== monthDay
-  ) {
-    return null
-  }
-
-  return {
-    normalizedMonth: `${monthMatch[1]}-${monthMatch[2]}-01`,
-    monthYear,
-    monthIndex: monthNumber - 1,
-    monthLength: new Date(Date.UTC(monthYear, monthNumber, 0)).getUTCDate(),
-  }
-}
-
 export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
-  const monthDetails = getNormalizedMonthDetails(month)
-
-  if (!monthDetails) {
-    return {
-      monthLength: 0,
-      activeDay: 0,
-      daysRemaining: 0,
-      isCurrentMonth: false,
-    }
-  }
-
-  const currentDate = getSafeReferenceDate(referenceDate)
-  const { normalizedMonth, monthLength } = monthDetails
-  const isCurrentMonth = getCurrentMonthStart(currentDate) === normalizedMonth
-  const fallbackObservedDays = Number.isFinite(observedDayCount)
-    ? Math.max(0, Math.floor(observedDayCount))
-    : 0
-  const activeDay = isCurrentMonth
-    ? Math.min(Math.max(currentDate.getDate(), 1), monthLength)
-    : Math.min(Math.max(fallbackObservedDays || monthLength, 1), monthLength)
-  const daysRemaining = isCurrentMonth || fallbackObservedDays
-    ? Math.max(monthLength - activeDay + 1, 0)
-    : 0
-
-  return {
-    monthLength,
-    activeDay,
-    daysRemaining,
-    isCurrentMonth,
-  }
+  return getSharedMonthProgressState(month, { observedDayCount, referenceDate })
 }
 
-export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date() } = {}) {
-  const budget = getSafeMoneyNumber(summary?.total_budget ?? summary?.monthly_limit)
-  const spent = getSafeMoneyNumber(summary?.total_expenses)
+export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date(), availability = summary ? 'ready' : 'loading' } = {}) {
+  const overallHealth = buildSharedOverallBudgetHealth({
+    summary,
+    availability,
+    month,
+    observedDayCount,
+    referenceDate,
+  })
+  const financialHealth = buildFinancialHealth({ summary, availability })
+  const budget = overallHealth.totalBudget ?? 0
+  const spent = overallHealth.spent ?? 0
   const income = getSafeMoneyNumber(summary?.total_income)
-  const remaining = summary?.remaining_budget == null
-    ? (budget > 0 ? Number((budget - spent).toFixed(2)) : 0)
-    : getSafeMoneyNumber(summary.remaining_budget)
-  const progressRaw = budget > 0 ? (spent / budget) * 100 : 0
-  const progressPercentage = budget > 0 ? Math.min(Number(progressRaw.toFixed(2)), 100) : 0
-  const monthState = getMonthProgressState(month || summary?.month, { observedDayCount, referenceDate })
-  const hasBudget = budget > 0
-  const isOverBudget = hasBudget && (remaining < 0 || summary?.threshold_exceeded)
-  const isNearLimit = hasBudget && !isOverBudget && progressRaw >= BUDGET_NEAR_LIMIT_RATIO * 100
-  const dailyAllowance = hasBudget && monthState.daysRemaining > 0
-    ? Number((remaining / monthState.daysRemaining).toFixed(2))
-    : null
-  const net = Number((income - spent).toFixed(2))
+  const net = financialHealth.netAmount ?? (income != null && overallHealth.spent != null
+    ? Number((income - overallHealth.spent).toFixed(2))
+    : 0)
+  const hasBudget = overallHealth.key !== 'no_budget' && overallHealth.key !== 'loading' && overallHealth.key !== 'unavailable'
 
-  if (!summary) {
-    return {
-      tone: 'neutral',
-      badge: 'Waiting',
-      value: 'Waiting on live totals',
-      supportingText: 'Budget snapshot',
-      progressLabel: 'Live summary is loading.',
-      progressNote: 'Budget guidance will appear as soon as the month snapshot loads.',
-      progressWidth: '0%',
-      progressPercentage: 0,
-      spent,
-      budget,
-      income,
-      remaining,
-      net,
-      monthState,
-      daysRemaining: null,
-      dailyAllowance: null,
-      isOverBudget: false,
-      isNearLimit: false,
-      hasBudget: false,
-      metrics: [
-        { label: 'Spent', value: '--', hint: 'Current month' },
-        { label: 'Income', value: '--', hint: 'Current month' },
-        {
-          label: 'Days left',
-          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
-          hint: 'Including today',
-        },
-        { label: 'Net this month', value: '--', hint: 'Income minus spend' },
-      ],
-    }
-  }
-
-  if (!hasBudget) {
-    return {
-      tone: 'neutral',
-      badge: 'No budget',
-      value: `${formatCurrency(spent)} spent`,
-      supportingText: `${formatCurrency(income)} in income tracked so far.`,
-      progressLabel: 'No monthly budget set yet.',
-      progressNote: 'Set a budget to unlock left-to-spend guidance, days left, and daily allowance.',
-      progressWidth: '0%',
-      progressPercentage: 0,
-      spent,
-      budget,
-      income,
-      remaining,
-      net,
-      monthState,
-      daysRemaining: null,
-      dailyAllowance: null,
-      isOverBudget: false,
-      isNearLimit: false,
-      hasBudget: false,
-      metrics: [
-        { label: 'Spent', value: formatCurrency(spent), hint: 'Current month' },
-        { label: 'Income', value: formatCurrency(income), hint: 'Current month' },
-        {
-          label: 'Days left',
-          value: monthState.daysRemaining ? String(monthState.daysRemaining) : '--',
-          hint: 'Including today',
-        },
-        {
-          label: 'Net this month',
-          value: formatCurrency(net),
-          hint: net < 0 ? 'Expenses above income' : 'Income minus spend',
-        },
-      ],
-    }
-  }
-
-  const baseState = {
-    progressWidth: `${progressPercentage}%`,
-    progressPercentage,
-    spent,
-    budget,
-    income,
-    remaining,
-    net,
-    monthState,
-    daysRemaining: monthState.daysRemaining,
-    dailyAllowance,
-    isOverBudget,
-    isNearLimit,
-    hasBudget: true,
-    metrics: [
+  const metrics = overallHealth.key === 'loading' || overallHealth.key === 'unavailable'
+    ? [
+      { label: 'Spent', value: '--', hint: 'Current month' },
+      {
+        label: 'Days left',
+        value: overallHealth.monthState.daysRemaining ? String(overallHealth.monthState.daysRemaining) : '--',
+        hint: 'Including today',
+      },
+      { label: 'Daily allowance', value: '--', hint: 'Left per day' },
+      { label: 'Net this month', value: '--', hint: 'Income minus spend' },
+    ]
+    : [
       {
         label: 'Spent',
         value: formatCurrency(spent),
-        hint: `${Math.round(progressRaw)}% of budget used`,
+        hint: hasBudget ? `${Math.round(overallHealth.progressPercentage)}% of budget used` : 'Current month',
       },
       {
         label: 'Days left',
-        value: String(monthState.daysRemaining),
+        value: overallHealth.daysRemaining == null ? '--' : String(overallHealth.daysRemaining),
         hint: 'Including today',
       },
       {
         label: 'Daily allowance',
-        value: dailyAllowance == null ? '--' : formatCurrency(dailyAllowance),
-        hint: isOverBudget ? 'Needs correction' : 'Left per day',
+        value: overallHealth.dailyAllowance == null ? '--' : formatCurrency(overallHealth.dailyAllowance),
+        hint: overallHealth.key === 'over_budget' ? 'Needs correction' : 'Left per day',
       },
       {
         label: 'Net this month',
-        value: formatCurrency(net),
-        hint: net < 0 ? 'Expenses above income' : 'Income minus spend',
+        value: financialHealth.netAmount == null ? '--' : formatCurrency(financialHealth.netAmount),
+        hint: financialHealth.key === 'negative_cash_flow'
+          ? 'Expenses above income'
+          : 'Income minus spend',
       },
-    ],
-  }
-
-  if (isOverBudget) {
-    return {
-      tone: 'warning',
-      badge: 'Over budget',
-      value: `${formatCurrency(Math.abs(remaining))} over`,
-      supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
-      progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
-      progressNote: 'This month has moved past the budget cap and needs correction at a glance.',
-      ...baseState,
-    }
-  }
-
-  if (isNearLimit) {
-    return {
-      tone: 'warning',
-      badge: 'Near limit',
-      value: `${formatCurrency(remaining)} left`,
-      supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
-      progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
-      progressNote: 'Budget pressure is rising, so the HUD shifts to a stronger warning state.',
-      ...baseState,
-    }
-  }
+    ]
 
   return {
-    tone: 'positive',
-    badge: 'On track',
-    value: `${formatCurrency(remaining)} left`,
-    supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(budget)} budgeted.`,
-    progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(budget)} budgeted`,
-    progressNote: 'Budget pace is still healthy for the month so far.',
-    ...baseState,
+    ...overallHealth,
+    badge: overallHealth.label,
+    value: overallHealth.primaryValue,
+    progressWidth: `${overallHealth.progressPercentage}%`,
+    budget,
+    spent,
+    income: income ?? 0,
+    remaining: overallHealth.remaining,
+    net,
+    daysRemaining: overallHealth.daysRemaining,
+    hasBudget,
+    isOverBudget: overallHealth.key === 'over_budget',
+    isNearLimit: overallHealth.key === 'near_limit',
+    metrics,
   }
 }
 
@@ -402,8 +253,11 @@ function buildLiveCategoryCards(categoryStatuses = []) {
     const displayName = item.category_name || 'Uncategorized'
     const visual = getCategoryVisual(displayName)
     const amount = Number(item.spent ?? 0)
-    const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
-    const progress = item.monthly_limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
+    const categoryHealth = buildCategoryBudgetHealth({
+      monthlyLimit: item.monthly_limit,
+      spent: item.spent,
+      actualsAvailable: true,
+    })
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
@@ -411,11 +265,11 @@ function buildLiveCategoryCards(categoryStatuses = []) {
       symbol: item.category_icon || visual.symbol,
       color: visual.color,
       soft: visual.soft,
-      progress,
+      progress: categoryHealth.progressPercentage,
       amount,
-      note: item.monthly_limit == null
-        ? 'No budget set'
-        : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
+      note: categoryHealth.remainingText,
+      statusLabel: categoryHealth.label,
+      statusTone: categoryHealth.tone,
     }
   })
 }
@@ -474,65 +328,14 @@ export function getCategoryCards(categoryStatuses, expenses = [], derivedCategor
 }
 
 export function getBudgetPressureHighlight(summary, expenses = [], derivedCategoryCards = null) {
-  const budgetedStatuses = Array.isArray(summary?.category_statuses)
-    ? summary.category_statuses
-      .filter((item) => Number(item?.monthly_limit ?? 0) > 0)
-      .map((item) => ({
-        name: item.category_name || 'Uncategorized',
-        spent: getSafeMoneyNumber(item.spent),
-        progress: getSafeMoneyNumber(item.progress_percentage),
-        remaining: item.remaining_budget == null ? null : getSafeMoneyNumber(item.remaining_budget),
-      }))
-    : []
-
-  if (budgetedStatuses.length) {
-    const strongestOverspend = [...budgetedStatuses]
-      .filter((item) => item.remaining != null && item.remaining < 0)
-      .sort((left, right) => left.remaining - right.remaining)[0]
-
-    if (strongestOverspend) {
-      return {
-        tone: 'warning',
-        label: 'Strongest overspend',
-        title: strongestOverspend.name,
-        detail: `${formatCurrency(Math.abs(strongestOverspend.remaining))} over budget right now.`,
-      }
-    }
-
-    const highestPressure = [...budgetedStatuses]
-      .sort((left, right) => (
-        right.progress - left.progress
-        || ((left.remaining ?? Number.POSITIVE_INFINITY) - (right.remaining ?? Number.POSITIVE_INFINITY))
-      ))[0]
-
-    return {
-      tone: highestPressure.progress >= BUDGET_NEAR_LIMIT_RATIO * 100 ? 'warning' : 'positive',
-      label: 'Top category pressure',
-      title: highestPressure.name,
-      detail: highestPressure.remaining == null
-        ? `${Math.round(highestPressure.progress)}% of budget used.`
-        : `${Math.round(highestPressure.progress)}% used with ${formatCurrency(Math.abs(highestPressure.remaining))} left.`,
-    }
-  }
-
   const spendShareCards = Array.isArray(derivedCategoryCards)
     ? derivedCategoryCards
     : buildDerivedCategoryCards(expenses)
-  if (spendShareCards.length) {
-    return {
-      tone: 'neutral',
-      label: 'Top spend area',
-      title: spendShareCards[0].name,
-      detail: `${spendShareCards[0].note} this month.`,
-    }
-  }
 
-  return {
-    tone: 'neutral',
-    label: 'Category pressure',
-    title: 'Waiting on categories',
-    detail: 'Current-month category pressure will show once expenses land.',
-  }
+  return buildSharedBudgetPressureHighlight({
+    categoryStatuses: summary?.category_statuses,
+    fallbackSpendCards: spendShareCards,
+  })
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -691,6 +494,13 @@ export default function DashboardView() {
   }
 
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
+  const summaryAvailability = isSampleMode
+    ? 'ready'
+    : liveState.summary
+      ? 'ready'
+      : liveState.status === 'loading'
+        ? 'loading'
+        : 'unavailable'
   const currentMonthExpenses = isSampleMode
     ? []
     : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
@@ -707,16 +517,22 @@ export default function DashboardView() {
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
       const visual = getCategoryVisual(item.name)
-      const remaining = item.budget - item.spent
+      const categoryHealth = buildCategoryBudgetHealth({
+        monthlyLimit: item.budget,
+        spent: item.spent,
+        actualsAvailable: true,
+      })
       return {
         id: item.id,
         name: visual.label,
         symbol: visual.symbol,
         color: visual.color,
         soft: visual.soft,
-        progress: Math.min((item.spent / item.budget) * 100, 100),
+        progress: categoryHealth.progressPercentage,
         amount: item.spent,
-        note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
+        note: categoryHealth.remainingText,
+        statusLabel: categoryHealth.label,
+        statusTone: categoryHealth.tone,
       }
     })
     : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
@@ -727,6 +543,11 @@ export default function DashboardView() {
   const hudState = getBudgetHudModel(summary, {
     month: chartMonth,
     observedDayCount: trendPoints.length,
+    availability: summaryAvailability,
+  })
+  const financialHealth = buildFinancialHealth({
+    summary,
+    availability: summaryAvailability,
   })
   const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses, derivedCategoryCards)
   const projectedTrendPoints = buildProjectedTrend(chartMonth, hudState.budget, trendPoints.length)
@@ -821,6 +642,17 @@ export default function DashboardView() {
           ))}
         </div>
 
+        <div className={`budget-health-callout budget-health-callout--${financialHealth.tone}`}>
+          <div>
+            <span className="budget-health-callout__label">Financial health</span>
+            <strong>{financialHealth.label}</strong>
+          </div>
+          <p>
+            <span>{financialHealth.valueText}</span>
+            <small>{financialHealth.detailText}</small>
+          </p>
+        </div>
+
         <div className={`budget-hero__pressure budget-hero__pressure--${pressureHighlight.tone}`}>
           <div>
             <span className="budget-hero__pressure-label">{pressureHighlight.label}</span>
@@ -903,6 +735,9 @@ export default function DashboardView() {
                   >
                     <div className="budget-glance__inner">{item.symbol}</div>
                   </div>
+                  {item.statusLabel ? (
+                    <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
+                  ) : null}
                   <strong>{item.name}</strong>
                   <span>{formatCurrency(item.amount)}</span>
                   <small>{item.note}</small>

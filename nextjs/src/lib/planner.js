@@ -1,4 +1,5 @@
 import { shiftMonth } from './financeUtils'
+import { buildCategoryBudgetHealth } from './budgetHealth'
 
 const UNCATEGORIZED_KEY = '__uncategorized__'
 const MAX_MONEY_CENTS = 9999999999n
@@ -100,29 +101,6 @@ export function normalizeMoneyDraftForSave(value) {
   return parseMoneyAmount(value)
 }
 
-export function getPlannerStatus(plannedAmount, spentAmount) {
-  const planned = parseMoneyAmount(plannedAmount)
-  const spent = parseSpendAmount(spentAmount)
-
-  if (!planned) {
-    if (spent > 0) {
-      return { label: 'Unplanned spend', tone: 'warning' }
-    }
-
-    return { label: 'No plan', tone: 'neutral' }
-  }
-
-  if (spent > planned) {
-    return { label: 'Over budget', tone: 'danger' }
-  }
-
-  if (spent >= planned * 0.8) {
-    return { label: 'Near limit', tone: 'warning' }
-  }
-
-  return { label: 'On track', tone: 'positive' }
-}
-
 export function buildPlannerRows({
   categories = [],
   categoryBudgets = [],
@@ -146,12 +124,11 @@ export function buildPlannerRows({
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
       : Number((plannedAmount - spentAmount).toFixed(2))
-    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
-    const plannerStatus = spentAmount == null
-      ? plannedAmount == null
-        ? { label: 'No plan', tone: 'neutral' }
-        : { label: 'Actual unavailable', tone: 'neutral' }
-      : getPlannerStatus(plannedAmount, spentAmount)
+    const plannerStatus = buildCategoryBudgetHealth({
+      monthlyLimit: plannedAmount,
+      spent: spentAmount,
+      actualsAvailable,
+    })
 
     rows.push({
       id: toBudgetKey(category.id),
@@ -161,9 +138,13 @@ export function buildPlannerRows({
       plannedAmount,
       spentAmount,
       remainingAmount,
-      progressPercentage,
+      progressPercentage: actualsAvailable ? plannerStatus.progressPercentage : getPlannerProgressPercentage(plannedAmount, spentAmount),
       statusLabel: plannerStatus.label,
       statusTone: plannerStatus.tone,
+      statusKey: plannerStatus.key,
+      statusDetail: plannerStatus.detailText,
+      remainingText: plannerStatus.remainingText,
+      progressAriaValueText: plannerStatus.ariaValueText,
       isEditable: true,
       hasSavedPlan: plannedAmount != null,
     })
@@ -181,12 +162,11 @@ export function buildPlannerRows({
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
       : Number((plannedAmount - spentAmount).toFixed(2))
-    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
-    const plannerStatus = spentAmount == null
-      ? plannedAmount == null
-        ? { label: 'No plan', tone: 'neutral' }
-        : { label: 'Actual unavailable', tone: 'neutral' }
-      : getPlannerStatus(plannedAmount, spentAmount)
+    const plannerStatus = buildCategoryBudgetHealth({
+      monthlyLimit: plannedAmount,
+      spent: spentAmount,
+      actualsAvailable,
+    })
 
     rows.push({
       id: toBudgetKey(status.category_id),
@@ -196,9 +176,13 @@ export function buildPlannerRows({
       plannedAmount,
       spentAmount,
       remainingAmount,
-      progressPercentage,
+      progressPercentage: actualsAvailable ? plannerStatus.progressPercentage : getPlannerProgressPercentage(plannedAmount, spentAmount),
       statusLabel: plannerStatus.label,
       statusTone: plannerStatus.tone,
+      statusKey: plannerStatus.key,
+      statusDetail: plannerStatus.detailText,
+      remainingText: plannerStatus.remainingText,
+      progressAriaValueText: plannerStatus.ariaValueText,
       isEditable: status.category_id != null,
       hasSavedPlan: plannedAmount != null,
     })
@@ -215,12 +199,11 @@ export function buildPlannerRows({
     const remainingAmount = plannedAmount == null || spentAmount == null
       ? null
       : Number((plannedAmount - spentAmount).toFixed(2))
-    const progressPercentage = getPlannerProgressPercentage(plannedAmount, spentAmount)
-    const plannerStatus = spentAmount == null
-      ? plannedAmount == null
-        ? { label: 'No plan', tone: 'neutral' }
-        : { label: 'Actual unavailable', tone: 'neutral' }
-      : getPlannerStatus(plannedAmount, spentAmount)
+    const plannerStatus = buildCategoryBudgetHealth({
+      monthlyLimit: plannedAmount,
+      spent: spentAmount,
+      actualsAvailable,
+    })
 
     rows.push({
       id: toBudgetKey(budget.category_id),
@@ -230,9 +213,13 @@ export function buildPlannerRows({
       plannedAmount,
       spentAmount,
       remainingAmount,
-      progressPercentage,
+      progressPercentage: actualsAvailable ? plannerStatus.progressPercentage : getPlannerProgressPercentage(plannedAmount, spentAmount),
       statusLabel: plannerStatus.label,
       statusTone: plannerStatus.tone,
+      statusKey: plannerStatus.key,
+      statusDetail: plannerStatus.detailText,
+      remainingText: plannerStatus.remainingText,
+      progressAriaValueText: plannerStatus.ariaValueText,
       isEditable: budget.category_id != null,
       hasSavedPlan: plannedAmount != null,
     })
