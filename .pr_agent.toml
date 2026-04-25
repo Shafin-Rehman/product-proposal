@@ -1,34 +1,39 @@
-# Local overrides for Codium / Qodo PR-Agent (complements .github/workflows/pr_agent.yml).
-# See: https://qodo-merge-docs.qodo.ai/usage-guide/automations_and_usage/
+# PR-Agent: Copilot-style defaults for your repo. Docs:
+# https://qodo-merge-docs.qodo.ai/usage-guide/automations_and_usage/
 
 [config]
-# Optional: stricter or looser; align with the workflow if you change models.
 temperature = 0.2
+duplicate_prompt_examples = true
 
-# NVIDIA DeepSeek: thinking blocks can break structured /improve output; the workflow
-# can also set litellm.extra_body — keep this in one place to match NVIDIA's sample.
-
+# NVIDIA/OpenAI-compatible: keep unsupported OpenAI params from reaching NVIDIA.
+# Do not set litellm.extra_body here: current PR-Agent only allows processing_mode/service_tier
+# in that setting, so chat_template_kwargs or reasoning_effort would abort before the API call.
 [litellm]
-extra_body = """{"chat_template_kwargs":{"thinking":false}}"""
+drop_params = true
+
+# High-level "what this PR does" (posted as a comment so your title/body are not replaced).
+[pr_description]
+publish_description_as_comment = true
+add_original_user_description = true
+final_update_message = false
 
 [pr_reviewer]
-# More than the default 3; increase for a deeper (noisier) pass.
 num_max_findings = 12
 require_security_review = true
 require_tests_review = true
 extra_instructions = """
-Be thorough: reason about the change in the full PR and product context, not only the diff hunk.
-Call out real bugs, missed edge cases, and maintainability. Prefer line-relevant, actionable
-comments. When you suggest a fix, show concrete code. Stay concise but not shallow.
+Review like a staff engineer: product context, correctness, edge cases, security, tests, and
+maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the
+summary for themes and risk.
 """
 
 [pr_code_suggestions]
-# /improve: more suggestions per chunk can surface more line-level nits (higher cost).
+# Committable, Copilot-style suggestion blocks in the diff when the provider supports it.
+commitable_code_suggestions = true
 num_code_suggestions_per_chunk = 4
-# Lower threshold = publish more candidate suggestions (noisier).
 suggestions_score_threshold = 0
 focus_only_on_problems = true
 extra_instructions = """
-Suggest only concrete, applicable improvements. Prefer specific line or block-level fixes
-with a short rationale. If something is already fine, skip it.
+Provide concrete, apply-ready suggestions with a short reason. Flag real issues and clear wins; skip
+nit-only churn unless it matters for correctness or security.
 """
