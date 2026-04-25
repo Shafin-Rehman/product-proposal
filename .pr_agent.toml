@@ -4,8 +4,8 @@
 [config]
 temperature = 0.2
 duplicate_prompt_examples = true
-custom_model_max_tokens = 128000
-max_model_tokens = 64000
+custom_model_max_tokens = 256000
+max_model_tokens = 128000
 
 # NVIDIA/OpenAI-compatible: keep unsupported OpenAI params from reaching NVIDIA.
 # Do not set litellm.extra_body here: current PR-Agent only allows processing_mode/service_tier

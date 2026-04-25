@@ -32,8 +32,8 @@ jobs:
           config.fallback_models: '["openai/deepseek-ai/deepseek-v4-pro"]'
           # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
           # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
-          config.custom_model_max_tokens: "128000"
-          config.max_model_tokens: "64000"
+          config.custom_model_max_tokens: "256000"
+          config.max_model_tokens: "128000"
           config.ai_timeout: "300"
           config.large_patch_policy: "clip"
           # Helps /improve when the model needs stronger few-shot style prompts for structured output.
