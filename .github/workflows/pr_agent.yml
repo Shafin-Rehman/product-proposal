@@ -29,10 +29,29 @@ jobs:
           # unprefixed model name to NVIDIA's API.
           config.model: "openai/deepseek-ai/deepseek-v4-pro"
           config.fallback_models: '["openai/deepseek-ai/deepseek-v4-pro"]'
+          # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
+          # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
+          config.custom_model_max_tokens: "128000"
+          config.max_model_tokens: "64000"
           config.ai_timeout: "300"
           config.large_patch_policy: "clip"
           # Helps /improve when the model needs stronger few-shot style prompts for structured output.
           config.duplicate_prompt_examples: "true"
+
+          # Keep the important repo config here too. In GitHub Actions, .pr_agent.toml changes are
+          # only effective after they exist on the branch PR-Agent reads for the target PR.
+          pr_description.publish_description_as_comment: "true"
+          pr_description.add_original_user_description: "true"
+          pr_description.final_update_message: "false"
+          pr_reviewer.num_max_findings: "12"
+          pr_reviewer.require_security_review: "true"
+          pr_reviewer.require_tests_review: "true"
+          pr_reviewer.extra_instructions: "Review like a staff engineer: product context, correctness, edge cases, security, tests, and maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the summary for themes and risk."
+          pr_code_suggestions.commitable_code_suggestions: "true"
+          pr_code_suggestions.num_code_suggestions_per_chunk: "4"
+          pr_code_suggestions.suggestions_score_threshold: "0"
+          pr_code_suggestions.focus_only_on_problems: "true"
+          pr_code_suggestions.extra_instructions: "Provide concrete, apply-ready suggestions with a short reason. Flag real issues and clear wins; skip nit-only churn unless it matters for correctness or security."
 
           # On each matching PR event: /describe (PR summary) -> /review -> /improve.
           # "Failed to generate code suggestions" = /improve threw; see Actions log for the exception.
