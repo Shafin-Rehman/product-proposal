@@ -73,3 +73,99 @@ jobs:
           # /review
           # /improve
           # /ask ...
+
+      - name: Normalize PR overview comment
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const describeComment = comments
+              .filter((comment) =>
+                comment.user?.type === 'Bot' &&
+                comment.body?.startsWith('## Title') &&
+                comment.body?.includes('### **Description**')
+              )
+              .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+
+            if (!describeComment) {
+              core.info('No PR-Agent describe comment found to normalize.');
+              return;
+            }
+
+            const body = describeComment.body;
+            const titleBlock = (body.match(/^## Title\s+([\s\S]*?)\n___/m)?.[1] || '').trim();
+            const title = titleBlock
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line && !/^####\s+\(Describe updated until commit/i.test(line))
+              .pop() || context.payload.pull_request.title;
+            const descriptionBlock = (body.match(/### \*\*Description\*\*\s*([\s\S]*?)(?:\n\n___|\n<details|$)/)?.[1] || '').trim();
+            const bullets = descriptionBlock
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => /^[-*]\s+/.test(line))
+              .map((line) => line.replace(/^[-*]\s+/, '').trim())
+              .filter(Boolean)
+              .slice(0, 3);
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100,
+            });
+
+            const fileRows = files
+              .slice(0, 20)
+              .map((file) => {
+                const description = file.status === 'removed'
+                  ? 'Removed file.'
+                  : `${file.status.charAt(0).toUpperCase()}${file.status.slice(1)} file with ${file.changes} changed lines.`;
+                return `| \`${file.filename.replaceAll('|', '\\|')}\` | ${description} |`;
+              });
+
+            const fileSummary = files.length > 20
+              ? `\n| _Additional files_ | ${files.length - 20} more changed files not shown. |`
+              : '';
+
+            const summary = title.endsWith('.') ? title : `${title}.`;
+            const changes = bullets.length
+              ? bullets.map((item) => `- ${item}`).join('\n')
+              : '- Reviewed the changed files and summarized the main update.';
+
+            const normalized = `## Pull request overview
+
+            ${summary}
+
+            **Changes:**
+            ${changes}
+
+            ### Reviewed changes
+
+            Reviewed the changed files and generated inline comments where applicable.
+
+            <details>
+            <summary>Show a summary per file</summary>
+
+            | File | Description |
+            | ---- | ----------- |
+            ${fileRows.join('\n')}${fileSummary}
+
+            </details>`;
+
+            await github.rest.issues.updateComment({
+              owner,
+              repo,
+              comment_id: describeComment.id,
+              body: normalized.replace(/^ {12}/gm, '').trim(),
+            });
