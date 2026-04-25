@@ -9,13 +9,14 @@ jobs:
   pr_agent:
     if: ${{ github.event.sender.type != 'Bot' && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'issue_comment' && github.event.issue.pull_request)) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       issues: write
       pull-requests: write
       contents: read
     steps:
       - name: PR Agent
-        uses: Codium-ai/pr-agent@main
+        uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
