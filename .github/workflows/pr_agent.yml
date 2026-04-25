@@ -1,29 +1,40 @@
 name: AI PR Reviewer
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronized]
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
     types: [created]
 
 jobs:
   pr_agent:
+    if: ${{ github.event.sender.type != 'Bot' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
       contents: read
     steps:
-      - name: PR Agent Action
+      - name: PR Agent
         uses: Codium-ai/pr-agent@main
         env:
-          # Information taken from your Python script:
-          CONFIG.MODEL: "deepseek-ai/deepseek-v4-pro"
-          OPENAI.BASE_URL: "https://integrate.api.nvidia.com/v1"
-          OPENAI.API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          
-          # Required GitHub info:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_REVIWER.ENABLE_AUTO_REVIEW: true
-          PR_CODE_SUGGESTIONS.ENABLE_AUTO_RESTORE: true
-          # This line below tells it to run the "Copilot-style" line-comments automatically
-          pr_commands: '["/review", "/improve"]'
+
+          # API key: pr-agent expects OPENAI_KEY (not OPENAI.API_KEY) for the OpenAI-compatible stack.
+          OPENAI_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+          # OpenAI-style endpoint (litellm uses [openai].api_base). Use API_BASE, not BASE_URL.
+          OPENAI.API_BASE: "https://integrate.api.nvidia.com/v1"
+
+          # Model and fallbacks (env keys are lowercase: config.model per Qodo / pr-agent GitHub docs).
+          config.model: "deepseek-ai/deepseek-v4-pro"
+          config.fallback_models: '["deepseek-ai/deepseek-v4-pro"]'
+          # Longer runs for large diffs; raise if the job times out.
+          config.ai_timeout: "300"
+          # Avoid aggressive clipping on big PRs (optional; tune if you see failures).
+          config.large_patch_policy: "clip"
+
+          # GitHub Action automation: /review and /improve (code suggestions). Use string booleans.
+          github_action_config.auto_review: "true"
+          github_action_config.auto_improve: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
