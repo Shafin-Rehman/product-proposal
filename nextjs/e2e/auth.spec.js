@@ -10,5 +10,11 @@ test('user can sign in and reach the dashboard', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
   await expect(page.getByText('Recent activity')).toBeVisible()
-  await expect(page.getByText('Recent income')).toBeVisible()
+
+  const activityFilter = page.locator('.dashboard-activity-filter')
+  const incomeFilter = activityFilter.getByRole('button', { name: 'Income' })
+
+  await expect(incomeFilter).toBeVisible()
+  await incomeFilter.click()
+  await expect(incomeFilter).toHaveAttribute('aria-pressed', 'true')
 })
