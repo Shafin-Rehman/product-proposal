@@ -1,0 +1,29 @@
+name: AI PR Reviewer
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronized]
+  issue_comment:
+    types: [created]
+
+jobs:
+  pr_agent:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: PR Agent Action
+        uses: Codium-ai/pr-agent@main
+        env:
+          # Information taken from your Python script:
+          CONFIG.MODEL: "deepseek-ai/deepseek-v4-pro"
+          OPENAI.BASE_URL: "https://integrate.api.nvidia.com/v1"
+          OPENAI.API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          
+          # Required GitHub info:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_REVIWER.ENABLE_AUTO_REVIEW: true
+          PR_CODE_SUGGESTIONS.ENABLE_AUTO_RESTORE: true
+          # This line below tells it to run the "Copilot-style" line-comments automatically
+          pr_commands: '["/review", "/improve"]'
