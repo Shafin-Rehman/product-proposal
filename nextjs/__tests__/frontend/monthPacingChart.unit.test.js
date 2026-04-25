@@ -113,4 +113,81 @@ describe('MonthPacingChart', () => {
     expect(screen.queryByText('Budget')).toBeNull()
     expect(screen.queryByText('Status')).toBeNull()
   })
+
+  it('moves the focused day when the pointer moves across the chart', () => {
+    const { container } = render(React.createElement(MonthPacingChart, {
+      trendPoints: [10, 20, 30, 40],
+      budget: 1000,
+      monthLength: 10,
+      activeDay: 4,
+    }))
+
+    const svg = screen.getByRole('img')
+    jest.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      width: 360,
+      height: 168,
+      top: 0,
+      left: 0,
+      right: 360,
+      bottom: 168,
+    })
+
+    fireEvent.mouseMove(svg, { clientX: 0 })
+    expect(screen.getAllByText('Day 1').length).toBeGreaterThan(0)
+
+    fireEvent.mouseMove(svg, { clientX: 360 })
+    expect(screen.getAllByText('Day 4').length).toBeGreaterThan(0)
+    expect(container.querySelector('.month-pacing--inspecting')).toBeTruthy()
+  })
+
+  it('clears keyboard hover and snaps back to the last day on Escape', () => {
+    render(React.createElement(MonthPacingChart, {
+      trendPoints: [5, 15, 25, 35],
+      budget: 1000,
+      monthLength: 10,
+      activeDay: 4,
+    }))
+
+    const svg = screen.getByRole('img')
+    jest.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      width: 360,
+      height: 168,
+      top: 0,
+      left: 0,
+      right: 360,
+      bottom: 168,
+    })
+
+    fireEvent.mouseMove(svg, { clientX: 0 })
+    expect(svg.getAttribute('aria-label')).toMatch(/Day 1:/)
+
+    fireEvent.keyDown(svg, { key: 'Escape' })
+    expect(svg.getAttribute('aria-label')).toMatch(/Day 4:/)
+  })
+
+  it('applies the over-budget class when the month is over budget on the last day', () => {
+    const { container } = render(React.createElement(MonthPacingChart, {
+      trendPoints: [10, 20, 300],
+      budget: 200,
+      monthLength: 10,
+      activeDay: 3,
+      isOverBudget: true,
+    }))
+
+    expect(container.querySelector('.month-pacing--over')).toBeTruthy()
+  })
+
+  it('draws more than one line segment when spend crosses the pace line between days', () => {
+    const { container } = render(React.createElement(MonthPacingChart, {
+      trendPoints: [200, 100],
+      budget: 200,
+      monthLength: 2,
+      activeDay: 2,
+    }))
+
+    const segments = container.querySelectorAll(
+      '.month-pacing__line--danger, .month-pacing__line--positive, .month-pacing__line--warning',
+    )
+    expect(segments.length).toBeGreaterThanOrEqual(2)
+  })
 })

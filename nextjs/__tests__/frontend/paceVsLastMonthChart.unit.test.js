@@ -114,4 +114,73 @@ describe('PaceVsLastMonthChart', () => {
 
     expect(screen.getByRole('img', { name: /Cumulative spend March vs February/ })).toBeTruthy()
   })
+
+  it('renders from last month data when the current month has not recorded spend yet', () => {
+    const previousSeries = buildCumulative([25, 50, 100])
+    const { container } = render(React.createElement(PaceVsLastMonthChart, {
+      currentMonthSeries: [],
+      previousMonthSeries: previousSeries,
+      currentMonthLabel: 'March',
+      previousMonthLabel: 'February',
+    }))
+
+    const root = container.querySelector('.pace-chart')
+    expect(root).toBeTruthy()
+    expect(root.classList.contains('pace-chart--empty')).toBe(false)
+    expect(root.getAttribute('data-has-previous')).toBe('true')
+    expect(container.querySelector('.pace-chart__line--previous')).toBeTruthy()
+  })
+
+  it('uses pointer movement to pick a day and clears inspection on Escape', () => {
+    const currentSeries = buildCumulative([20, 40, 60])
+    const previousSeries = buildCumulative([10, 20, 30])
+
+    const { container } = render(React.createElement(PaceVsLastMonthChart, {
+      currentMonthSeries: currentSeries,
+      previousMonthSeries: previousSeries,
+    }))
+
+    const root = container.querySelector('.pace-chart')
+    const svg = screen.getByRole('img')
+    jest.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      width: 320,
+      height: 156,
+      top: 0,
+      left: 0,
+      right: 320,
+      bottom: 156,
+    })
+
+    fireEvent.mouseMove(svg, { clientX: 0 })
+    expect(root.classList.contains('pace-chart--inspecting')).toBe(true)
+    fireEvent.keyDown(svg, { key: 'Escape' })
+    expect(root.classList.contains('pace-chart--inspecting')).toBe(false)
+  })
+
+  it('uses the "on pace" copy when the gap to last month is under half a dollar', () => {
+    const currentSeries = buildCumulative([100, 200])
+    const previousSeries = buildCumulative([100, 199.8])
+
+    const { container } = render(React.createElement(PaceVsLastMonthChart, {
+      currentMonthSeries: currentSeries,
+      previousMonthSeries: previousSeries,
+    }))
+
+    fireEvent.mouseEnter(container.querySelector('.pace-chart__plot'))
+    expect(screen.getAllByText(/On pace with last month/).length).toBeGreaterThan(0)
+  })
+
+  it('emits a warning segment when the current line jumps far above last month on the same day', () => {
+    const currentSeries = buildCumulative([5, 40])
+    const previousSeries = buildCumulative([2, 2])
+
+    const { container } = render(React.createElement(PaceVsLastMonthChart, {
+      currentMonthSeries: currentSeries,
+      previousMonthSeries: previousSeries,
+    }))
+
+    expect(
+      container.querySelector('.pace-chart__line--current.pace-chart__line--current-warning'),
+    ).toBeTruthy()
+  })
 })

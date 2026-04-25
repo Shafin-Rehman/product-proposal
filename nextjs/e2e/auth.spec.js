@@ -1,9 +1,12 @@
 const { test, expect } = require('@playwright/test')
 
+const TEST_EMAIL = 'tester@gmail.com'
+const TEST_PASSWORD = 'tester123'
+
 test('user can sign in and reach the dashboard', async ({ page }) => {
   await page.goto('/login')
-  await page.getByLabel('Email').fill('tester@gmail.com')
-  await page.getByLabel('Password').fill('tester123')
+  await page.getByLabel('Email').fill(TEST_EMAIL)
+  await page.getByLabel('Password').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'Log in' }).click()
 
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 })

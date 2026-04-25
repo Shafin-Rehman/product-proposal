@@ -131,7 +131,7 @@ describe('TransactionsView (sample data)', () => {
     expect(screen.getByText('Mockville Payroll')).toBeTruthy()
   })
 
-  it('narrows results when the search field is used', () => {
+  it('filters the list when searching for mockville market', () => {
     render(React.createElement(TransactionsView))
     act(() => {
       fireEvent.change(screen.getByPlaceholderText(/Search merchant/i), { target: { value: 'mockville market' } })
@@ -150,6 +150,19 @@ describe('TransactionsView (sample data)', () => {
 
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('closes the detail sheet when the backdrop control is activated', () => {
+    render(React.createElement(TransactionsView))
+    act(() => {
+      fireEvent.click(screen.getByText('Lab Coffee House'))
+    })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close transaction details' }))
     })
     expect(screen.queryByRole('dialog')).toBeNull()
   })

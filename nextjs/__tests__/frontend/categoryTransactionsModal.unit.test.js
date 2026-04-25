@@ -97,4 +97,17 @@ describe('CategoryTransactionsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Close Shopping transactions/ }))
     expect(onClose).toHaveBeenCalledTimes(2)
   })
+
+  it('invokes onClose when Escape is pressed while the dialog is open', () => {
+    const onClose = jest.fn()
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose,
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: CURRENT_DETAILS,
+    }))
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })

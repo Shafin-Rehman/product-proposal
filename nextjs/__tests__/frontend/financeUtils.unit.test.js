@@ -130,6 +130,17 @@ describe('buildDailySpendDetailsFromExpenses', () => {
   it('skips rows without a parseable date', () => {
     expect(buildDailySpendDetailsFromExpenses([{ id: 'x', amount: 5, date: null }])).toEqual([])
   })
+
+  it('assigns distinct fallback ids when the same day has multiple id-less rows with an identical fingerprint', () => {
+    const rows = [
+      { id: null, amount: '10.00', date: '2026-03-10', description: 'Snack', category_name: 'Dining' },
+      { id: null, amount: '10.00', date: '2026-03-10', description: 'Snack', category_name: 'Dining' },
+    ]
+    const details = buildDailySpendDetailsFromExpenses(rows)
+    const ids = details.map((entry) => entry.id)
+    expect(new Set(ids).size).toBe(2)
+    expect(ids.some((id) => /:2/.test(String(id)))).toBe(true)
+  })
 })
 
 describe('groupActivityByDate', () => {
