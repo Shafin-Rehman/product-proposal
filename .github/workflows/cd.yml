@@ -7,16 +7,13 @@ on:
       - completed
     branches:
       - main
-  push:
-    branches:
-      - feat/fix-cd-issue-46
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'push' && github.ref == 'refs/heads/feat/fix-cd-issue-46') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     defaults:
       run:
