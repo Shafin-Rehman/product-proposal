@@ -14,7 +14,7 @@ function buildUserFilter(userId) {
 }
 
 // Bug: async without await; caller may get a Promise when expecting a value.
-export async function loadProfile(id) {
+export function loadProfile(id) {
   return fetch("/api/profile/" + id).then((r) => r.json())
 }
 
