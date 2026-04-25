@@ -41,8 +41,16 @@ jobs:
           # Keep the important repo config here too. In GitHub Actions, .pr_agent.toml changes are
           # only effective after they exist on the branch PR-Agent reads for the target PR.
           pr_description.publish_description_as_comment: "true"
-          pr_description.add_original_user_description: "true"
+          pr_description.add_original_user_description: "false"
           pr_description.final_update_message: "false"
+          pr_description.use_bullet_points: "true"
+          pr_description.enable_pr_type: "false"
+          pr_description.enable_pr_diagram: "false"
+          pr_description.include_generated_by_header: "false"
+          pr_description.collapsible_file_list: "true"
+          pr_description.collapsible_file_list_threshold: "1"
+          pr_description.inline_file_summary: "table"
+          pr_description.extra_instructions: "Write a concise Copilot-style pull request overview. Start with the heading \"## Pull request overview\", then one short paragraph, then a \"**Changes:**\" list with at most three bullets. Keep the per-file walkthrough brief and avoid repeating the original PR body or template text."
           pr_reviewer.num_max_findings: "12"
           pr_reviewer.require_security_review: "true"
           pr_reviewer.require_tests_review: "true"
