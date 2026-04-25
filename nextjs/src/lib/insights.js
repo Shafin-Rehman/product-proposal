@@ -587,6 +587,8 @@ export async function buildInsightsSnapshot(userId, month) {
     dailyExpenseTotals,
     dailyExpenseEntries,
     topExpenses,
+    previousDailyExpenseTotals,
+    previousDailyExpenseEntries,
   ] = await Promise.all([
     buildBudgetSummary(userId, month),
     previousMonth ? buildBudgetSummary(userId, previousMonth) : Promise.resolve(null),
@@ -597,6 +599,8 @@ export async function buildInsightsSnapshot(userId, month) {
     getDailyExpenseTotals(userId, month),
     getDailyExpenseEntries(userId, month),
     getTopExpenses(userId, month),
+    previousMonth ? getDailyExpenseTotals(userId, previousMonth) : Promise.resolve([]),
+    previousMonth ? getDailyExpenseEntries(userId, previousMonth) : Promise.resolve([]),
   ])
 
   const cashFlow = buildCashFlowSeries(monthWindow, monthlyExpenseTotals, monthlyIncomeTotals)
@@ -604,6 +608,12 @@ export async function buildInsightsSnapshot(userId, month) {
     ...buildDailySpendSeries(dailyExpenseTotals, month),
     details: buildDailySpendDetails(dailyExpenseEntries),
   }
+  const previousDailySpend = previousMonth
+    ? {
+      ...buildDailySpendSeries(previousDailyExpenseTotals, previousMonth),
+      details: buildDailySpendDetails(previousDailyExpenseEntries),
+    }
+    : { series: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, peakDay: null, activeDays: 0, details: [] }
   const categoryMovers = buildCategoryMovers(summary?.category_statuses, previousSummary?.category_statuses)
   const budgetHealth = buildBudgetHealth(summary)
 
@@ -620,6 +630,7 @@ export async function buildInsightsSnapshot(userId, month) {
     categoryMovers,
     budgetHealth,
     dailySpend,
+    previousDailySpend,
     topExpenses,
   }
 }

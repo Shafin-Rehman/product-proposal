@@ -13,6 +13,7 @@ import {
   formatShortDate,
   groupActivityByDate,
 } from '@/lib/financeUtils'
+import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ENTRY_CATEGORY_OPTIONS = {
   expense: ['Groceries', 'Dining', 'Shopping', 'Housing', 'Travel', 'Fun', 'Bills', 'Health'],
@@ -377,7 +378,6 @@ export default function TransactionsView() {
   })
   const groupedFeed = groupActivityByDate(filteredFeed)
   const isLoading = !isSampleMode && liveState.status === 'loading' && !feed.length
-  const selectedVisual = selectedEntry ? getEntryVisual(selectedEntry) : null
   const entryPreview = getCategoryVisual(
     [entryDraft.category, entryDraft.counterparty].filter(Boolean).join(' '),
     entryDraft.kind
@@ -389,16 +389,6 @@ export default function TransactionsView() {
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
-  const selectedNote = selectedEntry && selectedEntry.note && selectedEntry.note !== selectedEntry.chip
-    ? selectedEntry.note
-    : selectedEntry?.kind === 'income'
-      ? 'No note added'
-      : 'Live expense'
-  const selectedSubtitle = selectedEntry
-    ? selectedEntry.merchant && selectedEntry.merchant !== selectedEntry.title
-      ? selectedEntry.merchant
-      : selectedEntry.note || selectedEntry.chip
-    : ''
   const hideFab = Boolean(selectedEntry) || isEntrySheetOpen
 
   const updateDraft = (field, value) => {
@@ -625,109 +615,54 @@ export default function TransactionsView() {
       </div>
 
       {selectedEntry ? (
-        <div className="detail-overlay" role="presentation">
-          <button
-            aria-label="Close transaction details"
-            className="detail-overlay__backdrop"
-            onClick={() => setSelectedEntry(null)}
-            type="button"
-          />
-          <div aria-labelledby="transaction-detail-title" aria-modal="true" className="detail-sheet" role="dialog">
-            <div className="detail-sheet__handle" />
-            <div
-              className="detail-sheet__hero"
-              style={{
-                '--entry-color': selectedVisual.color,
-                '--entry-soft': selectedVisual.soft,
-              }}
-            >
-              <div className="entry-avatar entry-avatar--large">
-                <span>{selectedVisual.symbol}</span>
-              </div>
-              <div className="detail-sheet__copy">
-                <span className="entry-chip">{selectedEntry.kind === 'income' ? 'Income' : 'Expense'}</span>
-                <h2 className="detail-sheet__title" id="transaction-detail-title">{selectedEntry.title}</h2>
-                <p className="detail-sheet__subtitle">{selectedSubtitle}</p>
-              </div>
-              <button className="button-secondary page-retry" onClick={() => setSelectedEntry(null)} type="button">
-                Close
-              </button>
-            </div>
-
-            <div className="detail-sheet__amount">
-              <span className={`entry-amount entry-amount--${selectedEntry.kind}`}>
-                {selectedEntry.kind === 'income' ? '+' : '-'}
-                {formatCurrency(selectedEntry.amount)}
-              </span>
-            </div>
-
-            <div className="detail-grid">
-              <div>
-                <span>Category</span>
-                <strong>{selectedEntry.chip}</strong>
-              </div>
-              <div>
-                <span>Date</span>
-                <strong>{formatLongDate(selectedEntry.occurredOn)}</strong>
-              </div>
-              <div>
-                <span>Type</span>
-                <strong>{selectedEntry.kind === 'income' ? 'Income' : 'Expense'}</strong>
-              </div>
-              <div>
-                <span>Note</span>
-                <strong>{selectedNote}</strong>
-              </div>
-            </div>
-
-            {!isSampleMode && selectedEntry.raw && (
-              <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
-                {deleteConfirm ? (
-                  <>
-                    <div className="inline-error" role="alert">
-                      <span>Delete this transaction? This cannot be undone.</span>
-                    </div>
-                    <div className="entry-sheet__actions">
-                      <button
-                        className="button-secondary"
-                        disabled={isDeleting}
-                        onClick={() => setDeleteConfirm(false)}
-                        type="button"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="button-danger"
-                        disabled={isDeleting}
-                        onClick={handleDeleteEntry}
-                        type="button"
-                      >
-                        {isDeleting ? 'Deleting...' : 'Confirm delete'}
-                      </button>
-                    </div>
-                  </>
-                ) : (
+        <TransactionDetailSheet entry={selectedEntry} onClose={() => setSelectedEntry(null)}>
+          {!isSampleMode && selectedEntry.raw && (
+            <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
+              {deleteConfirm ? (
+                <>
+                  <div className="inline-error" role="alert">
+                    <span>Delete this transaction? This cannot be undone.</span>
+                  </div>
                   <div className="entry-sheet__actions">
                     <button
                       className="button-secondary"
-                      onClick={() => openEntrySheet(selectedEntry)}
+                      disabled={isDeleting}
+                      onClick={() => setDeleteConfirm(false)}
                       type="button"
                     >
-                      Edit
+                      Cancel
                     </button>
                     <button
                       className="button-danger"
-                      onClick={() => setDeleteConfirm(true)}
+                      disabled={isDeleting}
+                      onClick={handleDeleteEntry}
                       type="button"
                     >
-                      Delete
+                      {isDeleting ? 'Deleting...' : 'Confirm delete'}
                     </button>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+                </>
+              ) : (
+                <div className="entry-sheet__actions">
+                  <button
+                    className="button-secondary"
+                    onClick={() => openEntrySheet(selectedEntry)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="button-danger"
+                    onClick={() => setDeleteConfirm(true)}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </TransactionDetailSheet>
       ) : null}
 
       {isEntrySheetOpen ? (

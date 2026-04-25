@@ -1,6 +1,7 @@
 import { formatCurrency, getCurrentMonthStart } from './financeUtils'
 
 export const BUDGET_NEAR_LIMIT_RATIO = 0.8
+export const BUDGET_WATCH_RATIO = 0.6
 
 function getSafeMoneyNumber(value) {
   if (value == null || value === '') return null
@@ -371,6 +372,19 @@ export function buildCategoryBudgetHealth({
     }
   }
 
+  if (spentAmount >= limit * BUDGET_WATCH_RATIO) {
+    return {
+      key: 'watch',
+      label: 'Watch',
+      tone: 'caution',
+      progressPercentage,
+      remainingAmount,
+      remainingText: formatMoneyDelta(remainingAmount),
+      detailText,
+      ariaValueText: `${Math.round(progressPercentage)} percent used, ${formatMoneyDelta(remainingAmount)}.`,
+    }
+  }
+
   return {
     key: 'on_track',
     label: 'On track',
@@ -393,6 +407,8 @@ export function buildBudgetPressureHighlight({
       .map((item) => ({
         name: item?.category_name || 'Uncategorized',
         progress: getSafeMoneyNumber(item?.progress_percentage) ?? 0,
+        monthlyLimit: getSafeMoneyNumber(item?.monthly_limit),
+        spent: getSafeMoneyNumber(item?.spent),
         health: buildCategoryBudgetHealth({
           monthlyLimit: item?.monthly_limit,
           spent: item?.spent,
@@ -412,6 +428,10 @@ export function buildBudgetPressureHighlight({
       tone: 'danger',
       title: overspentStatus.name,
       detail: `${formatCurrency(Math.abs(overspentStatus.health.remainingAmount))} over budget right now.`,
+      progressPercentage: Math.min(Number(overspentStatus.health.progressPercentage ?? overspentStatus.progress ?? 100), 100),
+      monthlyLimit: overspentStatus.monthlyLimit,
+      remainingAmount: overspentStatus.health.remainingAmount,
+      spent: overspentStatus.spent,
     }
   }
 
@@ -428,6 +448,10 @@ export function buildBudgetPressureHighlight({
       tone: highestPressure.health.tone,
       title: highestPressure.name,
       detail: `${Math.round(highestPressure.progress)}% used with ${highestPressure.health.remainingText}.`,
+      progressPercentage: Math.min(Number(highestPressure.progress ?? 0), 100),
+      monthlyLimit: highestPressure.monthlyLimit,
+      remainingAmount: highestPressure.health.remainingAmount,
+      spent: highestPressure.spent,
     }
   }
 
@@ -438,6 +462,10 @@ export function buildBudgetPressureHighlight({
       tone: 'neutral',
       title: fallbackSpendCards[0].name,
       detail: `${fallbackSpendCards[0].note} this month.`,
+      progressPercentage: Math.min(Number(fallbackSpendCards[0].progress ?? 0), 100),
+      monthlyLimit: null,
+      remainingAmount: null,
+      spent: fallbackSpendCards[0].amount ?? null,
     }
   }
 
@@ -447,5 +475,9 @@ export function buildBudgetPressureHighlight({
     tone: 'neutral',
     title: 'Waiting on categories',
     detail: 'Current-month category pressure will show once expenses land.',
+    progressPercentage: 0,
+    monthlyLimit: null,
+    remainingAmount: null,
+    spent: null,
   }
 }

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode } from '@/components/providers'
 import { ApiError, apiGet } from '@/lib/apiClient'
@@ -15,6 +16,11 @@ import {
   getCurrentMonthStart,
   shiftMonth,
 } from '@/lib/financeUtils'
+import AllocationBar from '@/components/ui/AllocationBar'
+import CategoryProgressRow from '@/components/ui/CategoryProgressRow'
+import CategoryTransactionsModal from '@/components/ui/CategoryTransactionsModal'
+import PaceVsLastMonthChart from '@/components/ui/PaceVsLastMonthChart'
+import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const DONUT_VIEWBOX = 520
 const DONUT_CENTER = DONUT_VIEWBOX / 2
@@ -25,7 +31,7 @@ const DONUT_MARKER_RADIUS = DONUT_OUTER_RADIUS + 42
 
 const CASHFLOW_WIDTH = 560
 const CASHFLOW_HEIGHT = 344
-const CASHFLOW_INSET_X = 28
+const CASHFLOW_INSET_X = 32
 const CASHFLOW_INSET_TOP = 24
 const CASHFLOW_INSET_BOTTOM = 52
 const CASHFLOW_BASELINE_RATIO = 0.53
@@ -91,6 +97,13 @@ function getMetricAccent(metricId) {
   if (metricId === 'net') return '\u223F'
   if (metricId === 'budget-left') return '\u25CE'
   return '\u2022'
+}
+
+function pickTopExpensesFromDetails(details = [], limit = 10) {
+  if (!Array.isArray(details) || !details.length) return []
+  return [...details]
+    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
+    .slice(0, limit)
 }
 
 function getBudgetUsageHeadline(budgetHealth) {
@@ -244,53 +257,6 @@ function buildSmoothPath(points = []) {
   }, '')
 }
 
-const SPARKLINE_WIDTH = 320
-const SPARKLINE_HEIGHT = 60
-const SPARKLINE_PAD_X = 2
-const SPARKLINE_PAD_Y = 4
-
-function buildSparklineGeometry(series = [], highlightLastDays = 7) {
-  const points = []
-  if (!series.length) {
-    return { points, linePath: '', areaPath: '', highlightLinePath: '', highlightAreaPath: '', dividerX: null, baselineY: SPARKLINE_HEIGHT - SPARKLINE_PAD_Y }
-  }
-
-  const innerW = SPARKLINE_WIDTH - (SPARKLINE_PAD_X * 2)
-  const innerH = SPARKLINE_HEIGHT - (SPARKLINE_PAD_Y * 2)
-  const max = Math.max(...series.map((item) => Number(item.amount ?? 0)), 1)
-  const count = series.length
-
-  series.forEach((item, index) => {
-    const amount = Number(item.amount ?? 0)
-    const x = count === 1 ? SPARKLINE_PAD_X + (innerW / 2) : SPARKLINE_PAD_X + ((index / (count - 1)) * innerW)
-    const y = SPARKLINE_PAD_Y + innerH - ((amount / max) * innerH)
-    points.push({ x, y })
-  })
-
-  const baselineY = SPARKLINE_HEIGHT - SPARKLINE_PAD_Y
-  const linePath = buildSmoothPath(points)
-  const areaPath = points.length >= 2
-    ? `${linePath} L ${points.at(-1).x.toFixed(2)} ${baselineY.toFixed(2)} L ${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`
-    : ''
-
-  const highlightStartIndex = Math.max(count - highlightLastDays, 0)
-  const highlightPoints = points.slice(highlightStartIndex)
-  const highlightLinePath = buildSmoothPath(highlightPoints)
-  const highlightAreaPath = highlightPoints.length >= 2
-    ? `${highlightLinePath} L ${highlightPoints.at(-1).x.toFixed(2)} ${baselineY.toFixed(2)} L ${highlightPoints[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`
-    : ''
-
-  return {
-    points,
-    linePath,
-    areaPath,
-    highlightLinePath,
-    highlightAreaPath,
-    dividerX: highlightPoints.length > 0 && highlightStartIndex > 0 ? highlightPoints[0].x : null,
-    baselineY,
-  }
-}
-
 function buildCashFlowGeometry(series = []) {
   const plotBottom = CASHFLOW_HEIGHT - CASHFLOW_INSET_BOTTOM
   const chartHeight = plotBottom - CASHFLOW_INSET_TOP
@@ -339,6 +305,7 @@ function buildCashFlowGeometry(series = []) {
     baselineY,
     guides,
     groups,
+    maxBarValue,
     linePath: buildSmoothPath(groups.map((item) => ({ x: item.centerX, y: item.netY }))),
   }
 }
@@ -395,39 +362,29 @@ function buildDailyDetailMap(entries = []) {
   }, {})
 }
 
-function getTopExpenseBudgetMeter(item, expenseBreakdown = [], monthlyTotal = 0, topExpenseMax = 1) {
-  const matchedCategory = expenseBreakdown.find((category) => (
-    category.id === item.categoryId
-    || category.name === item.categoryName
-    || String(category.name || '').toLowerCase() === String(item.categoryName || '').toLowerCase()
-  ))
-  const amount = Number(item.amount ?? 0)
-  const budgetAmount = Number(matchedCategory?.monthlyLimit ?? 0)
-
-  if (matchedCategory?.hasBudget && budgetAmount > 0) {
-    const value = (amount / budgetAmount) * 100
+function buildCumulativeSeries(series = []) {
+  let running = 0
+  return series.map((item) => {
+    running += Number(item?.amount ?? 0)
     return {
-      label: 'Of category budget',
-      value,
-      width: clamp(value, amount > 0 ? 5 : 0, 100),
+      day: Number(item?.day ?? 0),
+      amount: Number(running.toFixed(2)),
     }
-  }
+  })
+}
 
-  if (monthlyTotal > 0) {
-    const value = (amount / monthlyTotal) * 100
-    return {
-      label: 'Of monthly spend',
-      value,
-      width: clamp(value, amount > 0 ? 5 : 0, 100),
-    }
-  }
+function getMonthLength(month) {
+  if (!month) return 31
+  const date = new Date(`${month}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return 31
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()
+}
 
-  const value = (amount / topExpenseMax) * 100
-  return {
-    label: 'Vs largest purchase',
-    value,
-    width: clamp(value, amount > 0 ? 12 : 0, 100),
-  }
+function getMonthShortLabel(month) {
+  if (!month) return 'Month'
+  const date = new Date(`${month}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return 'Month'
+  return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
 }
 
 function getDefaultSelectedDay(dailySpend) {
@@ -464,11 +421,18 @@ export default function InsightsView() {
   const [rhythmTooltip, setRhythmTooltip] = useState(null)
   const [isMonthViewOpen, setIsMonthViewOpen] = useState(false)
   const [selectedDayKey, setSelectedDayKey] = useState(null)
+  const [drillDown, setDrillDown] = useState(null)
+  const [topExpenseDetail, setTopExpenseDetail] = useState(null)
   const [liveState, setLiveState] = useState({ status: 'loading', message: '', snapshot: null })
 
   const activeMonth = isSampleMode ? DEMO_MONTH : selectedMonth
   const snapshot = isSampleMode ? demoInsightsSnapshot : liveState.snapshot
   const cashFlowSeries = snapshot?.cashFlowSeries ?? []
+  const rhythmTopExpenses = useMemo(() => {
+    const fromDetails = pickTopExpensesFromDetails(snapshot?.dailySpend?.details, 10)
+    if (fromDetails.length) return fromDetails
+    return (snapshot?.topExpenses ?? []).slice(0, 10)
+  }, [snapshot?.dailySpend?.details, snapshot?.topExpenses])
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -538,6 +502,15 @@ export default function InsightsView() {
     }
   }, [isMonthViewOpen])
 
+  useEffect(() => {
+    if (!topExpenseDetail) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setTopExpenseDetail(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [topExpenseDetail])
+
   function openMonthView(event) {
     event?.preventDefault?.()
     event?.stopPropagation?.()
@@ -548,14 +521,12 @@ export default function InsightsView() {
   if (!isReady || !session?.accessToken) return null
 
   const activeItems = getActiveBreakdownItems(snapshot, viewMode)
-  const expenseItems = getActiveBreakdownItems(snapshot, 'expenses')
   const donutSegments = buildDonutSegments(activeItems)
   const comparisonMetrics = snapshot?.comparisonMetrics ?? []
-  const cashFlowSummary = snapshot?.cashFlowSummary ?? { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 }
   const budgetHealth = snapshot?.budgetHealth ?? { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] }
   const categoryMovers = snapshot?.categoryMovers ?? []
   const dailySpend = snapshot?.dailySpend ?? { series: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, peakDay: null, activeDays: 0 }
-  const topExpenses = snapshot?.topExpenses ?? []
+  const previousDailySpend = snapshot?.previousDailySpend ?? { series: [], totalAmount: 0 }
   const currentLiveMonth = getCurrentMonthStart()
   const earliestMonth = isSampleMode ? DEMO_MONTH : snapshot?.earliestMonth
   const previousMonth = shiftMonth(activeMonth, -1)
@@ -566,7 +537,6 @@ export default function InsightsView() {
   const cashFlowGeometry = buildCashFlowGeometry(cashFlowSeries)
   const activeCashGroup = activeCashMonth ? cashFlowGeometry.groups.find((item) => item.month === activeCashMonth) ?? null : null
   const focusCashGroup = activeCashGroup ?? cashFlowGeometry.groups.at(-1) ?? null
-  const topExpenseMax = Math.max(...topExpenses.map((item) => Number(item.amount ?? 0)), 1)
   const dailyPeak = dailySpend.peakDay
   const calendarGrid = buildCalendarGrid(dailySpend.series, activeMonth)
   const rhythmBars = buildRhythmBars(dailySpend.series)
@@ -575,7 +545,6 @@ export default function InsightsView() {
   const selectedDayLabel = selectedDayKey ? formatLongDate(selectedDayKey) : activeMonthLabel
   const activeRhythmEntry = activeRhythmDay ? dailySpend.series.find((item) => item.key === activeRhythmDay) ?? null : null
   const centerLabelLines = viewMode === 'expenses' ? ['Spent', 'this month'] : ['Income', 'this month']
-  const budgetProgressWidth = budgetHealth.budgetAmount == null ? 0 : Math.max(Math.min(budgetHealth.progressValue ?? 0, 100), 4)
   const trailingCategoryId = activeItems.length > 2 && activeItems.length % 2 === 1 ? activeItems.at(-1)?.id : null
   const moverScaleMax = Math.max(
     ...categoryMovers.flatMap((entry) => [Number(entry.amount ?? 0), Number(entry.previousAmount ?? 0)]),
@@ -598,16 +567,14 @@ export default function InsightsView() {
   const cashFlowHealthCopy = focusCashGroup
     ? `${focusCashGroup.label} kept ${formatPercentage(focusSavingsRate ?? 0)} of income after expenses.`
     : 'Cash-flow highlights appear after a few months of activity.'
-  const topExpenseTotal = topExpenses.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
-  const topExpenseShare = dailySpend.totalAmount > 0 ? (topExpenseTotal / dailySpend.totalAmount) * 100 : 0
-  const lastSevenSpend = dailySpend.series.slice(-7).reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
-  const lastSevenShare = dailySpend.totalAmount > 0 ? (lastSevenSpend / dailySpend.totalAmount) * 100 : 0
-  const rhythmPatternTitle = lastSevenShare >= 45 ? 'Late-month concentration' : 'Balanced month shape'
-  const rhythmPatternTone = lastSevenShare >= 45 ? 'warning' : 'positive'
-  const rhythmPatternCopy = dailySpend.totalAmount > 0
-    ? `Last 7 days ${formatPercentage(lastSevenShare)}. Top ${topExpenses.length} ${formatPercentage(topExpenseShare)}.`
-    : 'Daily and top-expense patterns appear once spending starts.'
-  const sparklineGeometry = buildSparklineGeometry(dailySpend.series, 7)
+
+  const paceCurrentSeries = buildCumulativeSeries(dailySpend.series)
+  const pacePreviousSeries = buildCumulativeSeries(previousDailySpend.series || [])
+  const previousMonthShortLabel = getMonthShortLabel(snapshot?.previousMonth || previousMonth)
+  const currentMonthShortLabel = getMonthShortLabel(activeMonth)
+  const isViewingCurrentMonth = activeMonth === currentLiveMonth
+  const todayDay = isViewingCurrentMonth ? new Date().getDate() : null
+
   const monthModal = isMonthViewOpen && portalRoot
     ? createPortal(
       <div className="insights-screen--issue57 insights-v57__month-modal-portal">
@@ -747,6 +714,24 @@ export default function InsightsView() {
       <LiveNotice message={liveState.message} onRetry={() => setReloadToken((value) => value + 1)} />
 
       <div className="insights-v57">
+        <div className="insights-v57__metric-strip">
+          {comparisonMetrics.map((metric) => (
+            <article className={`insights-v57__metric-card insights-v57__metric-card--${metric.deltaTone} insights-v57__metric-card--${metric.id}`} key={metric.id}>
+              <div className="insights-v57__metric-head">
+                <div className="insights-v57__metric-label">
+                  <span className={`insights-v57__metric-accent insights-v57__metric-accent--${metric.id}`}>{getMetricAccent(metric.id)}</span>
+                  <span>{metric.label}</span>
+                </div>
+                <div className="insights-v57__metric-trend">
+                  <span className={`insights-v57__metric-delta insights-v57__metric-delta--${metric.deltaTone}`}>{getMetricDeltaValue(metric)}</span>
+                  {getMetricDeltaContext(metric) ? <small>{getMetricDeltaContext(metric)}</small> : null}
+                </div>
+              </div>
+              <strong className="insights-v57__metric-value">{getMetricValue(metric)}</strong>
+            </article>
+          ))}
+        </div>
+
         <div className="insights-v57__top-grid">
           <article className="insights-v57__card insights-v57__hero">
             <div className="insights-v57__card-header insights-v57__card-header--hero">
@@ -760,7 +745,7 @@ export default function InsightsView() {
             </div>
 
             {activeItems.length ? (
-              <div className="insights-v57__hero-body">
+              <div className="insights-v57__hero-body insights-v57__hero-body--donut-only">
                 <div className="insights-v57__donut-shell">
                   <div className="insights-v57__donut" key={`${viewMode}-${activeMonth}`}>
                     <svg aria-hidden="true" className="insights-v57__donut-svg" viewBox={`0 0 ${DONUT_VIEWBOX} ${DONUT_VIEWBOX}`}>
@@ -811,34 +796,6 @@ export default function InsightsView() {
                     ))}
                   </div>
                 </div>
-
-                <div className="insights-v57__category-grid">
-                  {activeItems.map((item) => (
-                    <article className={`insights-v57__category-card insights-v57__category-card--${item.tone}${trailingCategoryId === item.id ? ' insights-v57__category-card--tail' : ''}`} key={item.id}>
-                      <div className="insights-v57__category-top">
-                        <div className="insights-v57__category-leading">
-                          <div className="insights-v57__category-icon" style={{ backgroundColor: item.soft, color: item.color }}>{item.symbol}</div>
-                          <div className="insights-v57__category-copy">
-                            <strong>{item.name}</strong>
-                            <span>{formatPercentage(item.share)}</span>
-                          </div>
-                        </div>
-                        <strong className="insights-v57__category-amount">{formatCurrency(item.amount)}</strong>
-                      </div>
-
-                      <div className="insights-v57__category-meta">
-                        <span className={`insights-v57__status-chip insights-v57__status-chip--${item.tone}`}>{item.statusLabel}</span>
-                        <small>{item.progressLabel}</small>
-                      </div>
-
-                      <div aria-label={`${item.name} progress`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={Math.round(item.progressValue ?? 0)} aria-valuetext={item.progressLabel} className="insights-v57__category-progress" role="progressbar">
-                        <span className={`insights-v57__category-progress-fill insights-v57__category-progress-fill--${item.tone}`} style={{ width: `${Math.max(item.progressValue ?? 0, 4)}%` }} />
-                      </div>
-
-                      <p className="insights-v57__category-support">{item.supportingText}</p>
-                    </article>
-                  ))}
-                </div>
               </div>
             ) : (
               <div className="blank-state blank-state--hero">
@@ -851,7 +808,9 @@ export default function InsightsView() {
           <article className="insights-v57__card insights-v57__cashflow">
             <div className="insights-v57__card-header insights-v57__card-header--tight">
               <h2 className="insights-v57__title">Cash flow</h2>
-              <span className="insights-v57__range-chip">{snapshot?.cashFlowRangeLabel ?? 'Last 6 months'}</span>
+              <div className="insights-v57__cashflow-header-meta">
+                <span className="insights-v57__range-chip">{snapshot?.cashFlowRangeLabel ?? 'Last 6 months'}</span>
+              </div>
             </div>
 
             {cashFlowSeries.length ? (
@@ -957,13 +916,6 @@ export default function InsightsView() {
                     </div>
                   ) : null}
                 </div>
-
-                <div className="insights-v57__cashflow-summary">
-                  <div className="insights-v57__cashflow-summary-item"><span>Total income</span><strong>{formatCurrency(cashFlowSummary.totalIncome)}</strong></div>
-                  <div className="insights-v57__cashflow-summary-item"><span>Total expenses</span><strong>{formatCurrency(cashFlowSummary.totalExpenses)}</strong></div>
-                  <div className="insights-v57__cashflow-summary-item"><span>Net cash flow</span><strong>{formatCurrency(cashFlowSummary.totalNet)}</strong></div>
-                  <div className="insights-v57__cashflow-summary-item"><span>Cash flow / mo</span><strong>{formatCurrency(cashFlowSummary.averageNet)}</strong></div>
-                </div>
               </>
             ) : (
               <div className="blank-state blank-state--compact">
@@ -974,23 +926,35 @@ export default function InsightsView() {
           </article>
         </div>
 
-        <div className="insights-v57__metric-strip">
-          {comparisonMetrics.map((metric) => (
-            <article className={`insights-v57__metric-card insights-v57__metric-card--${metric.deltaTone} insights-v57__metric-card--${metric.id}`} key={metric.id}>
-              <div className="insights-v57__metric-head">
-                <div className="insights-v57__metric-label">
-                  <span className={`insights-v57__metric-accent insights-v57__metric-accent--${metric.id}`}>{getMetricAccent(metric.id)}</span>
-                  <span>{metric.label}</span>
-                </div>
-                <div className="insights-v57__metric-trend">
-                  <span className={`insights-v57__metric-delta insights-v57__metric-delta--${metric.deltaTone}`}>{getMetricDeltaValue(metric)}</span>
-                  {getMetricDeltaContext(metric) ? <small>{getMetricDeltaContext(metric)}</small> : null}
-                </div>
-              </div>
-              <strong className="insights-v57__metric-value">{getMetricValue(metric)}</strong>
-            </article>
-          ))}
-        </div>
+        {activeItems.length ? (
+          <section className="section-block insights-v57__detail-section" aria-label="Category detail">
+            <div className="section-headline">
+              <h2>Category detail</h2>
+              <span className="section-link">{formatCurrency(activeTotal)} {viewMode === 'expenses' ? 'spent' : 'earned'}</span>
+            </div>
+            <div className="category-progress-list category-progress-list--insights">
+              {activeItems.map((item) => (
+                <CategoryProgressRow
+                  amount={item.amount}
+                  color={item.color}
+                  fallbackShareText={!item.hasBudget ? item.progressLabel : null}
+                  key={item.id}
+                  monthlyLimit={item.hasBudget ? item.monthlyLimit : null}
+                  name={item.name}
+                  onSelect={viewMode === 'expenses' ? () => setDrillDown({ category: item, mode: 'single' }) : null}
+                  progressPercentage={item.progressValue ?? item.share ?? 0}
+                  remainingAmount={item.remainingBudget ?? null}
+                  selectLabel={`View ${item.name} transactions for ${activeMonthLabel}`}
+                  showStatusChip="always"
+                  soft={item.soft}
+                  statusLabel={item.statusLabel}
+                  symbol={item.symbol}
+                  tone={item.tone || 'neutral'}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <div className="insights-v57__bottom-grid">
           <article className="insights-v57__card insights-v57__budget-card">
@@ -1002,9 +966,17 @@ export default function InsightsView() {
                 <strong>{getBudgetUsageHeadline(budgetHealth)}</strong>
               </div>
 
-              <div className="insights-v57__budget-progress" role="presentation">
-                <span className={`insights-v57__budget-progress-fill insights-v57__budget-progress-fill--${budgetHealth.tone}`} style={{ width: `${budgetProgressWidth}%` }} />
-              </div>
+              <AllocationBar
+                activeDay={isViewingCurrentMonth ? todayDay : null}
+                ariaLabel="Budget health progress"
+                ariaValueText={`${Math.round(budgetHealth.progressValue ?? 0)}% used`}
+                isOverBudget={(budgetHealth.remainingAmount ?? 0) < 0}
+                monthLength={getMonthLength(activeMonth)}
+                monthMarkerLabel={isViewingCurrentMonth ? `Today · Day ${todayDay}` : null}
+                progressPercentage={budgetHealth.progressValue ?? 0}
+                showMarker={Boolean(budgetHealth.budgetAmount) && isViewingCurrentMonth}
+                tone={budgetHealth.tone}
+              />
 
               <div className="insights-v57__budget-overview-scale">
                 <span>Spent <strong>{formatCurrency(budgetHealth.spentAmount ?? 0)}</strong></span>
@@ -1017,28 +989,24 @@ export default function InsightsView() {
               <section className="insights-v57__budget-panel">
                 <div className="insights-v57__panel-head"><h3>Pressure</h3></div>
                 {budgetHealth.pressureCategories.length ? (
-                  <div className="insights-v57__pressure-list">
+                  <div className="category-progress-list category-progress-list--insights category-progress-list--compact">
                     {budgetHealth.pressureCategories.map((item) => (
-                      <div className={`insights-v57__pressure-row insights-v57__pressure-row--${item.tone}`} key={`pressure-${item.id}`}>
-                        <div className="insights-v57__pressure-head">
-                          <div className="insights-v57__pressure-main">
-                            <div className="insights-v57__pressure-icon" style={{ backgroundColor: item.soft, color: item.color }}>{item.symbol}</div>
-                            <div><strong>{item.name}</strong></div>
-                          </div>
-                          <div className="insights-v57__pressure-side">
-                            <strong>{item.progressLabel}</strong>
-                            <span className={`insights-v57__status-chip insights-v57__status-chip--${item.tone}`}>{item.statusLabel}</span>
-                          </div>
-                        </div>
-                        <div className="insights-v57__pressure-progress">
-                          <span className={`insights-v57__pressure-progress-fill insights-v57__pressure-progress-fill--${item.tone}`} style={{ width: `${Math.max(item.progressValue ?? 0, 4)}%` }} />
-                        </div>
-                        <div className="insights-v57__pressure-meta">
-                          <small><span>Budget</span><strong>{item.monthlyLimit == null ? 'None' : formatCurrency(item.monthlyLimit)}</strong></small>
-                          <small><span>Spent</span><strong>{formatCurrency(item.amount)}</strong></small>
-                          <small><span>{(item.remainingBudget ?? 0) < 0 ? 'Over' : 'Left'}</span><strong>{item.remainingBudget == null ? 'None' : formatCurrency(Math.abs(item.remainingBudget))}</strong></small>
-                        </div>
-                      </div>
+                      <CategoryProgressRow
+                        amount={item.amount}
+                        color={item.color}
+                        key={`pressure-${item.id}`}
+                        monthlyLimit={item.monthlyLimit}
+                        name={item.name}
+                        onSelect={() => setDrillDown({ category: item, mode: 'single' })}
+                        progressPercentage={item.progressValue ?? 0}
+                        remainingAmount={item.remainingBudget}
+                        selectLabel={`View ${item.name} pressure transactions for ${activeMonthLabel}`}
+                        showStatusChip="never"
+                        soft={item.soft}
+                        statusLabel={item.statusLabel}
+                        symbol={item.symbol}
+                        tone={item.tone || 'neutral'}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -1054,7 +1022,13 @@ export default function InsightsView() {
                 {categoryMovers.length ? (
                   <div className="insights-v57__mover-list">
                     {categoryMovers.map((item) => (
-                      <div className="insights-v57__mover-row" key={item.id}>
+                      <button
+                        aria-label={`Compare ${item.name} between ${currentMonthShortLabel} and ${previousMonthShortLabel}`}
+                        className={`insights-v57__mover-row insights-v57__mover-row--${item.tone || 'neutral'} insights-v57__mover-row--interactive`}
+                        key={item.id}
+                        onClick={() => setDrillDown({ category: item, mode: 'compare' })}
+                        type="button"
+                      >
                         <div className="insights-v57__mover-head">
                           <div className="insights-v57__mover-main">
                             <div className="insights-v57__mover-icon" style={{ backgroundColor: item.soft, color: item.color }}>{item.symbol}</div>
@@ -1081,7 +1055,7 @@ export default function InsightsView() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -1141,7 +1115,11 @@ export default function InsightsView() {
                 <div className="insights-v57__rhythm-summary">
                   <div className="insights-v57__rhythm-ribbon-item"><span>Active days</span><strong>{dailySpend.activeDays}</strong></div>
                   <div className="insights-v57__rhythm-ribbon-item"><span>Spend / active day</span><strong>{formatCurrency(dailySpend.activeDayAverage ?? dailySpend.averageAmount)}</strong></div>
-                  <div className="insights-v57__rhythm-ribbon-item"><span>Peak day</span><strong>{dailyPeak ? formatShortDate(dailyPeak.key) : 'None yet'}</strong></div>
+                  <div className="insights-v57__rhythm-ribbon-item insights-v57__rhythm-ribbon-item--peak">
+                    <span>Peak day</span>
+                    <strong>{dailyPeak ? formatShortDate(dailyPeak.key) : 'None yet'}</strong>
+                    {dailyPeak ? <small>{formatCurrency(dailyPeak.amount)}</small> : null}
+                  </div>
                 </div>
               </>
             ) : (
@@ -1151,75 +1129,80 @@ export default function InsightsView() {
               </div>
             )}
 
-            <div className="insights-v57__panel-head insights-v57__panel-head--expenses"><h3>Top expenses</h3></div>
-            {topExpenses.length ? (
-              <div className="insights-v57__top-expense-list">
-                {topExpenses.map((item, index) => {
-                  const meter = getTopExpenseBudgetMeter(item, expenseItems, dailySpend.totalAmount, topExpenseMax)
-                  return (
-                  <div className="insights-v57__top-expense-row" key={item.id}>
-                    <div className="insights-v57__top-expense-head">
-                      <span className="insights-v57__top-expense-rank">{String(index + 1).padStart(2, '0')}</span>
-                      <div className="insights-v57__top-expense-main">
-                        <div className="insights-v57__top-expense-icon" style={{ backgroundColor: item.soft, color: item.color }}>{item.symbol}</div>
-                        <div><strong>{item.title}</strong><span>{item.categoryName} | {formatShortDate(item.occurredOn)}</span></div>
+            {rhythmTopExpenses.length ? (
+              <section className="insights-v57__rhythm-top-expenses" aria-label="Top expenses">
+                <div className="insights-v57__rhythm-top-expenses-head">
+                  <h3 className="insights-v57__rhythm-top-expenses-title">Top expenses</h3>
+                  <Link className="insights-v57__top-expenses-more" href="/transactions">
+                    View more
+                  </Link>
+                </div>
+                <div className="insights-v57__top-expense-list insights-v57__top-expense-list--nested">
+                  {rhythmTopExpenses.map((item, index) => (
+                    <button
+                      className="insights-v57__top-expense-row insights-v57__top-expense-row--interactive"
+                      key={item.id}
+                      onClick={() => setTopExpenseDetail({
+                        id: item.id,
+                        kind: 'expense',
+                        title: item.title,
+                        chip: item.categoryName,
+                        amount: item.amount,
+                        occurredOn: item.occurredOn || item.key,
+                        note: item.categoryName,
+                        merchant: item.title,
+                      })}
+                      type="button"
+                    >
+                      <div className="insights-v57__top-expense-head">
+                        <span className="insights-v57__top-expense-rank">{String(index + 1).padStart(2, '0')}</span>
+                        <div className="insights-v57__top-expense-main">
+                          <div className="insights-v57__top-expense-icon" style={{ backgroundColor: item.soft, color: item.color }}>{item.symbol}</div>
+                          <div><strong>{item.title}</strong><span>{item.categoryName} · {formatShortDate(item.occurredOn)}</span></div>
+                        </div>
+                        <strong className="insights-v57__top-expense-amount">-{formatCurrency(item.amount)}</strong>
                       </div>
-                      <strong className="insights-v57__top-expense-amount">-{formatCurrency(item.amount)}</strong>
-                    </div>
-                    <div className="insights-v57__top-expense-meter-head">
-                      <span><strong>{formatPercentage(meter.value)}</strong> {meter.label.toLowerCase()}</span>
-                    </div>
-                    <div className="insights-v57__top-expense-meter">
-                      <span className="insights-v57__top-expense-meter-fill" style={{ width: `${meter.width}%`, background: item.color }} />
-                    </div>
-                  </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="blank-state blank-state--compact">
-                <strong>No top expenses yet</strong>
-                <span>Biggest purchases will surface here once the selected month has spending.</span>
-              </div>
-            )}
-            {topExpenses.length && dailySpend.totalAmount > 0 ? (
-              <div className={`insights-v57__spend-pattern insights-v57__spend-pattern--${rhythmPatternTone}`} aria-label={rhythmPatternCopy}>
-                <div className="insights-v57__spend-pattern-head">
-                  <span>Spend pattern</span>
-                  <strong>{rhythmPatternTitle}</strong>
+                    </button>
+                  ))}
                 </div>
-                {sparklineGeometry.points.length >= 2 ? (
-                  <svg
-                    aria-hidden="true"
-                    className={`insights-v57__sparkline insights-v57__sparkline--${rhythmPatternTone}`}
-                    preserveAspectRatio="none"
-                    viewBox={`0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`}
-                  >
-                    {sparklineGeometry.areaPath ? <path className="insights-v57__sparkline-area" d={sparklineGeometry.areaPath} /> : null}
-                    {sparklineGeometry.linePath ? <path className="insights-v57__sparkline-line" d={sparklineGeometry.linePath} /> : null}
-                    {sparklineGeometry.highlightAreaPath ? <path className="insights-v57__sparkline-highlight-area" d={sparklineGeometry.highlightAreaPath} /> : null}
-                    {sparklineGeometry.highlightLinePath ? <path className="insights-v57__sparkline-highlight-line" d={sparklineGeometry.highlightLinePath} /> : null}
-                    {sparklineGeometry.dividerX != null ? (
-                      <line
-                        className="insights-v57__sparkline-divider"
-                        x1={sparklineGeometry.dividerX}
-                        x2={sparklineGeometry.dividerX}
-                        y1={SPARKLINE_PAD_Y}
-                        y2={sparklineGeometry.baselineY}
-                      />
-                    ) : null}
-                  </svg>
-                ) : null}
-                <div className="insights-v57__spend-pattern-stats">
-                  <span><small>Last 7 days</small><strong>{formatPercentage(lastSevenShare)}</strong></span>
-                  <span><small>Top buys</small><strong>{formatPercentage(topExpenseShare)}</strong></span>
-                </div>
-              </div>
+              </section>
             ) : null}
           </article>
         </div>
+
+        <section className="section-block insights-v57__pace-section" aria-label="Month over month pace">
+          <div className="section-headline">
+            <h2>Pace vs last month</h2>
+            <span className="section-link">{currentMonthShortLabel} vs {previousMonthShortLabel}</span>
+          </div>
+          <div className="insights-v57__pace-card">
+            <PaceVsLastMonthChart
+              currentMonthSeries={paceCurrentSeries}
+              previousMonthSeries={pacePreviousSeries}
+              currentMonthLabel={currentMonthShortLabel}
+              previousMonthLabel={previousMonthShortLabel}
+              monthLength={getMonthLength(activeMonth)}
+            />
+          </div>
+        </section>
+
       </div>
       {monthModal}
+      <CategoryTransactionsModal
+        isOpen={Boolean(drillDown)}
+        onClose={() => setDrillDown(null)}
+        category={drillDown?.category ?? null}
+        currentMonthDetails={dailySpend.details ?? []}
+        previousMonthDetails={drillDown?.mode === 'compare' ? (previousDailySpend.details ?? []) : null}
+        currentMonthLabel={activeMonthLabel}
+        previousMonthLabel={formatMonthLabel(snapshot?.previousMonth || previousMonth)}
+      />
+      {topExpenseDetail ? (
+        <TransactionDetailSheet
+          entry={topExpenseDetail}
+          onClose={() => setTopExpenseDetail(null)}
+        />
+      ) : null}
     </section>
   )
 }

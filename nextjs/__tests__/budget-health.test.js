@@ -1,5 +1,6 @@
 const {
   BUDGET_NEAR_LIMIT_RATIO,
+  BUDGET_WATCH_RATIO,
   buildBudgetPressureHighlight,
   buildCategoryBudgetHealth,
   buildFinancialHealth,
@@ -251,6 +252,20 @@ describe('buildCategoryBudgetHealth', () => {
       label: 'Near limit',
       tone: 'warning',
       remainingAmount: 20,
+    }))
+  })
+
+  it('returns watch between watch ratio and near-limit', () => {
+    expect(BUDGET_WATCH_RATIO).toBe(0.6)
+    expect(buildCategoryBudgetHealth({
+      monthlyLimit: '100.00',
+      spent: '65.00',
+      actualsAvailable: true,
+    })).toEqual(expect.objectContaining({
+      key: 'watch',
+      label: 'Watch',
+      tone: 'caution',
+      remainingAmount: 35,
     }))
   })
 

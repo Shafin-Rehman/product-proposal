@@ -73,6 +73,13 @@ jest.mock('@/lib/demoData', () => ({
     { id: 'food', name: 'Food', budget: 350, spent: 320 },
     { id: 'fun', name: 'Fun', budget: 250, spent: 180 },
   ],
+  demoInsightsSnapshot: {
+    dailySpend: {
+      details: [
+        { id: 'x1', amount: 10, title: 'Test', categoryName: 'Food', occurredOn: '2026-03-12', color: '#123', soft: '#abc', symbol: 'F' },
+      ],
+    },
+  },
 }))
 jest.mock('@/lib/financeVisuals', () => ({
   getCategoryVisual: jest.fn((value) => ({
@@ -90,9 +97,13 @@ jest.mock('@/lib/financeVisuals', () => ({
 }))
 jest.mock('@/lib/financeUtils', () => ({
   buildActivityFeed: jest.fn(),
+  buildDailySpendDetailsFromExpenses: jest.fn(() => []),
   buildMonthlySpendTrend: jest.fn(),
+  buildRecentCashFlow: jest.fn(() => []),
+  buildTrendChartAxes: jest.fn(() => ({ paceLine: null, budgetLineY: null, axisLabels: null, plotLeft: 18, plotRight: 294 })),
   formatCurrency: jest.fn((value) => `$${value}`),
   formatMonthPeriod: jest.fn((value) => value),
+  formatPercentage: jest.fn((value) => `${Math.round(Number(value) || 0)}%`),
   formatShortDate: jest.fn((value) => value),
   getCurrentMonthStart: jest.fn((date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`),
   isInMonth: jest.fn(),
@@ -265,10 +276,10 @@ describe('getCategoryCards', () => {
         category_id: 'cat-food',
         category_name: 'Food',
         category_icon: 'F',
-        monthly_limit: '80.00',
+        monthly_limit: '100.00',
         spent: '50.00',
-        remaining_budget: '30.00',
-        progress_percentage: 62.5,
+        remaining_budget: '50.00',
+        progress_percentage: 50,
       },
     ], [
       { id: 'e1', category_id: 'cat-other', category_name: 'Other', amount: '999.00' },
@@ -276,8 +287,8 @@ describe('getCategoryCards', () => {
       expect.objectContaining({
         name: 'Food',
         amount: 50,
-        progress: 62.5,
-        note: '$30 left',
+        progress: 50,
+        note: '$50 left',
         statusLabel: 'On track',
         statusTone: 'positive',
       }),
@@ -617,13 +628,13 @@ describe('getBudgetPressureHighlight', () => {
   it('returns a waiting message when neither budgets nor expenses are available', () => {
     expect(getBudgetPressureHighlight({
       category_statuses: [],
-    }, [])).toEqual({
+    }, [])).toEqual(expect.objectContaining({
       key: 'waiting',
       tone: 'neutral',
       label: 'Category pressure',
       title: 'Waiting on categories',
       detail: 'Current-month category pressure will show once expenses land.',
-    })
+    }))
   })
 })
 
@@ -652,7 +663,6 @@ describe('DashboardView', () => {
     expect(screen.getByText('$180 left')).toBeTruthy()
     expect(screen.getAllByText('Near limit').length).toBeGreaterThan(0)
     expect(screen.getByText('Positive cash flow')).toBeTruthy()
-    expect(screen.getByText('Top category pressure')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
     expect(screen.getByText('Grocer')).toBeTruthy()
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
@@ -705,7 +715,6 @@ describe('DashboardView', () => {
     expect(screen.getAllByText('Near limit').length).toBeGreaterThan(0)
     expect(screen.getByText('$140 left')).toBeTruthy()
     expect(screen.getByText('Positive cash flow')).toBeTruthy()
-    expect(screen.getByText('Top category pressure')).toBeTruthy()
     expect(screen.getByText('Grocer')).toBeTruthy()
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
   })

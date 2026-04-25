@@ -11,11 +11,14 @@ import {
   demoBudgetSummary,
   demoBudgetTrend,
   demoCategoryBudgets,
+  demoInsightsSnapshot,
 } from '@/lib/demoData'
 import { getCategoryVisual, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
+  buildDailySpendDetailsFromExpenses,
   buildMonthlySpendTrend,
+  buildRecentCashFlow,
   formatCurrency,
   formatMonthPeriod,
   formatShortDate,
@@ -29,11 +32,17 @@ import {
   buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
   getMonthProgressState as getSharedMonthProgressState,
 } from '@/lib/budgetHealth'
-const PREVIEW_LIMIT = 4
-const INCOME_LIMIT = 4
-const CHART_WIDTH = 312
-const CHART_HEIGHT = 148
-const CHART_INSET = 18
+import AllocationBar from '@/components/ui/AllocationBar'
+import BudgetHudMetrics from '@/components/ui/BudgetHudMetrics'
+import CashFlowSnapshot from '@/components/ui/CashFlowSnapshot'
+import CategoryProgressRow from '@/components/ui/CategoryProgressRow'
+import CategoryTransactionsModal from '@/components/ui/CategoryTransactionsModal'
+import FinancialHealthTile from '@/components/ui/FinancialHealthTile'
+import MonthPacingChart from '@/components/ui/MonthPacingChart'
+import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
+
+const ACTIVITY_PREVIEW_LIMIT = 6
+const CATEGORY_PREVIEW_LIMIT = 5
 
 function getErrorMessage(error) {
   if (error instanceof ApiError) return error.message
@@ -164,90 +173,6 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
   }
 }
 
-function getMonthShape(month) {
-  const monthDate = new Date(`${month}T12:00:00Z`)
-  if (Number.isNaN(monthDate.getTime())) return null
-
-  const year = monthDate.getUTCFullYear()
-  const monthIndex = monthDate.getUTCMonth()
-  return {
-    monthLength: new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate(),
-  }
-}
-
-function buildProjectedTrend(month, budget, pointCount) {
-  const monthShape = getMonthShape(month)
-  if (!monthShape || !budget || pointCount < 1) return []
-
-  return Array.from({ length: pointCount }, (_, index) => Number((
-    budget * ((index + 1) / monthShape.monthLength)
-  ).toFixed(2)))
-}
-
-function getTrendCeiling(points, projectedPoints = [], budget = 0) {
-  const referencePoints = [...points, ...projectedPoints].filter((point) => Number.isFinite(point))
-  if (!referencePoints.length) return 1
-
-  const maxPoint = Math.max(...referencePoints)
-  if (budget > 0) {
-    return Math.max(maxPoint * 1.14, maxPoint + 120)
-  }
-
-  return Math.max(maxPoint * 1.18, maxPoint + 120)
-}
-
-function buildTrendPath(points, width, height, inset, maxValue) {
-  if (!points.length) return ''
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-
-  return points
-    .map((point, index) => {
-      const x = inset + ((width - inset * 2) / Math.max(points.length - 1, 1)) * index
-      const y = height - inset - ((height - inset * 2) * point) / safeMax
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
-function buildAreaPath(points, width, height, inset, maxValue) {
-  if (!points.length) return ''
-
-  const linePath = buildTrendPath(points, width, height, inset, maxValue)
-  const baseline = height - inset
-  return `${linePath} L ${width - inset} ${baseline} L ${inset} ${baseline} Z`
-}
-
-function buildComparisonAreaPath(topPoints, bottomPoints, width, height, inset, maxValue) {
-  if (!topPoints.length || topPoints.length !== bottomPoints.length) return ''
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-  const buildPoint = (point, index) => {
-    const x = inset + ((width - inset * 2) / Math.max(topPoints.length - 1, 1)) * index
-    const y = height - inset - ((height - inset * 2) * point) / safeMax
-    return `${x.toFixed(2)} ${y.toFixed(2)}`
-  }
-
-  const topPath = topPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${buildPoint(point, index)}`).join(' ')
-  const bottomPath = bottomPoints
-    .map((point, index) => ({ point, index }))
-    .reverse()
-    .map(({ point, index }) => `L ${buildPoint(point, index)}`)
-    .join(' ')
-
-  return `${topPath} ${bottomPath} Z`
-}
-
-function getTrendPoint(points, width, height, inset, maxValue, index = points.length - 1) {
-  if (!points.length || index < 0 || index >= points.length) return null
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-  return {
-    x: inset + ((width - inset * 2) / Math.max(points.length - 1, 1)) * index,
-    y: height - inset - ((height - inset * 2) * points[index]) / safeMax,
-  }
-}
-
 function buildLiveCategoryCards(categoryStatuses = []) {
   return categoryStatuses.map((item) => {
     const displayName = item.category_name || 'Uncategorized'
@@ -267,6 +192,8 @@ function buildLiveCategoryCards(categoryStatuses = []) {
       soft: visual.soft,
       progress: categoryHealth.progressPercentage,
       amount,
+      monthlyLimit: Number(item.monthly_limit ?? 0) > 0 ? Number(item.monthly_limit) : null,
+      remainingAmount: categoryHealth.remainingAmount,
       note: categoryHealth.remainingText,
       statusLabel: categoryHealth.label,
       statusTone: categoryHealth.tone,
@@ -316,6 +243,8 @@ export function buildDerivedCategoryCards(expenses = []) {
       soft: visual.soft,
       progress: Math.min(share, 100),
       amount,
+      monthlyLimit: null,
+      remainingAmount: null,
       note: `${Math.round(share) || 0}% of spend`,
     }
   })
@@ -334,7 +263,11 @@ export function getBudgetPressureHighlight(summary, expenses = [], derivedCatego
 
   return buildSharedBudgetPressureHighlight({
     categoryStatuses: summary?.category_statuses,
-    fallbackSpendCards: spendShareCards,
+    fallbackSpendCards: spendShareCards.map((card) => ({
+      name: card.name,
+      note: card.note,
+      progress: card.progress,
+    })),
   })
 }
 
@@ -372,6 +305,9 @@ export default function DashboardView() {
   const [budgetDraft, setBudgetDraft] = useState({ monthly_limit: '' })
   const [isBudgetSaving, setIsBudgetSaving] = useState(false)
   const [budgetSaveError, setBudgetSaveError] = useState('')
+  const [activityFilter, setActivityFilter] = useState('all')
+  const [categoryDrillDown, setCategoryDrillDown] = useState(null)
+  const [activityDetailEntry, setActivityDetailEntry] = useState(null)
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -451,6 +387,15 @@ export default function DashboardView() {
     return () => controller.abort()
   }, [currentMonth, dataChangedToken, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
 
+  useEffect(() => {
+    if (!activityDetailEntry) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setActivityDetailEntry(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activityDetailEntry])
+
   const openBudgetSheet = () => {
     const currentLimit = isSampleMode
       ? demoBudgetSummary?.monthly_limit
@@ -504,11 +449,16 @@ export default function DashboardView() {
   const currentMonthExpenses = isSampleMode
     ? []
     : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
+  const categoryTransactionDetails = isSampleMode
+    ? (demoInsightsSnapshot?.dailySpend?.details ?? [])
+    : buildDailySpendDetailsFromExpenses(currentMonthExpenses)
   const activity = isSampleMode
     ? demoActivity
     : buildActivityFeed(liveState.expenses, liveState.income)
-  const recentActivity = activity.slice(0, PREVIEW_LIMIT)
-  const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
+  const filteredActivity = activityFilter === 'all'
+    ? activity
+    : activity.filter((entry) => entry.kind === activityFilter)
+  const recentActivity = filteredActivity.slice(0, ACTIVITY_PREVIEW_LIMIT)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const hasBudgetedStatuses = hasBudgetedCategoryStatuses(summary?.category_statuses)
   const derivedCategoryCards = !isSampleMode && !hasBudgetedStatuses
@@ -530,6 +480,8 @@ export default function DashboardView() {
         soft: visual.soft,
         progress: categoryHealth.progressPercentage,
         amount: item.spent,
+        monthlyLimit: item.budget,
+        remainingAmount: categoryHealth.remainingAmount,
         note: categoryHealth.remainingText,
         statusLabel: categoryHealth.label,
         statusTone: categoryHealth.tone,
@@ -549,25 +501,34 @@ export default function DashboardView() {
     summary,
     availability: summaryAvailability,
   })
-  const pressureHighlight = getBudgetPressureHighlight(summary, currentMonthExpenses, derivedCategoryCards)
-  const projectedTrendPoints = buildProjectedTrend(chartMonth, hudState.budget, trendPoints.length)
-  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, hudState.budget)
-  const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const projectedPath = buildTrendPath(projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const areaPath = buildAreaPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const overrunTrendPoints = trendPoints.map((point, index) => Math.max(point, projectedTrendPoints[index] ?? point))
-  const hasPaceOverrun = projectedTrendPoints.some((point, index) => trendPoints[index] > point)
-  const overrunPath = hasPaceOverrun
-    ? buildComparisonAreaPath(overrunTrendPoints, projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-    : ''
-  const overrunAmount = projectedTrendPoints.length
-    ? Math.max((trendPoints.at(-1) ?? 0) - (projectedTrendPoints.at(-1) ?? 0), 0)
-    : 0
-  const currentPoint = getTrendPoint(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const currentPointLeft = currentPoint ? `${(currentPoint.x / CHART_WIDTH) * 100}%` : '50%'
-  const currentPointTop = currentPoint ? `${(currentPoint.y / CHART_HEIGHT) * 100}%` : '50%'
+  const recentCashFlow = isSampleMode
+    ? (() => {
+      const monthlyIncome = getSafeMoneyNumber(demoBudgetSummary?.total_income)
+      const monthlyExpenses = getSafeMoneyNumber(demoBudgetSummary?.total_expenses)
+      return [
+        { month: '2026-01-01', label: 'Jan', incomeAmount: monthlyIncome * 0.95, expenseAmount: monthlyExpenses * 0.88, netAmount: Number((monthlyIncome * 0.95 - monthlyExpenses * 0.88).toFixed(2)) },
+        { month: '2026-02-01', label: 'Feb', incomeAmount: monthlyIncome * 1.02, expenseAmount: monthlyExpenses * 1.05, netAmount: Number((monthlyIncome * 1.02 - monthlyExpenses * 1.05).toFixed(2)) },
+        { month: '2026-03-01', label: 'Mar', incomeAmount: monthlyIncome, expenseAmount: monthlyExpenses, netAmount: Number((monthlyIncome - monthlyExpenses).toFixed(2)) },
+      ]
+    })()
+    : buildRecentCashFlow(liveState.expenses, liveState.income, chartMonth, 3)
   const firstName = getFirstName(session?.user?.email)
-
+  const periodLabel = formatMonthPeriod(chartMonth)
+  const previewCategories = [...categoryCards]
+    .sort((left, right) => {
+      const leftBudgeted = left.monthlyLimit != null && Number(left.monthlyLimit) > 0
+      const rightBudgeted = right.monthlyLimit != null && Number(right.monthlyLimit) > 0
+      if (leftBudgeted && rightBudgeted) {
+        return (Number(right.progress) || 0) - (Number(left.progress) || 0)
+      }
+      if (leftBudgeted !== rightBudgeted) return leftBudgeted ? -1 : 1
+      return (Number(right.amount) || 0) - (Number(left.amount) || 0)
+    })
+    .slice(0, CATEGORY_PREVIEW_LIMIT)
+  const monthMarkerLabel = hudState.monthState?.monthLength
+    ? `Today · Day ${hudState.monthState.activeDay}`
+    : null
+  const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0) : '--'
   return (
     <>
     <section className="app-screen dashboard-screen">
@@ -593,7 +554,7 @@ export default function DashboardView() {
         className={`budget-hero budget-hero--${hudState.tone}${hudState.isOverBudget ? ' budget-hero--over' : ''}${hudState.isNearLimit ? ' budget-hero--risk' : ''}`}
       >
         <div className="budget-hero__topline">
-          <span className="budget-hero__eyebrow">{formatMonthPeriod(chartMonth)} budget HUD</span>
+          <span className="budget-hero__eyebrow">{periodLabel} budget HUD</span>
           <div className="budget-hero__actions">
             <span className={`budget-hero__badge budget-hero__badge--${hudState.tone}`}>{hudState.badge}</span>
             {!isSampleMode && (
@@ -604,108 +565,54 @@ export default function DashboardView() {
           </div>
         </div>
 
-        <div className="budget-hero__header">
-          <div className="budget-hero__headline">
-            <h2 className="budget-hero__value">{hudState.value}</h2>
-            <p className="budget-hero__suffix">{hudState.supportingText}</p>
-          </div>
+        <div className="budget-hero__headline">
+          <h2 className="budget-hero__value">{hudState.value}</h2>
+          <p className="budget-hero__suffix">{hudState.supportingText}</p>
         </div>
 
-        <div className="budget-hero__progress-block">
-          <div
-            aria-label="Monthly budget progress"
-            className="budget-progress budget-hero__progress"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(hudState.progressPercentage)}
-            aria-valuetext={hudState.progressLabel}
-          >
-            <span
-              className={`budget-progress__fill budget-progress__fill--${hudState.tone}`}
-              style={{ width: hudState.progressWidth }}
-            />
-          </div>
-          <div className="budget-hero__progress-copy">
-            <strong>{hudState.progressLabel}</strong>
-            <span>{hudState.progressNote}</span>
-          </div>
-        </div>
+        <AllocationBar
+          progressPercentage={hudState.progressPercentage}
+          tone={hudState.tone}
+          ariaLabel="Monthly budget progress"
+          ariaValueText={hudState.progressLabel}
+          monthLength={hudState.monthState?.monthLength}
+          activeDay={hudState.monthState?.activeDay}
+          monthMarkerLabel={monthMarkerLabel}
+          isOverBudget={hudState.isOverBudget}
+          showMarker={hudState.hasBudget}
+        />
 
-        <div className="budget-hero__metrics">
-          {hudState.metrics.map((metric) => (
-            <div className="budget-hero__metric" key={metric.label}>
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-              <small>{metric.hint}</small>
-            </div>
-          ))}
-        </div>
-
-        <div className={`budget-health-callout budget-health-callout--${financialHealth.tone}`}>
-          <div>
-            <span className="budget-health-callout__label">Financial health</span>
-            <strong>{financialHealth.label}</strong>
-          </div>
-          <p>
-            <span>{financialHealth.valueText}</span>
-            <small>{financialHealth.detailText}</small>
-          </p>
-        </div>
-
-        <div className={`budget-hero__pressure budget-hero__pressure--${pressureHighlight.tone}`}>
-          <div>
-            <span className="budget-hero__pressure-label">{pressureHighlight.label}</span>
-            <strong>{pressureHighlight.title}</strong>
-          </div>
-          <p>{pressureHighlight.detail}</p>
-        </div>
-
-        {trendPoints.length ? (
-          <div className="budget-hero__chart">
-            <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
-              <defs>
-                <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
-                  <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
-                </linearGradient>
-                <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
-                  <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
-                </linearGradient>
-              </defs>
-              {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
-              <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
-              {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
-              <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
-              {currentPoint ? (
-                <circle
-                  className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
-                  cx={currentPoint.x}
-                  cy={currentPoint.y}
-                  r="4.5"
-                />
-              ) : null}
-            </svg>
-            {currentPoint && trendPoints.length ? (
-              <div
-                className="budget-hero__callout"
-                style={{
-                  left: currentPointLeft,
-                  top: currentPointTop,
-                }}
-              >
-                {formatCurrency(trendPoints.at(-1) ?? 0)} spent
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="blank-state blank-state--compact">
-            <strong>Waiting on activity</strong>
-            <span>This curve will appear once month-to-date spending lands.</span>
-          </div>
-        )}
+        <BudgetHudMetrics metrics={hudState.metrics} />
       </article>
+
+      <section className="section-block dashboard-trend">
+        <div className="section-headline">
+          <h2>Month pacing</h2>
+          <span className="section-link">{chartSpendValue} spent</span>
+        </div>
+
+        <MonthPacingChart
+          trendPoints={trendPoints}
+          budget={hudState.budget}
+          monthLength={hudState.monthState?.monthLength ?? 30}
+          activeDay={hudState.monthState?.activeDay ?? 0}
+          isOverBudget={hudState.isOverBudget}
+          emptyState={(
+            <div className="blank-state blank-state--compact">
+              <strong>Waiting on activity</strong>
+              <span>Your pacing line will appear once expenses land this month.</span>
+            </div>
+          )}
+        />
+      </section>
+
+      <section className="dashboard-glance dashboard-glance--single" aria-label="At a glance">
+        <FinancialHealthTile
+          health={financialHealth}
+          income={hudState.income}
+          expenses={hudState.spent}
+        />
+      </section>
 
       <section className="section-block">
         <div className="section-headline">
@@ -715,35 +622,31 @@ export default function DashboardView() {
           </Link>
         </div>
 
-        {categoryCards.length ? (
-          <div className="budget-glance-scroll">
-            <div className="budget-glance">
-              {categoryCards.map((item) => (
-                <div
-                  className="budget-glance__item"
-                  key={item.id}
-                  style={{
-                    '--entry-color': item.color,
-                    '--entry-soft': item.soft,
-                  }}
-                >
-                  <div
-                    className="budget-glance__ring"
-                    style={{
-                      background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
-                    }}
-                  >
-                    <div className="budget-glance__inner">{item.symbol}</div>
-                  </div>
-                  {item.statusLabel ? (
-                    <span className={`budget-status-pill budget-status-pill--${item.statusTone}`}>{item.statusLabel}</span>
-                  ) : null}
-                  <strong>{item.name}</strong>
-                  <span>{formatCurrency(item.amount)}</span>
-                  <small>{item.note}</small>
-                </div>
-              ))}
-            </div>
+        {previewCategories.length ? (
+          <div className="category-progress-list">
+            {previewCategories.map((item) => (
+              <CategoryProgressRow
+                amount={item.amount}
+                color={item.color}
+                fallbackShareText={item.monthlyLimit == null ? item.note : null}
+                key={item.id}
+                monthlyLimit={item.monthlyLimit}
+                name={item.name}
+                onSelect={() => setCategoryDrillDown({
+                  name: item.name,
+                  symbol: item.symbol,
+                  color: item.color,
+                  soft: item.soft,
+                })}
+                progressPercentage={item.progress}
+                remainingAmount={item.remainingAmount}
+                selectLabel={`View ${item.name} transactions for ${periodLabel}`}
+                soft={item.soft}
+                statusLabel={item.statusLabel}
+                symbol={item.symbol}
+                tone={item.statusTone || 'neutral'}
+              />
+            ))}
           </div>
         ) : (
           <div className="blank-state blank-state--compact">
@@ -762,19 +665,48 @@ export default function DashboardView() {
             </Link>
           </div>
 
+          <div className="segment-control segment-control--strong dashboard-activity-filter" role="group" aria-label="Activity filter">
+            <button
+              aria-pressed={activityFilter === 'all'}
+              className={`segment-control__button${activityFilter === 'all' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('all')}
+              type="button"
+            >
+              All
+            </button>
+            <button
+              aria-pressed={activityFilter === 'expense'}
+              className={`segment-control__button${activityFilter === 'expense' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('expense')}
+              type="button"
+            >
+              Expenses
+            </button>
+            <button
+              aria-pressed={activityFilter === 'income'}
+              className={`segment-control__button${activityFilter === 'income' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('income')}
+              type="button"
+            >
+              Income
+            </button>
+          </div>
+
           {recentActivity.length ? (
             <div className="activity-feed">
               {recentActivity.map((entry) => {
                 const visual = getEntryVisual(entry)
 
                 return (
-                  <div
-                    className="activity-feed__row"
+                  <button
+                    className={`activity-feed__row activity-feed__row--${entry.kind} activity-feed__row--interactive`}
                     key={entry.id}
+                    onClick={() => setActivityDetailEntry(entry)}
                     style={{
                       '--entry-color': visual.color,
                       '--entry-soft': visual.soft,
                     }}
+                    type="button"
                   >
                     <div className="entry-avatar">
                       <span>{visual.symbol}</span>
@@ -792,63 +724,37 @@ export default function DashboardView() {
                       {entry.kind === 'income' ? '+' : '-'}
                       {formatCurrency(entry.amount)}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
           ) : (
             <div className="blank-state blank-state--compact">
-              <strong>No activity yet</strong>
-              <span>New transactions will land here once the month starts moving.</span>
+              <strong>
+                {activityFilter === 'income'
+                  ? 'No income yet'
+                  : activityFilter === 'expense'
+                    ? 'No expenses yet'
+                    : 'No activity yet'}
+              </strong>
+              <span>
+                {activityFilter === 'income'
+                  ? 'Income entries will show up here as they land.'
+                  : activityFilter === 'expense'
+                    ? 'Expenses will show up here as they land.'
+                    : 'New transactions will land here once the month starts moving.'}
+              </span>
             </div>
           )}
         </section>
 
-        <section className="section-block dashboard-panel dashboard-panel--income">
-          <div className="section-headline">
-            <h2>Recent income</h2>
-            <Link className="section-link" href="/transactions">
-              View all
-            </Link>
-          </div>
-
-          {recentIncome.length ? (
-            <div className="activity-feed">
-              {recentIncome.map((entry) => {
-                const visual = getEntryVisual(entry)
-                return (
-                  <div
-                    className="activity-feed__row"
-                    key={entry.id}
-                    style={{
-                      '--entry-color': visual.color,
-                      '--entry-soft': visual.soft,
-                    }}
-                  >
-                    <div className="entry-avatar">
-                      <span>{visual.symbol}</span>
-                    </div>
-                    <div className="entry-main">
-                      <strong>{entry.title}</strong>
-                      <div className="entry-meta">
-                        <span className="entry-chip">{entry.chip}</span>
-                        <span>{formatShortDate(entry.occurredOn)}</span>
-                      </div>
-                    </div>
-                    <div className="entry-amount entry-amount--income">
-                      +{formatCurrency(entry.amount)}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="blank-state blank-state--compact">
-              <strong>No income yet</strong>
-              <span>Income entries will show up here as they land.</span>
-            </div>
-          )}
-        </section>
+        <CashFlowSnapshot
+          expenses={hudState.spent}
+          income={hudState.income}
+          monthLabel={periodLabel}
+          trend={recentCashFlow}
+          viewMoreHref="/insights"
+        />
       </div>
     </section>
 
@@ -937,6 +843,23 @@ export default function DashboardView() {
             </form>
           </div>
         </div>
+      ) : null}
+
+      <CategoryTransactionsModal
+        category={categoryDrillDown}
+        currentMonthDetails={categoryTransactionDetails}
+        currentMonthLabel={periodLabel}
+        isOpen={Boolean(categoryDrillDown)}
+        onClose={() => setCategoryDrillDown(null)}
+        previousMonthDetails={null}
+        previousMonthLabel={null}
+      />
+
+      {activityDetailEntry ? (
+        <TransactionDetailSheet
+          entry={activityDetailEntry}
+          onClose={() => setActivityDetailEntry(null)}
+        />
       ) : null}
     </>
   )

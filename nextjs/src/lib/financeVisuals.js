@@ -164,6 +164,14 @@ export function getCategoryVisual(value, kind = 'expense') {
 }
 
 export function getEntryVisual(entry) {
+  if (entry?.chip) {
+    return getCategoryVisual(entry.chip, entry?.kind)
+  }
+
+  if (entry?.categoryName) {
+    return getCategoryVisual(entry.categoryName, entry?.kind)
+  }
+
   return getCategoryVisual(
     [entry?.chip, entry?.merchant, entry?.title, entry?.note].filter(Boolean).join(' '),
     entry?.kind
