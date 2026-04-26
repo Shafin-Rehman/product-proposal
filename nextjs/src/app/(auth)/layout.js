@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
@@ -15,23 +15,26 @@ function AuthRouteLoading() {
   )
 }
 
-function isRecoveryLink() {
-  if (typeof window === 'undefined') return false
-  const hash = new URLSearchParams(window.location.hash.slice(1))
-  return hash.get('type') === 'recovery'
-}
-
 export default function AuthLayout({ children }) {
   const router = useRouter()
   const { isReady, isAuthenticated } = useAuth()
+  const [isRecovery, setIsRecovery] = useState(false)
+
+  useEffect(() => {
+    // Preserve recovery-link state from the URL hash on mount.
+    if (typeof window !== 'undefined') {
+      const hash = new URLSearchParams(window.location.hash.slice(1))
+      if (hash.get('type') === 'recovery' && hash.get('access_token')) setIsRecovery(true)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return
-    if (isRecoveryLink()) return
+    if (isRecovery) return
     router.replace('/dashboard')
-  }, [isAuthenticated, isReady, router])
+  }, [isAuthenticated, isReady, router, isRecovery])
 
-  if (!isReady || (isAuthenticated && !isRecoveryLink())) {
+  if (!isReady || (isAuthenticated && !isRecovery)) {
     return <AuthRouteLoading />
   }
 
