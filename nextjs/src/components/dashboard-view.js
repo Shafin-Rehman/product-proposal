@@ -580,7 +580,7 @@ export default function DashboardView() {
       <section className="section-block">
         <div className="section-headline">
           <h2>Budgets</h2>
-          <Link className="section-link" href="/planner">
+          <Link className="section-link" href="/insights">
             View more
           </Link>
         </div>
