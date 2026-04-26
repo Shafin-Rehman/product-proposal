@@ -15,16 +15,23 @@ function AuthRouteLoading() {
   )
 }
 
+function isRecoveryLink() {
+  if (typeof window === 'undefined') return false
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  return hash.get('type') === 'recovery'
+}
+
 export default function AuthLayout({ children }) {
   const router = useRouter()
   const { isReady, isAuthenticated } = useAuth()
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return
+    if (isRecoveryLink()) return
     router.replace('/dashboard')
   }, [isAuthenticated, isReady, router])
 
-  if (!isReady || isAuthenticated) {
+  if (!isReady || (isAuthenticated && !isRecoveryLink())) {
     return <AuthRouteLoading />
   }
 
