@@ -61,20 +61,6 @@ function AuthProvider({ children }) {
   useEffect(() => {
     setSession(readSession())
     setIsReady(true)
-
-    const handleStorageChange = (e) => {
-      if (e.key === 'budgetbuddy.session') {
-        const nextSession = readSession()
-        setSession(nextSession)
-        
-        if (!nextSession && window.location.pathname !== '/login') {
-          window.location.replace('/login')
-        }
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const setSessionFromAuthResponse = (responseBody) => {
@@ -91,7 +77,6 @@ function AuthProvider({ children }) {
   const logout = () => {
     clearSession()
     setSession(null)
-    window.location.replace('/login')
   }
 
   const value = useMemo(() => ({
