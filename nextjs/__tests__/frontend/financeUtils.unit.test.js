@@ -6,8 +6,12 @@ const {
   formatMonthPeriod,
   buildMonthlySpendTrend,
   buildActivityFeed,
+  buildDailySpendDetailsFromExpenses,
   groupActivityByDate,
   buildIncomeSourceBreakdown,
+  buildRecentCashFlow,
+  buildCumulativeDailyTotals,
+  buildTrendChartAxes,
 } = require('@/lib/financeUtils')
 
 describe('parseCalendarDate', () => {
@@ -109,6 +113,36 @@ describe('buildActivityFeed', () => {
   })
 })
 
+describe('buildDailySpendDetailsFromExpenses', () => {
+  it('maps expense API rows into modal detail entries grouped by day', () => {
+    const rows = [
+      { id: 'a', amount: '30.00', date: '2026-03-10', description: 'Lunch', category_name: 'Dining' },
+      { id: 'b', amount: '10.00', date: '2026-03-10', description: 'Snack', category_name: 'Dining' },
+    ]
+    const details = buildDailySpendDetailsFromExpenses(rows)
+    expect(details).toHaveLength(2)
+    expect(details[0].amount).toBe(30)
+    expect(details[0].occurredOn).toBe('2026-03-10')
+    expect(details[0].categoryName).toBeTruthy()
+    expect(details[1].amount).toBe(10)
+  })
+
+  it('skips rows without a parseable date', () => {
+    expect(buildDailySpendDetailsFromExpenses([{ id: 'x', amount: 5, date: null }])).toEqual([])
+  })
+
+  it('assigns distinct fallback ids when the same day has multiple id-less rows with an identical fingerprint', () => {
+    const rows = [
+      { id: null, amount: '10.00', date: '2026-03-10', description: 'Snack', category_name: 'Dining' },
+      { id: null, amount: '10.00', date: '2026-03-10', description: 'Snack', category_name: 'Dining' },
+    ]
+    const details = buildDailySpendDetailsFromExpenses(rows)
+    const ids = details.map((entry) => entry.id)
+    expect(new Set(ids).size).toBe(2)
+    expect(ids.some((id) => /:2/.test(String(id)))).toBe(true)
+  })
+})
+
 describe('groupActivityByDate', () => {
   it('groups entries sharing a day and sorts groups newest first', () => {
     const entries = [
@@ -134,5 +168,99 @@ describe('buildIncomeSourceBreakdown', () => {
     expect(result).toHaveLength(1)
     expect(result[0].name).toBe('Payroll')
     expect(result[0].amount).toBe(2500)
+  })
+})
+
+describe('buildRecentCashFlow', () => {
+  it('returns the last N months of income, expense, and net totals', () => {
+    const expenses = [
+      { id: 'e1', amount: '80', date: '2026-01-12' },
+      { id: 'e2', amount: '120', date: '2026-02-04' },
+      { id: 'e3', amount: '200', date: '2026-03-15' },
+      { id: 'e4', amount: '50', date: '2026-03-22' },
+    ]
+    const income = [
+      { id: 'i1', amount: '1000', date: '2026-01-05' },
+      { id: 'i2', amount: '1200', date: '2026-02-05' },
+      { id: 'i3', amount: '1500', date: '2026-03-02' },
+    ]
+    const series = buildRecentCashFlow(expenses, income, '2026-03-01', 3)
+    expect(series.map((item) => item.month)).toEqual(['2026-01-01', '2026-02-01', '2026-03-01'])
+    expect(series[0].incomeAmount).toBe(1000)
+    expect(series[0].expenseAmount).toBe(80)
+    expect(series[0].netAmount).toBe(920)
+    expect(series[2].expenseAmount).toBe(250)
+    expect(series[2].netAmount).toBe(1250)
+  })
+
+  it('returns an empty array when the month is invalid', () => {
+    expect(buildRecentCashFlow([], [], 'nope')).toEqual([])
+  })
+
+  it('returns zeroed months when there is no matching data', () => {
+    const series = buildRecentCashFlow([], [], '2026-03-01', 2)
+    expect(series).toHaveLength(2)
+    series.forEach((item) => {
+      expect(item.incomeAmount).toBe(0)
+      expect(item.expenseAmount).toBe(0)
+      expect(item.netAmount).toBe(0)
+    })
+  })
+})
+
+describe('buildCumulativeDailyTotals', () => {
+  it('produces one entry per day with running spend totals', () => {
+    const expenses = [
+      { id: 'e1', amount: '50', date: '2026-03-03' },
+      { id: 'e2', amount: '30', date: '2026-03-10' },
+      { id: 'e3', amount: '70', date: '2026-03-10' },
+    ]
+    const series = buildCumulativeDailyTotals(expenses, '2026-03-01')
+    expect(series).toHaveLength(31)
+    expect(series[2].amount).toBe(50)
+    expect(series[9].amount).toBe(150)
+    expect(series[30].amount).toBe(150)
+  })
+
+  it('returns an empty array for an invalid month', () => {
+    expect(buildCumulativeDailyTotals([], 'nope')).toEqual([])
+  })
+})
+
+describe('buildTrendChartAxes', () => {
+  it('returns a pace line, budget line y-coordinate, and axis labels when a budget exists', () => {
+    const axes = buildTrendChartAxes({
+      budget: 1000,
+      monthLength: 31,
+      activeDay: 15,
+      pointCount: 15,
+      width: 312,
+      height: 148,
+      inset: 18,
+    })
+
+    expect(axes.budgetLineY).toBe(18)
+    expect(axes.axisLabels).toHaveLength(2)
+    expect(axes.axisLabels[0]).toEqual({ y: 130, value: 0 })
+    expect(axes.axisLabels[1]).toEqual({ y: 18, value: 1000 })
+    expect(axes.paceLine).toMatchObject({ startX: 18, startY: 130 })
+    expect(axes.paceLine.endX).toBeGreaterThan(18)
+    expect(axes.paceLine.endY).toBeLessThan(130)
+    expect(axes.budgetLineLabel).toBe('$1,000.00')
+  })
+
+  it('omits pace line and axis labels when no budget is provided', () => {
+    const axes = buildTrendChartAxes({
+      budget: 0,
+      monthLength: 30,
+      activeDay: 10,
+      pointCount: 10,
+      width: 312,
+      height: 148,
+      inset: 18,
+    })
+    expect(axes.paceLine).toBeNull()
+    expect(axes.budgetLineY).toBeNull()
+    expect(axes.axisLabels).toBeNull()
   })
 })

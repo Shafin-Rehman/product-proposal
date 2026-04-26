@@ -1,4 +1,4 @@
-import { getCategoryLabel } from './financeVisuals'
+import { getCategoryLabel, getCategoryVisual } from './financeVisuals'
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -197,7 +197,7 @@ export function buildActivityFeed(expenses = [], income = []) {
   const expenseEntries = expenses.map((expense) => {
     const categoryName = expense?.category_name || 'Expense'
     const description = expense?.description?.trim()
-    const displayCategory = getCategoryLabel([categoryName, description].filter(Boolean).join(' '), 'expense')
+    const displayCategory = getCategoryLabel(categoryName, 'expense')
 
     return {
       id: `expense-${expense.id}`,
@@ -238,6 +238,67 @@ export function buildActivityFeed(expenses = [], income = []) {
   ))
 }
 
+function toAmountDetail(value) {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0
+}
+
+function buildDailyExpenseDetailId(row, dayKey, fallbackOrdinalByKey) {
+  if (row.id != null && row.id !== '') {
+    return String(row.id)
+  }
+  const amount = toAmountDetail(row.amount)
+  const title = String(row.title ?? row.description ?? '').trim()
+  const category = String(row.category_name ?? '').trim()
+  const dedupeKey = `${dayKey}\t${amount}\t${title}\t${category}`
+  const ordinal = (fallbackOrdinalByKey.get(dedupeKey) ?? 0) + 1
+  fallbackOrdinalByKey.set(dedupeKey, ordinal)
+  const ordinalSuffix = ordinal > 1 ? `:${ordinal}` : ''
+  return `daily-expense-fallback:${dayKey}:${amount}:${title}:${category}${ordinalSuffix}`
+}
+
+/** Maps API expense rows to the detail entries consumed by CategoryTransactionsModal (client-only; avoids importing server insights bundle). */
+export function buildDailySpendDetailsFromExpenses(rows = []) {
+  const grouped = new Map()
+  const fallbackOrdinalByKey = new Map()
+
+  rows.forEach((row, index) => {
+    const dateValue = row.date || row.created_at || row.occurred_on
+    const key = toDayKey(dateValue)
+    if (!key || key === 'unknown') return
+
+    const description = row.description != null ? String(row.description).trim() : ''
+    const categorySeed = row.category_name || description || `Expense ${index + 1}`
+    const visual = getCategoryVisual(categorySeed)
+    const title = description || row.category_name || visual.label
+
+    const nextEntry = {
+      id: buildDailyExpenseDetailId(row, key, fallbackOrdinalByKey),
+      key,
+      amount: toAmountDetail(row.amount),
+      title,
+      categoryName: visual.label,
+      occurredOn: key,
+      color: visual.color,
+      soft: visual.soft,
+      symbol: row.category_icon || visual.symbol,
+    }
+
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key).push(nextEntry)
+  })
+
+  return Array.from(grouped.entries()).flatMap(([key, entries]) =>
+    entries
+      .sort((left, right) => {
+        const amountDifference = right.amount - left.amount
+        if (amountDifference !== 0) return amountDifference
+        return String(left.title || '').localeCompare(String(right.title || ''))
+      })
+      .map((entry) => ({ ...entry, key })),
+  )
+}
+
 export function groupActivityByDate(entries = []) {
   const groups = new Map()
 
@@ -270,4 +331,154 @@ export function buildIncomeSourceBreakdown(incomeEntries = [], month) {
   return Array.from(grouped.entries())
     .map(([name, amount]) => ({ name, amount }))
     .sort((left, right) => right.amount - left.amount)
+}
+
+function getMonthShortLabel(value) {
+  const date = parseCalendarDate(value)
+  if (!date) return ''
+  return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+}
+
+export function buildRecentCashFlow(expenses = [], income = [], month, monthsBack = 3) {
+  const anchorMonth = getMonthStartValue(month)
+  if (!anchorMonth) return []
+
+  const safeMonthsBack = Math.max(1, Number(monthsBack) || 3)
+
+  const monthKeys = []
+  for (let offset = safeMonthsBack - 1; offset >= 0; offset -= 1) {
+    const shifted = shiftMonth(anchorMonth, -offset)
+    if (shifted) monthKeys.push(shifted)
+  }
+
+  const totalsByMonth = new Map(monthKeys.map((key) => [key, { incomeAmount: 0, expenseAmount: 0 }]))
+
+  const addEntry = (entry, kind) => {
+    const key = getMonthStartValue(entry?.date || entry?.created_at)
+    if (!key || !totalsByMonth.has(key)) return
+    const bucket = totalsByMonth.get(key)
+    const amount = Number(entry?.amount ?? 0)
+    if (!Number.isFinite(amount)) return
+    if (kind === 'income') bucket.incomeAmount += amount
+    else bucket.expenseAmount += amount
+  }
+
+  income.forEach((entry) => addEntry(entry, 'income'))
+  expenses.forEach((entry) => addEntry(entry, 'expense'))
+
+  return monthKeys.map((key) => {
+    const bucket = totalsByMonth.get(key) || { incomeAmount: 0, expenseAmount: 0 }
+    const incomeAmount = Number(bucket.incomeAmount.toFixed(2))
+    const expenseAmount = Number(bucket.expenseAmount.toFixed(2))
+    const netAmount = Number((incomeAmount - expenseAmount).toFixed(2))
+    return {
+      month: key,
+      label: getMonthShortLabel(key),
+      incomeAmount,
+      expenseAmount,
+      netAmount,
+    }
+  })
+}
+
+export function buildCumulativeDailyTotals(expenses = [], month) {
+  const monthDate = parseCalendarDate(month)
+  if (!monthDate) return []
+
+  const year = monthDate.getUTCFullYear()
+  const monthIndex = monthDate.getUTCMonth()
+  const monthLength = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  const totalsByDay = Array.from({ length: monthLength }, () => 0)
+
+  expenses
+    .filter((expense) => isInMonth(expense.date || expense.created_at, month))
+    .forEach((expense) => {
+      const entryDate = parseCalendarDate(expense.date || expense.created_at)
+      if (!entryDate) return
+
+      const dayIndex = entryDate.getUTCDate() - 1
+      if (dayIndex < 0 || dayIndex >= totalsByDay.length) return
+      const amount = Number(expense.amount ?? 0)
+      if (Number.isFinite(amount)) totalsByDay[dayIndex] += amount
+    })
+
+  let running = 0
+  return totalsByDay.map((amount, index) => {
+    running += amount
+    return {
+      day: index + 1,
+      amount: Number(running.toFixed(2)),
+    }
+  })
+}
+
+export function buildTrendChartAxes({
+  budget,
+  monthLength,
+  activeDay,
+  pointCount,
+  width,
+  height,
+  inset,
+  insetTop,
+  insetBottom,
+  valueCeiling,
+}) {
+  const safeMonthLength = Math.max(0, Number(monthLength) || 0)
+  const safeActiveDay = Math.max(0, Math.min(Number(activeDay) || 0, safeMonthLength))
+  const safePointCount = Math.max(0, Math.floor(Number(pointCount) || 0))
+  const safeWidth = Math.max(0, Number(width) || 0)
+  const safeHeight = Math.max(0, Number(height) || 0)
+  const safeInset = Math.max(0, Number(inset) || 0)
+  const safeBudget = Number(budget) > 0 ? Number(budget) : 0
+  const top = insetTop ?? safeInset
+  const bottom = insetBottom ?? safeInset
+
+  const plotWidth = Math.max(safeWidth - safeInset * 2, 0)
+  const plotHeight = Math.max(safeHeight - top - bottom, 0)
+  const scaleMaxRaw = valueCeiling != null && Number(valueCeiling) > 0 ? Number(valueCeiling) : null
+  const scaleMax = scaleMaxRaw != null ? scaleMaxRaw : (safeBudget > 0 ? safeBudget : 1)
+
+  const buildPoint = (progressRatio, valueRatio) => ({
+    x: safeInset + plotWidth * progressRatio,
+    y: top + plotHeight * (1 - valueRatio),
+  })
+
+  const paceLine = safeBudget > 0 && safeMonthLength > 0 && safePointCount >= 2
+    ? (() => {
+      const start = buildPoint(0, 0)
+      const finalProgress = Math.min(Math.max(safePointCount - 1, 0) / Math.max(safePointCount - 1, 1), 1)
+      const finalDayIndex = Math.min(safePointCount, safeMonthLength)
+      const finalPaceValue = (safeBudget * finalDayIndex) / safeMonthLength
+      const paceRatio = Math.min(finalPaceValue / scaleMax, 1)
+      return {
+        startX: start.x,
+        startY: start.y,
+        endX: safeInset + plotWidth * finalProgress,
+        endY: top + plotHeight * (1 - paceRatio),
+      }
+    })()
+    : null
+
+  const budgetLineY = safeBudget > 0
+    ? top + plotHeight * (1 - Math.min(safeBudget / scaleMax, 1))
+    : null
+
+  const axisLabels = safeBudget > 0
+    ? [
+      { y: top + plotHeight, value: 0 },
+      { y: top, value: scaleMax },
+    ]
+    : null
+
+  const budgetLineLabel = safeBudget > 0 ? formatCurrency(safeBudget) : null
+
+  return {
+    paceLine,
+    budgetLineY,
+    budgetLineLabel,
+    axisLabels,
+    plotLeft: safeInset,
+    plotRight: safeWidth - safeInset,
+  }
 }

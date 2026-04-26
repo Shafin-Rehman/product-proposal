@@ -1,0 +1,170 @@
+name: AI PR Reviewer
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  pr_agent:
+    if: ${{ github.event.sender.type != 'Bot' && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'issue_comment' && github.event.issue.pull_request)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: PR Agent
+        uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Official DeepSeek API via LiteLLM's native DeepSeek provider.
+          # PR-Agent maps DEEPSEEK.KEY to the DEEPSEEK_API_KEY env var used by LiteLLM.
+          DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+          config.model: "deepseek/deepseek-v4-pro"
+          config.fallback_models: '["deepseek/deepseek-v4-pro"]'
+          # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
+          # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
+          config.custom_model_max_tokens: "256000"
+          config.max_model_tokens: "128000"
+          config.ai_timeout: "300"
+          config.large_patch_policy: "clip"
+          # Helps /improve when the model needs stronger few-shot style prompts for structured output.
+          config.duplicate_prompt_examples: "true"
+
+          # Keep the important repo config here too. In GitHub Actions, .pr_agent.toml changes are
+          # only effective after they exist on the branch PR-Agent reads for the target PR.
+          pr_description.publish_description_as_comment: "true"
+          pr_description.add_original_user_description: "false"
+          pr_description.final_update_message: "false"
+          pr_description.use_bullet_points: "true"
+          pr_description.enable_pr_type: "false"
+          pr_description.enable_pr_diagram: "false"
+          pr_description.include_generated_by_header: "false"
+          pr_description.collapsible_file_list: "true"
+          pr_description.collapsible_file_list_threshold: "1"
+          pr_description.inline_file_summary: "table"
+          pr_description.extra_instructions: "Write a concise Copilot-style pull request overview. Start with the heading \"## Pull request overview\", then one short paragraph, then a \"**Changes:**\" list with at most three bullets. Keep the per-file walkthrough brief and avoid repeating the original PR body or template text."
+          pr_reviewer.num_max_findings: "12"
+          pr_reviewer.require_security_review: "true"
+          pr_reviewer.require_tests_review: "true"
+          pr_reviewer.extra_instructions: "Review like a staff engineer: product context, correctness, edge cases, security, tests, and maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the summary for themes and risk."
+          pr_code_suggestions.commitable_code_suggestions: "true"
+          pr_code_suggestions.num_code_suggestions_per_chunk: "4"
+          pr_code_suggestions.suggestions_score_threshold: "0"
+          pr_code_suggestions.focus_only_on_problems: "true"
+          pr_code_suggestions.extra_instructions: "Provide concrete, apply-ready suggestions with a short reason. Flag real issues and clear wins; skip nit-only churn unless it matters for correctness or security."
+
+          # On each matching PR event: /describe (PR summary) -> /review -> /improve.
+          # "Failed to generate code suggestions" = /improve threw; see Actions log for the exception.
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_review: "true"
+          github_action_config.auto_improve: "true"
+          # Run when the PR is opened, reopened, marked ready, or the branch is pushed (synchronize).
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          # Manual fallbacks: comment on the PR (first line must be the command), e.g.:
+          # /describe   - "what this PR does" (there is no /summary; this is the summary tool)
+          # /review
+          # /improve
+          # /ask ...
+
+      - name: Normalize PR overview comment
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const describeComment = comments
+              .filter((comment) =>
+                comment.user?.type === 'Bot' &&
+                comment.body?.startsWith('## Title') &&
+                comment.body?.includes('### **Description**')
+              )
+              .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+
+            if (!describeComment) {
+              core.info('No PR-Agent describe comment found to normalize.');
+              return;
+            }
+
+            const body = describeComment.body;
+            const titleBlock = (body.match(/^## Title\s+([\s\S]*?)\n___/m)?.[1] || '').trim();
+            const title = titleBlock
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line && !/^####\s+\(Describe updated until commit/i.test(line))
+              .join(' ') || context.payload.pull_request.title;
+            const descriptionBlock = (body.match(/### \*\*Description\*\*\s*([\s\S]*?)(?:\n\n___|\n<details|$)/)?.[1] || '').trim();
+            const bullets = descriptionBlock
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => /^[-*]\s+/.test(line))
+              .map((line) => line.replace(/^[-*]\s+/, '').trim())
+              .filter(Boolean)
+              .slice(0, 3);
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100,
+            });
+
+            const fileRows = files
+              .slice(0, 20)
+              .map((file) => {
+                const description = file.status === 'removed'
+                  ? 'Removed file.'
+                  : `${file.status.charAt(0).toUpperCase()}${file.status.slice(1)} file with ${file.changes} changed lines.`;
+                return `| \`${file.filename.replace(/\|/g, '\\|')}\` | ${description} |`;
+              });
+
+            const fileSummary = files.length > 20
+              ? `\n| _Additional files_ | ${files.length - 20} more changed files not shown. |`
+              : '';
+
+            const summary = title.endsWith('.') ? title : `${title}.`;
+            const changes = bullets.length
+              ? bullets.map((item) => `- ${item}`).join('\n')
+              : '- Reviewed the changed files and summarized the main update.';
+
+            const normalized = [
+              '## Pull request overview',
+              '',
+              summary,
+              '',
+              '**Changes:**',
+              changes,
+              '',
+              '### Reviewed changes',
+              '',
+              'Reviewed the changed files and generated inline comments where applicable.',
+              '',
+              '<details>',
+              '<summary>Show a summary per file</summary>',
+              '',
+              '| File | Description |',
+              '| ---- | ----------- |',
+              `${fileRows.join('\n')}${fileSummary}`,
+              '',
+              '</details>',
+            ].join('\n');
+
+            await github.rest.issues.updateComment({
+              owner,
+              repo,
+              comment_id: describeComment.id,
+              body: normalized.trim(),
+            });

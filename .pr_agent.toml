@@ -1,0 +1,52 @@
+# PR-Agent: Copilot-style defaults for your repo. Docs:
+# https://qodo-merge-docs.qodo.ai/usage-guide/automations_and_usage/
+
+[config]
+temperature = 0.2
+duplicate_prompt_examples = true
+custom_model_max_tokens = 256000
+max_model_tokens = 128000
+
+# Official DeepSeek via LiteLLM's native DeepSeek provider.
+[litellm]
+drop_params = true
+
+# High-level "what this PR does" (posted as a comment so your title/body are not replaced).
+[pr_description]
+publish_description_as_comment = true
+add_original_user_description = false
+final_update_message = false
+use_bullet_points = true
+enable_pr_type = false
+enable_pr_diagram = false
+include_generated_by_header = false
+collapsible_file_list = true
+collapsible_file_list_threshold = 1
+inline_file_summary = "table"
+extra_instructions = """
+Write a concise Copilot-style pull request overview. Start with the heading
+"## Pull request overview", then one short paragraph, then a "**Changes:**" list with at most
+three bullets. Keep the per-file walkthrough brief and avoid repeating the original PR body or
+template text.
+"""
+
+[pr_reviewer]
+num_max_findings = 12
+require_security_review = true
+require_tests_review = true
+extra_instructions = """
+Review like a staff engineer: product context, correctness, edge cases, security, tests, and
+maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the
+summary for themes and risk.
+"""
+
+[pr_code_suggestions]
+# Committable, Copilot-style suggestion blocks in the diff when the provider supports it.
+commitable_code_suggestions = true
+num_code_suggestions_per_chunk = 4
+suggestions_score_threshold = 0
+focus_only_on_problems = true
+extra_instructions = """
+Provide concrete, apply-ready suggestions with a short reason. Flag real issues and clear wins; skip
+nit-only churn unless it matters for correctness or security.
+"""
