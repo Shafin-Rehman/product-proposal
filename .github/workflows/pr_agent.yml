@@ -1,4 +1,5 @@
 name: AI PR Reviewer
+
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -14,65 +15,125 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Official DeepSeek API via LiteLLM's native DeepSeek provider.
+      # PR-Agent maps DEEPSEEK.KEY to the DEEPSEEK_API_KEY env var used by LiteLLM.
+      DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      config.fallback_models: '["deepseek/deepseek-v4-flash"]'
+      # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
+      # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
+      config.custom_model_max_tokens: "256000"
+      config.max_model_tokens: "128000"
+      config.ai_timeout: "300"
+      config.large_patch_policy: "clip"
+      config.duplicate_prompt_examples: "true"
+
+      # Keep the important repo config here too. In GitHub Actions, .pr_agent.toml changes are
+      # only effective after they exist on the branch PR-Agent reads for the target PR.
+      pr_description.publish_description_as_comment: "true"
+      pr_description.add_original_user_description: "false"
+      pr_description.final_update_message: "false"
+      pr_description.use_bullet_points: "true"
+      pr_description.enable_pr_type: "false"
+      pr_description.enable_pr_diagram: "false"
+      pr_description.include_generated_by_header: "false"
+      pr_description.collapsible_file_list: "true"
+      pr_description.collapsible_file_list_threshold: "1"
+      pr_description.inline_file_summary: "table"
+      pr_description.extra_instructions: "Write a lightweight pull request overview, not a code review. Start with the heading \"## Pull request overview\". Use one short paragraph, then a \"**Changes:**\" list with 3 to 6 bullets depending on PR size, then a compact changed-files table and brief reviewer focus areas based only on the PR diff, changed file list, and PR body. Avoid verdict language about issue absence. Do not perform deep correctness or security review. Include a testing note only when it is obvious from touched test files, workflow files, package files, or the PR body."
+
+      pr_code_suggestions.commitable_code_suggestions: "true"
+      pr_code_suggestions.num_code_suggestions_per_chunk: "4"
+      pr_code_suggestions.suggestions_score_threshold: "0"
+      pr_code_suggestions.focus_only_on_problems: "true"
+      pr_code_suggestions.extra_instructions: "Review like GitHub Copilot code review. Focus on real correctness bugs, edge cases, missing data flow, test gaps, security-sensitive changes, and quick safe fixes. Skip style churn, subjective UI nits, and broad refactors. Generate apply-ready committable suggestions only when the fix is small, obvious, and low-risk. For larger or less obvious issues, leave a brief explanatory inline comment instead of inventing a patch. Do not force a suggestion for every comment."
+
     steps:
-      - name: PR Agent
+      - name: Pull request overview
+        if: ${{ github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "ready_for_review"]'), github.event.action) }}
         uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Cheap summary-only model for the compatible /describe tool.
+          config.model: "deepseek/deepseek-v4-flash"
+          config.reasoning_effort: "max"
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_review: "false"
+          github_action_config.auto_improve: "false"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
 
-          # Official DeepSeek API via LiteLLM's native DeepSeek provider.
-          # PR-Agent maps DEEPSEEK.KEY to the DEEPSEEK_API_KEY env var used by LiteLLM.
-          DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      - name: Code review suggestions
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
+        env:
+          # Main automated AI review line via the compatible /improve tool.
+          config.model: "deepseek/deepseek-v4-flash"
+          config.reasoning_effort: "max"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_review: "false"
+          github_action_config.auto_improve: "true"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
 
+      - name: Normalize code review comment
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const codeReviewComment = comments
+              .filter((comment) =>
+                comment.user?.type === 'Bot' &&
+                /generating\s+pr\s+code\s+suggestions|pr\s+code\s+suggestions/i.test(comment.body || '')
+              )
+              .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+
+            if (!codeReviewComment) {
+              core.info('No PR-Agent code suggestions comment found to normalize.');
+              return;
+            }
+
+            const normalized = codeReviewComment.body
+              .replace(/^#{1,3}\s*(?:Generating\s+PR\s+code\s+suggestions|PR\s+code\s+suggestions)\s*$/gim, '## Code review')
+              .replace(/\bGenerating\s+PR\s+code\s+suggestions\b/gi, 'Code review');
+
+            if (normalized !== codeReviewComment.body) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: codeReviewComment.id,
+                body: normalized.trim(),
+              });
+            }
+
+      - name: Manual PR-Agent slash commands
+        if: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request }}
+        uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
+        env:
+          # Manual fallbacks: comment on the PR (first line must be the command), e.g.:
+          # /describe   - lightweight PR overview
+          # /review     - native PR-Agent review, manual only
+          # /improve    - code review suggestions
+          # /ask ...
           config.model: "deepseek/deepseek-v4-pro"
           config.fallback_models: '["deepseek/deepseek-v4-pro"]'
-          # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
-          # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
-          config.custom_model_max_tokens: "256000"
-          config.max_model_tokens: "128000"
-          config.ai_timeout: "300"
-          config.large_patch_policy: "clip"
-          # Helps /improve when the model needs stronger few-shot style prompts for structured output.
-          config.duplicate_prompt_examples: "true"
-
-          # Keep the important repo config here too. In GitHub Actions, .pr_agent.toml changes are
-          # only effective after they exist on the branch PR-Agent reads for the target PR.
-          pr_description.publish_description_as_comment: "true"
-          pr_description.add_original_user_description: "false"
-          pr_description.final_update_message: "false"
-          pr_description.use_bullet_points: "true"
-          pr_description.enable_pr_type: "false"
-          pr_description.enable_pr_diagram: "false"
-          pr_description.include_generated_by_header: "false"
-          pr_description.collapsible_file_list: "true"
-          pr_description.collapsible_file_list_threshold: "1"
-          pr_description.inline_file_summary: "table"
-          pr_description.extra_instructions: "Write a concise Copilot-style pull request overview. Start with the heading \"## Pull request overview\", then one short paragraph, then a \"**Changes:**\" list with at most three bullets. Keep the per-file walkthrough brief and avoid repeating the original PR body or template text."
-          pr_reviewer.num_max_findings: "12"
-          pr_reviewer.require_security_review: "true"
-          pr_reviewer.require_tests_review: "true"
-          pr_reviewer.extra_instructions: "Review like a staff engineer: product context, correctness, edge cases, security, tests, and maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the summary for themes and risk."
-          pr_code_suggestions.commitable_code_suggestions: "true"
-          pr_code_suggestions.num_code_suggestions_per_chunk: "4"
-          pr_code_suggestions.suggestions_score_threshold: "0"
-          pr_code_suggestions.focus_only_on_problems: "true"
-          pr_code_suggestions.extra_instructions: "Provide concrete, apply-ready suggestions with a short reason. Flag real issues and clear wins; skip nit-only churn unless it matters for correctness or security."
-
-          # On each matching PR event: /describe (PR summary) -> /review -> /improve.
-          # "Failed to generate code suggestions" = /improve threw; see Actions log for the exception.
-          github_action_config.auto_describe: "true"
-          github_action_config.auto_review: "true"
-          github_action_config.auto_improve: "true"
-          # Run when the PR is opened, reopened, marked ready, or the branch is pushed (synchronize).
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
-          # Manual fallbacks: comment on the PR (first line must be the command), e.g.:
-          # /describe   - "what this PR does" (there is no /summary; this is the summary tool)
-          # /review
-          # /improve
-          # /ask ...
+          config.reasoning_effort: "high"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_review: "false"
+          github_action_config.auto_improve: "false"
 
       - name: Normalize PR overview comment
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "ready_for_review"]'), github.event.action) }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -89,8 +150,10 @@ jobs:
             const describeComment = comments
               .filter((comment) =>
                 comment.user?.type === 'Bot' &&
-                comment.body?.startsWith('## Title') &&
-                comment.body?.includes('### **Description**')
+                (
+                  comment.body?.startsWith('## Pull request overview') ||
+                  (comment.body?.startsWith('## Title') && comment.body?.includes('### **Description**'))
+                )
               )
               .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
@@ -101,19 +164,35 @@ jobs:
 
             const body = describeComment.body;
             const titleBlock = (body.match(/^## Title\s+([\s\S]*?)\n___/m)?.[1] || '').trim();
-            const title = titleBlock
+            const fallbackTitle = titleBlock
               .split(/\r?\n/)
               .map((line) => line.trim())
               .filter((line) => line && !/^####\s+\(Describe updated until commit/i.test(line))
               .join(' ') || context.payload.pull_request.title;
-            const descriptionBlock = (body.match(/### \*\*Description\*\*\s*([\s\S]*?)(?:\n\n___|\n<details|$)/)?.[1] || '').trim();
-            const bullets = descriptionBlock
+
+            const paragraphFromOverview = body
+              .replace(/^## Pull request overview\s*/i, '')
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .find((line) =>
+                line &&
+                !line.startsWith('#') &&
+                !line.startsWith('|') &&
+                !line.startsWith('-') &&
+                !line.startsWith('<') &&
+                !line.startsWith('**Changes:**') &&
+                !/no\s+major\s+issues\s+found/i.test(line)
+              );
+
+            const changesBlock = body.match(/\*\*Changes:\*\*\s*\n([\s\S]*?)(?=\n\s*\n|\n#{1,6}\s|\n<details|\n\s*\||$)/i)?.[1] || '';
+
+            const bullets = changesBlock
               .split(/\r?\n/)
               .map((line) => line.trim())
               .filter((line) => /^[-*]\s+/.test(line))
               .map((line) => line.replace(/^[-*]\s+/, '').trim())
-              .filter(Boolean)
-              .slice(0, 3);
+              .filter((line) => line && !/no\s+major\s+issues\s+found/i.test(line))
+              .slice(0, 6);
 
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner,
@@ -122,35 +201,59 @@ jobs:
               per_page: 100,
             });
 
+            const describeFile = (file) => {
+              const path = file.filename;
+              const lower = path.toLowerCase();
+              if (lower.includes('workflow') || lower.startsWith('.github/')) return 'Updates GitHub repository automation or PR metadata.';
+              if (lower.endsWith('.toml') || lower.endsWith('.yml') || lower.endsWith('.yaml') || lower.endsWith('.json')) return 'Updates project configuration.';
+              if (/(^|\/)(test|tests|__tests__|spec)\//i.test(path) || /\.(test|spec)\./i.test(path)) return 'Updates test coverage or test fixtures.';
+              if (file.status === 'removed') return 'Removes file.';
+              return `${file.status.charAt(0).toUpperCase()}${file.status.slice(1)} file with ${file.changes} changed lines.`;
+            };
+
             const fileRows = files
               .slice(0, 20)
-              .map((file) => {
-                const description = file.status === 'removed'
-                  ? 'Removed file.'
-                  : `${file.status.charAt(0).toUpperCase()}${file.status.slice(1)} file with ${file.changes} changed lines.`;
-                return `| \`${file.filename.replace(/\|/g, '\\|')}\` | ${description} |`;
-              });
+              .map((file) => `| \`${file.filename.replace(/\|/g, '\\|')}\` | ${describeFile(file)} |`);
 
             const fileSummary = files.length > 20
               ? `\n| _Additional files_ | ${files.length - 20} more changed files not shown. |`
               : '';
 
-            const summary = title.endsWith('.') ? title : `${title}.`;
+            const focusAreas = [];
+            if (files.some((file) => file.filename.startsWith('.github/workflows/') || /\.(yml|yaml)$/i.test(file.filename))) {
+              focusAreas.push('Verify workflow triggers, permissions, and secret names match the intended PR lifecycle.');
+            }
+            if (files.some((file) => /(^|\/)(package(-lock)?|pnpm-lock|yarn\.lock|requirements|pyproject|poetry\.lock)/i.test(file.filename))) {
+              focusAreas.push('Check dependency or package changes for install, build, and compatibility impact.');
+            }
+            if (files.some((file) => /(auth|token|secret|permission|api|workflow)/i.test(file.filename))) {
+              focusAreas.push('Review auth, API, secret, or permission-sensitive changes carefully.');
+            }
+            if (files.some((file) => /(^|\/)(test|tests|__tests__|spec)\//i.test(file.filename) || /\.(test|spec)\./i.test(file.filename))) {
+              focusAreas.push('Confirm the changed tests cover the main behavior touched by this PR.');
+            }
+            if (!focusAreas.length) {
+              focusAreas.push('Focus review on the changed files with the largest logic or data-flow impact.');
+            }
+
+            const testingNote = files.some((file) => /(^|\/)(test|tests|__tests__|spec)\//i.test(file.filename) || /\.(test|spec)\./i.test(file.filename))
+              ? ['### Testing note', '', 'This PR touches test files, so reviewers should check that the coverage matches the changed behavior.', '']
+              : [];
+
+            const summary = (paragraphFromOverview || fallbackTitle).replace(/\s+/g, ' ').trim();
             const changes = bullets.length
               ? bullets.map((item) => `- ${item}`).join('\n')
-              : '- Reviewed the changed files and summarized the main update.';
+              : files.slice(0, 3).map((file) => `- Update \`${file.filename}\`.`).join('\n');
 
             const normalized = [
               '## Pull request overview',
               '',
-              summary,
+              summary.endsWith('.') ? summary : `${summary}.`,
               '',
               '**Changes:**',
               changes,
               '',
               '### Reviewed changes',
-              '',
-              'Reviewed the changed files and generated inline comments where applicable.',
               '',
               '<details>',
               '<summary>Show a summary per file</summary>',
@@ -160,6 +263,12 @@ jobs:
               `${fileRows.join('\n')}${fileSummary}`,
               '',
               '</details>',
+              '',
+              '### Reviewer focus areas',
+              '',
+              focusAreas.map((item) => `- ${item}`).join('\n'),
+              '',
+              ...testingNote,
             ].join('\n');
 
             await github.rest.issues.updateComment({
