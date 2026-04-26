@@ -1,0 +1,146 @@
+/** @jest-environment jsdom */
+
+jest.mock('@/lib/financeVisuals', () => ({
+  getEntryVisual: jest.fn(() => ({
+    color: '#102030',
+    soft: '#aabbcc',
+    symbol: '$',
+  })),
+}))
+
+jest.mock('@/lib/financeUtils', () => ({
+  formatCurrency: jest.fn((value) => {
+    const n = Number(value)
+    return Number.isFinite(n) ? `$${n.toFixed(2)}` : '$0.00'
+  }),
+  formatLongDate: jest.fn((value) => `Long date ${value}`),
+}))
+
+const React = require('react')
+const { render, screen, fireEvent, cleanup } = require('@testing-library/react')
+const { default: TransactionDetailSheet } = require('@/components/ui/TransactionDetailSheet')
+
+afterEach(() => {
+  cleanup()
+  jest.clearAllMocks()
+})
+
+describe('TransactionDetailSheet', () => {
+  it('renders nothing when entry is missing', () => {
+    const { container } = render(React.createElement(TransactionDetailSheet, { onClose: jest.fn() }))
+    expect(container.querySelector('.detail-overlay')).toBeNull()
+  })
+
+  it('invokes onClose from the header close button and the backdrop', () => {
+    const onClose = jest.fn()
+    render(React.createElement(TransactionDetailSheet, {
+      onClose,
+      entry: {
+        kind: 'expense',
+        title: 'Cafe',
+        merchant: 'Cafe',
+        occurredOn: '2026-03-12',
+        amount: 4,
+        chip: 'Dining',
+        note: '',
+      },
+    }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the merchant in the subtitle when it differs from the title', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Dining out',
+        merchant: 'Cafe on Main',
+        occurredOn: '2026-03-12',
+        amount: 12.5,
+        chip: 'Dining',
+        note: 'Team lunch',
+      },
+    }))
+
+    expect(screen.getByText('Cafe on Main')).toBeTruthy()
+  })
+
+  it('uses a long-form date in the subtitle when the merchant is not a separate display name', () => {
+    const { formatLongDate } = require('@/lib/financeUtils')
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Small shop',
+        merchant: 'Small shop',
+        occurredOn: '2026-04-15',
+        amount: 8,
+        chip: 'Dining',
+        note: 'Dining',
+      },
+    }))
+
+    expect(formatLongDate).toHaveBeenCalled()
+    expect(document.querySelector('.detail-sheet__subtitle').textContent).toBe('Long date 2026-04-15')
+  })
+
+  it('displays a distinct body note for expenses when the note is not the category chip', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Store',
+        merchant: 'Store',
+        occurredOn: '2026-01-20',
+        amount: 19.99,
+        chip: 'Shopping',
+        note: 'Gift card for Alex',
+      },
+    }))
+
+    const noteCell = screen.getByText('Note').parentElement
+    expect(noteCell.querySelector('strong').textContent).toBe('Gift card for Alex')
+  })
+
+  it('shows a neutral income note and plus formatting for income', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Payday',
+        merchant: 'Acme',
+        occurredOn: '2026-03-01',
+        amount: 2500,
+        chip: 'Income',
+        note: 'Income',
+      },
+    }))
+
+    expect(screen.getByText('No note added').closest('strong')).toBeTruthy()
+    expect(screen.getByText(/\+.*2500/)).toBeTruthy()
+  })
+
+  it('passes through extra detail content in children', () => {
+    render(React.createElement(
+      TransactionDetailSheet,
+      {
+        onClose: jest.fn(),
+        entry: {
+          kind: 'expense',
+          title: 'A',
+          merchant: 'A',
+          occurredOn: '2026-01-01',
+          amount: 1,
+          chip: 'C',
+        },
+        children: React.createElement('p', { 'data-testid': 'extra' }, 'Extra copy'),
+      },
+    ))
+
+    expect(screen.getByTestId('extra').textContent).toBe('Extra copy')
+  })
+})

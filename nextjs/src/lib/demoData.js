@@ -286,4 +286,27 @@ export const demoInsightsSnapshot = {
     { id: 'demo-exp-6', amount: 89.5, title: "Trader Joe's", categoryName: 'Groceries', occurredOn: '2026-03-21', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
     { id: 'demo-exp-1', amount: 80, title: 'Target run', categoryName: 'Shopping', occurredOn: '2026-03-29', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
   ],
+  previousDailySpend: {
+    totalAmount: 934.18,
+    averageAmount: 33.36,
+    activeDayAverage: 103.8,
+    peakDay: { day: 26, key: '2026-02-26', amount: 220.4 },
+    activeDays: 9,
+    series: [
+      { day: 1, key: '2026-02-01', amount: 0 }, { day: 2, key: '2026-02-02', amount: 0 }, { day: 3, key: '2026-02-03', amount: 0 }, { day: 4, key: '2026-02-04', amount: 0 }, { day: 5, key: '2026-02-05', amount: 0 }, { day: 6, key: '2026-02-06', amount: 0 }, { day: 7, key: '2026-02-07', amount: 0 }, { day: 8, key: '2026-02-08', amount: 0 }, { day: 9, key: '2026-02-09', amount: 0 }, { day: 10, key: '2026-02-10', amount: 0 }, { day: 11, key: '2026-02-11', amount: 0 }, { day: 12, key: '2026-02-12', amount: 42.5 }, { day: 13, key: '2026-02-13', amount: 0 }, { day: 14, key: '2026-02-14', amount: 0 }, { day: 15, key: '2026-02-15', amount: 78 }, { day: 16, key: '2026-02-16', amount: 0 }, { day: 17, key: '2026-02-17', amount: 112.3 }, { day: 18, key: '2026-02-18', amount: 0 }, { day: 19, key: '2026-02-19', amount: 65.8 }, { day: 20, key: '2026-02-20', amount: 0 }, { day: 21, key: '2026-02-21', amount: 0 }, { day: 22, key: '2026-02-22', amount: 98.2 }, { day: 23, key: '2026-02-23', amount: 0 }, { day: 24, key: '2026-02-24', amount: 52 }, { day: 25, key: '2026-02-25', amount: 0 }, { day: 26, key: '2026-02-26', amount: 220.4 }, { day: 27, key: '2026-02-27', amount: 0 }, { day: 28, key: '2026-02-28', amount: 264.98 },
+    ],
+    details: [
+      { id: 'demo-prev-1', key: '2026-02-12', amount: 42.5, title: 'Cafeteria refill', categoryName: 'Dining', occurredOn: '2026-02-12', color: '#d29e4a', soft: 'rgba(210, 158, 74, 0.18)', symbol: '\u{1F37D}\uFE0F' },
+      { id: 'demo-prev-2', key: '2026-02-15', amount: 78, title: 'Trader Joe\'s', categoryName: 'Groceries', occurredOn: '2026-02-15', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
+      { id: 'demo-prev-3', key: '2026-02-17', amount: 112.3, title: 'Amazon (mug + book)', categoryName: 'Shopping', occurredOn: '2026-02-17', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
+      { id: 'demo-prev-4', key: '2026-02-19', amount: 65.8, title: 'Concert ticket', categoryName: 'Fun', occurredOn: '2026-02-19', color: '#8d7fd1', soft: 'rgba(141, 127, 209, 0.18)', symbol: '\u{1F3AE}' },
+      { id: 'demo-prev-5', key: '2026-02-22', amount: 98.2, title: 'JetBlue baggage', categoryName: 'Travel', occurredOn: '2026-02-22', color: '#62a9b7', soft: 'rgba(98, 169, 183, 0.18)', symbol: '\u2708\uFE0F' },
+      { id: 'demo-prev-6', key: '2026-02-24', amount: 52, title: 'Pharmacy run', categoryName: 'Health', occurredOn: '2026-02-24', color: '#63a6cf', soft: 'rgba(99, 166, 207, 0.18)', symbol: '\u2695\uFE0F' },
+      { id: 'demo-prev-7', key: '2026-02-26', amount: 158.8, title: 'Whole Foods big haul', categoryName: 'Groceries', occurredOn: '2026-02-26', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
+      { id: 'demo-prev-8', key: '2026-02-26', amount: 61.6, title: 'Target essentials', categoryName: 'Shopping', occurredOn: '2026-02-26', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
+      { id: 'demo-prev-9', key: '2026-02-28', amount: 145, title: 'Costco haul', categoryName: 'Groceries', occurredOn: '2026-02-28', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
+      { id: 'demo-prev-10', key: '2026-02-28', amount: 96.7, title: 'Apple keyboard', categoryName: 'Shopping', occurredOn: '2026-02-28', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
+      { id: 'demo-prev-11', key: '2026-02-28', amount: 23.28, title: 'Late dinner', categoryName: 'Dining', occurredOn: '2026-02-28', color: '#d29e4a', soft: 'rgba(210, 158, 74, 0.18)', symbol: '\u{1F37D}\uFE0F' },
+    ],
+  },
 }

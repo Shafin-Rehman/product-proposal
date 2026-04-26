@@ -1,5 +1,9 @@
 /** @jest-environment jsdom */
 
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({ children, href, ...props }) => require('react').createElement('a', { href, ...props }, children),
+}))
 jest.mock('next/navigation', () => ({ useRouter: jest.fn() }))
 jest.mock('@/components/providers', () => ({
   useAuth: jest.fn(),
@@ -137,12 +141,30 @@ describe('InsightsView (sample data)', () => {
     expect(screen.getAllByText('vs last month').length).toBeGreaterThan(0)
     expect(screen.getByText('Spend / active day')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open March 2026 month view/ })).toBeTruthy()
-    expect(screen.getByText('Top expenses')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Top expenses' })).toBeTruthy()
     expect(
       screen.getByLabelText('Mar cash flow details: income $3,229.00, expenses $1,011.36, net +$2,217.64')
     ).toBeTruthy()
-    expect(screen.getByText(/of category budget|of monthly spend|vs largest purchase/)).toBeTruthy()
-    expect(container.querySelector('.insights-v57__sparkline')).toBeTruthy()
     expect(container.querySelector('.insights-v57__cashflow-peak')).toBeTruthy()
+  })
+
+  it('renders the new Category detail section with CategoryProgressRow items and a pace-vs-last-month chart', () => {
+    const { container } = render(React.createElement(InsightsView))
+
+    expect(screen.getByRole('heading', { name: 'Category detail' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Pace vs last month' })).toBeTruthy()
+    expect(container.querySelector('.category-progress-list--insights')).toBeTruthy()
+    expect(container.querySelector('.pace-chart')).toBeTruthy()
+  })
+
+  it('shows a readable cash flow scale note in the card header', () => {
+    const { container } = render(React.createElement(InsightsView))
+    expect(container.querySelector('.insights-v57__cashflow-baseline-label')).toBeNull()
+  })
+
+  it('does not render the removed spend-pattern sparkline', () => {
+    const { container } = render(React.createElement(InsightsView))
+    expect(container.querySelector('.insights-v57__sparkline')).toBeNull()
+    expect(container.querySelector('.insights-v57__cashflow-summary')).toBeNull()
   })
 })
