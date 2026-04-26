@@ -256,7 +256,7 @@ export function buildActivityFeed(expenses = [], income = []) {
       amount: Number(expense.amount ?? 0),
       occurredOn: expense.date || expense.created_at,
       sortOn: parseCalendarDate(expense.date || expense.created_at)?.getTime() ?? 0,
-      note: description ? displayCategory : 'Live expense',
+      note: description ? displayCategory : '',
       merchant: description || displayCategory,
       raw: expense,
     }

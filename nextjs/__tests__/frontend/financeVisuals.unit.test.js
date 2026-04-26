@@ -5,6 +5,7 @@ const {
   getCategoryLabel,
   getCategoryVisual,
   getCategoryPresentation,
+  isUncategorizedExpenseName,
   UNCATEGORIZED_EXPENSE_DISPLAY,
   UNCATEGORIZED_EXPENSE_SYMBOL,
   UNKNOWN_INCOME_DISPLAY,
@@ -25,9 +26,17 @@ describe('getCategoryLabel', () => {
     expect(getCategoryLabel('Dining', 'expense')).toBe('Dining')
   })
 
-  it('uses a compact no-category display label for empty expense strings', () => {
+  it('uses a clear uncategorized display label for empty expense strings', () => {
     expect(getCategoryLabel('', 'expense')).toBe(UNCATEGORIZED_EXPENSE_DISPLAY)
     expect(getCategoryLabel('   ', 'expense')).toBe(UNCATEGORIZED_EXPENSE_DISPLAY)
+    expect(getCategoryLabel('', 'expense')).toBe('Uncategorized')
+  })
+
+  it('treats null, SQL labels, and old compact fallback values as uncategorized', () => {
+    expect(isUncategorizedExpenseName(null)).toBe(true)
+    expect(isUncategorizedExpenseName('')).toBe(true)
+    expect(isUncategorizedExpenseName('Uncategorized')).toBe(true)
+    expect(isUncategorizedExpenseName('No cat')).toBe(true)
   })
 
   it('uses no-source display for empty income, not a fake source name', () => {
@@ -90,6 +99,16 @@ describe('getCategoryPresentation', () => {
 })
 
 describe('built-in color uniqueness (Issue #58)', () => {
+  function hexDistance(left, right) {
+    const parse = (hex) => {
+      const value = hex.replace('#', '')
+      return [0, 2, 4].map((start) => parseInt(value.slice(start, start + 2), 16))
+    }
+    const [lr, lg, lb] = parse(left)
+    const [rr, rg, rb] = parse(right)
+    return Math.sqrt(((lr - rr) ** 2) + ((lg - rg) ** 2) + ((lb - rb) ** 2))
+  }
+
   it('has no duplicate primary colors among shipped expense and income built-ins', () => {
     const { expense, income } = getBuiltInColorCollisions()
     expect(expense).toEqual([])
@@ -101,6 +120,16 @@ describe('built-in color uniqueness (Issue #58)', () => {
     const inc = Object.values(BUILT_IN_INCOME_VISUALS)
     expect(new Set(ex.map((v) => v.color)).size).toBe(ex.length)
     expect(new Set(inc.map((v) => v.color)).size).toBe(inc.length)
+  })
+
+  it('keeps manually flagged color families visibly distinct', () => {
+    expect(hexDistance(BUILT_IN_EXPENSE_VISUALS.Education.color, BUILT_IN_EXPENSE_VISUALS.Transit.color)).toBeGreaterThan(90)
+
+    const incomeColors = BUILT_IN_INCOME_VISUALS
+    expect(hexDistance(incomeColors.Salary.color, incomeColors.Rental.color)).toBeGreaterThan(100)
+    expect(hexDistance(incomeColors.Salary.color, incomeColors['Part-time'].color)).toBeGreaterThan(100)
+    expect(hexDistance(incomeColors.Rental.color, incomeColors['Part-time'].color)).toBeGreaterThan(100)
+    expect(hexDistance(incomeColors.Freelance.color, incomeColors.Salary.color)).toBeGreaterThan(80)
   })
 })
 

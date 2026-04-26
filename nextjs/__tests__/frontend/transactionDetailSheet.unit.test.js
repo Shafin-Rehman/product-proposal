@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 
 jest.mock('@/lib/financeVisuals', () => ({
-  getEntryVisual: jest.fn(() => ({
+  getEntryVisual: jest.fn((entry) => ({
+    label: entry?.chip,
     color: '#102030',
     soft: '#aabbcc',
     symbol: '$',
@@ -87,6 +88,24 @@ describe('TransactionDetailSheet', () => {
     expect(categoryCell.querySelector('strong').textContent).toBe('Dining')
   })
 
+  it('shows the actual expense category in the prominent header pill', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Education',
+        merchant: 'Education',
+        occurredOn: '2026-03-12',
+        amount: 4,
+        chip: 'Education',
+        note: '',
+      },
+    }))
+
+    expect(document.querySelector('.detail-sheet__copy .entry-chip').textContent).toBe('Education')
+    expect(screen.queryByText('Live expense')).toBeNull()
+  })
+
   it('labels the chip as Source for an income entry', () => {
     render(React.createElement(TransactionDetailSheet, {
       onClose: jest.fn(),
@@ -104,6 +123,23 @@ describe('TransactionDetailSheet', () => {
     const sourceCell = screen.getByText('Source').parentElement
     expect(sourceCell.querySelector('strong').textContent).toBe('No source')
     expect(screen.queryByText('Category')).toBeNull()
+  })
+
+  it('shows the actual income source in the prominent header pill', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Payday',
+        merchant: 'Acme',
+        occurredOn: '2026-03-01',
+        amount: 2500,
+        chip: 'Salary',
+        note: '',
+      },
+    }))
+
+    expect(document.querySelector('.detail-sheet__copy .entry-chip').textContent).toBe('Salary')
   })
 
   it('uses a long-form date in the subtitle when the merchant is not a separate display name', () => {

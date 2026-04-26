@@ -7,13 +7,12 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
   if (!entry) return null
 
   const visual = getEntryVisual(entry)
+  const displayTitle = entry.title || visual.label || (entry.kind === 'income' ? 'Income' : 'Expense')
   const selectedNote = entry.note && entry.note !== entry.chip
     ? entry.note
-    : entry.kind === 'income'
-      ? 'No note added'
-      : 'Live expense'
+    : 'No note added'
 
-  const selectedSubtitle = entry.merchant && entry.merchant !== entry.title
+  const selectedSubtitle = entry.merchant && entry.merchant !== displayTitle
     ? entry.merchant
     : entry.note && entry.note !== entry.chip
       ? entry.note
@@ -37,13 +36,12 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
             '--entry-soft': visual.soft,
           }}
         >
-          <span className={`detail-sheet__tone-band detail-sheet__tone-band--${entry.kind}`} aria-hidden="true" />
           <div className="entry-avatar entry-avatar--large">
             <span>{visual.symbol}</span>
           </div>
           <div className="detail-sheet__copy">
-            <span className="entry-chip">{entry.kind === 'income' ? 'Income' : 'Expense'}</span>
-            <h2 className="detail-sheet__title" id="transaction-detail-title">{entry.title}</h2>
+            <span className="entry-chip">{visual.label || entry.chip}</span>
+            <h2 className="detail-sheet__title" id="transaction-detail-title">{displayTitle}</h2>
             <p className="detail-sheet__subtitle">{selectedSubtitle}</p>
           </div>
           <button className="button-secondary page-retry" onClick={onClose} type="button">

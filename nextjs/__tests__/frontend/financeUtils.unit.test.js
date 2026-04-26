@@ -101,6 +101,15 @@ describe('buildActivityFeed', () => {
     expect(entry.chip).toBe(UNCATEGORIZED_EXPENSE_DISPLAY)
   })
 
+  it('does not leak live-mode placeholder text for expenses without descriptions', () => {
+    const expenseRow = { id: 'e3', amount: '4.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: '', category_name: 'Education' }
+    const [entry] = buildActivityFeed([expenseRow], [])
+    expect(entry.title).toBe('Education')
+    expect(entry.merchant).toBe('Education')
+    expect(entry.note).toBe('')
+    expect(Object.values(entry).join(' ')).not.toMatch(/live expense/i)
+  })
+
   it('sorts combined entries with the most recent first', () => {
     const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-25T09:00:00Z' }]
     const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01T09:00:00Z', source_name: 'Payroll' }]

@@ -101,13 +101,13 @@ const VISUAL_MATCHERS = [
  * @type {Record<string, { symbol: string, color: string }>}
  */
 export const BUILT_IN_EXPENSE_VISUALS = {
-  Food: { symbol: '\u{1F354}', color: '#d4a13a' },
-  Transit: { symbol: '\u{1F68C}', color: '#2f6fbd' },
-  Entertainment: { symbol: '\u{1F389}', color: '#9a4dca' },
-  Shopping: { symbol: '\u{1F6CD}\uFE0F', color: '#c45d7a' },
-  Utilities: { symbol: '\u{1F4A1}', color: '#d4a52a' },
-  Health: { symbol: '\u{1F48A}', color: '#e24d6a' },
-  Education: { symbol: '\u{1F4DA}', color: '#4a6ed4' },
+  Food: { symbol: '\u{1F354}', color: '#d4932f' },
+  Transit: { symbol: '\u{1F68C}', color: '#008f9c' },
+  Entertainment: { symbol: '\u{1F389}', color: '#8a4fd3' },
+  Shopping: { symbol: '\u{1F6CD}\uFE0F', color: '#c94f7c' },
+  Utilities: { symbol: '\u{1F4A1}', color: '#c7a018' },
+  Health: { symbol: '\u{1F48A}', color: '#d94f45' },
+  Education: { symbol: '\u{1F4DA}', color: '#3f6ed8' },
   Other: { symbol: '\u{1F4E6}', color: '#6d5a4a' },
 }
 
@@ -116,13 +116,15 @@ export const BUILT_IN_EXPENSE_VISUALS = {
  * @type {Record<string, { symbol: string, color: string }>}
  */
 export const BUILT_IN_INCOME_VISUALS = {
-  Salary: { symbol: '\u{1F4BC}', color: '#1f7a45' },
-  Freelance: { symbol: '\u{1F4BB}', color: '#1565a8' },
-  'Part-time': { symbol: '\u23F1\uFE0F', color: '#2d8f6f' },
-  Business: { symbol: '\u{1F3E2}', color: '#a67c1f' },
-  Investment: { symbol: '\u{1F4C8}', color: '#6b4dc9' },
-  Rental: { symbol: '\u{1F3E0}', color: '#0f9069' },
-  Gift: { symbol: '\u{1F381}', color: '#c13d6d' },
+  Salary: { symbol: '\u{1F4BC}', color: '#2563eb' },
+  Freelance: { symbol: '\u{1F4BB}', color: '#7c3aed' },
+  'Part-time': { symbol: '\u23F1\uFE0F', color: '#d97706' },
+  Business: { symbol: '\u{1F3E2}', color: '#0f766e' },
+  Investment: { symbol: '\u{1F4C8}', color: '#16a34a' },
+  Rental: { symbol: '\u{1F3E0}', color: '#be123c' },
+  Gift: { symbol: '\u{1F381}', color: '#c026d3' },
+  Refund: { symbol: '\u{1F9FE}', color: '#0891b2' },
+  Transfer: { symbol: '\u{1F501}', color: '#475569' },
   Other: { symbol: '\u{1F4B0}', color: '#5f6b7a' },
 }
 
@@ -132,8 +134,8 @@ export const UNCATEGORIZED_EXPENSE_LABEL = 'Uncategorized'
 /** Matches SQL: COALESCE(c.name, 'Uncategorized') — internal/aggregation only. */
 export const UNCATEGORIZED_EXPENSE_DB_LABEL = 'Uncategorized'
 
-/** Short user-facing label for missing expense category (compact rows, legends, chips). */
-export const UNCATEGORIZED_EXPENSE_DISPLAY = 'No cat'
+/** User-facing label for missing expense category. */
+export const UNCATEGORIZED_EXPENSE_DISPLAY = 'Uncategorized'
 
 export const UNKNOWN_INCOME_DISPLAY = 'No source'
 
@@ -175,6 +177,7 @@ export function isUncategorizedExpenseName(value) {
   if (!t) return true
   const l = t.toLowerCase()
   if (l === 'uncategorized') return true
+  if (l === 'no cat') return true
   if (t === UNCATEGORIZED_EXPENSE_DISPLAY) return true
   return false
 }
