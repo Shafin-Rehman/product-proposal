@@ -20,7 +20,6 @@ import {
   formatMonthPeriod,
   formatShortDate,
   getCurrentMonthStart,
-  isInMonth,
 } from '@/lib/financeUtils'
 const PREVIEW_LIMIT = 4
 const INCOME_LIMIT = 4
@@ -46,39 +45,8 @@ function getFirstName(email) {
     .join(' ')
 }
 
-export function hasOverallMonthlyLimit(summary) {
-  return Number(summary?.monthly_limit ?? 0) > 0
-}
-
-function hasBudgetedCategoryStatuses(categoryStatuses) {
-  return Array.isArray(categoryStatuses)
-    && categoryStatuses.some((item) => Number(item?.monthly_limit ?? 0) > 0)
-}
-
-export function hasCategoryBudgets(summary) {
-  return hasBudgetedCategoryStatuses(summary?.category_statuses)
-}
-
-export function getBudgetCtaLabel(summary) {
-  if (hasOverallMonthlyLimit(summary)) return 'Edit budget'
-  if (hasCategoryBudgets(summary)) return 'Set overall limit'
-  return 'Set budget'
-}
-
-export function getBudgetHintText(summary) {
-  if (hasOverallMonthlyLimit(summary)) {
-    return `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
-  }
-
-  if (hasCategoryBudgets(summary)) {
-    return 'Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.'
-  }
-
-  return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
-}
-
 function getHeroState(summary) {
-  const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
+  const budget = Number(summary?.monthly_limit ?? 0)
   const spent = Number(summary?.total_expenses ?? 0)
   const income = Number(summary?.total_income ?? 0)
   const remaining = Number(summary?.remaining_budget ?? 0)
@@ -214,13 +182,12 @@ function getTrendPoint(points, width, height, inset, maxValue, index = points.le
   }
 }
 
-function buildLiveCategoryCards(categoryStatuses = []) {
-  return categoryStatuses.map((item) => {
+function buildLiveCategoryCards(breakdown = [], totalExpenses = 0) {
+  return breakdown.map((item) => {
     const displayName = item.category_name || 'Uncategorized'
     const visual = getCategoryVisual(displayName)
-    const amount = Number(item.spent ?? 0)
-    const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
-    const progress = item.monthly_limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
+    const amount = Number(item.total_amount ?? 0)
+    const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
@@ -228,66 +195,11 @@ function buildLiveCategoryCards(categoryStatuses = []) {
       symbol: item.category_icon || visual.symbol,
       color: visual.color,
       soft: visual.soft,
-      progress,
-      amount,
-      note: item.monthly_limit == null
-        ? 'No budget set'
-        : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
-    }
-  })
-}
-
-export function buildDerivedCategoryCards(expenses = []) {
-  const grouped = new Map()
-
-  expenses.forEach((expense) => {
-    const amount = Number(expense.amount ?? 0)
-    const key = expense.category_id ?? expense.category_name ?? 'uncategorized'
-    const displayName = expense.category_name || 'Uncategorized'
-    const current = grouped.get(key) ?? {
-      category_name: displayName,
-      total_amount: 0,
-      count: 0,
-    }
-
-    current.total_amount += amount
-    current.count += 1
-    grouped.set(key, current)
-  })
-
-  const breakdown = Array.from(grouped.entries())
-    .map(([key, item]) => ({
-      category_id: key,
-      category_name: item.category_name,
-      total_amount: Number(item.total_amount.toFixed(2)),
-      count: item.count,
-    }))
-    .sort((left, right) => right.total_amount - left.total_amount)
-
-  const totalExpenses = breakdown.reduce((sum, item) => sum + Number(item.total_amount ?? 0), 0)
-
-  return breakdown.map((item) => {
-    const visual = getCategoryVisual(item.category_name || 'Uncategorized')
-    const amount = Number(item.total_amount ?? 0)
-    const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
-
-    return {
-      id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: item.category_name || 'Uncategorized',
-      symbol: visual.symbol,
-      color: visual.color,
-      soft: visual.soft,
       progress: Math.min(share, 100),
       amount,
       note: `${Math.round(share) || 0}% of spend`,
     }
   })
-}
-
-export function getCategoryCards(categoryStatuses, expenses = []) {
-  return hasBudgetedCategoryStatuses(categoryStatuses)
-    ? buildLiveCategoryCards(categoryStatuses)
-    : buildDerivedCategoryCards(expenses)
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -317,6 +229,7 @@ export default function DashboardView() {
     status: 'loading',
     message: '',
     summary: null,
+    breakdown: [],
     expenses: [],
     income: [],
   })
@@ -339,6 +252,10 @@ export default function DashboardView() {
 
       const results = await Promise.allSettled([
         apiGet(`/api/budget/summary?month=${encodeURIComponent(currentMonth)}`, {
+          accessToken: session.accessToken,
+          signal: controller.signal,
+        }),
+        apiGet(`/api/expenses/breakdown?month=${encodeURIComponent(currentMonth)}`, {
           accessToken: session.accessToken,
           signal: controller.signal,
         }),
@@ -365,8 +282,9 @@ export default function DashboardView() {
       }
 
       const summaryResult = results[0]
-      const expensesResult = results[1]
-      const incomeResult = results[2]
+      const breakdownResult = results[1]
+      const expensesResult = results[2]
+      const incomeResult = results[3]
       const failedCount = results.filter((result) => result.status === 'rejected').length
 
       setLiveState({
@@ -377,6 +295,7 @@ export default function DashboardView() {
             : 'Some live sections are missing for the moment, but the rest of the month is still visible.'
           : '',
         summary: summaryResult.status === 'fulfilled' ? summaryResult.value : null,
+        breakdown: breakdownResult.status === 'fulfilled' ? breakdownResult.value : [],
         expenses: expensesResult.status === 'fulfilled' ? expensesResult.value : [],
         income: incomeResult.status === 'fulfilled' ? incomeResult.value : [],
       })
@@ -395,6 +314,7 @@ export default function DashboardView() {
         status: 'error',
         message: getErrorMessage(error),
         summary: null,
+        breakdown: [],
         expenses: [],
         income: [],
       })
@@ -446,9 +366,6 @@ export default function DashboardView() {
   }
 
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
-  const currentMonthExpenses = isSampleMode
-    ? []
-    : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
   const activity = isSampleMode
     ? demoActivity
     : buildActivityFeed(liveState.expenses, liveState.income)
@@ -469,9 +386,11 @@ export default function DashboardView() {
         note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
       }
     })
-    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
+    : buildLiveCategoryCards(
+      [...liveState.breakdown].sort((left, right) => Number(right.total_amount) - Number(left.total_amount)),
+      Number(summary?.total_expenses ?? 0)
+    )
   const heroState = getHeroState(summary)
-  const budgetCtaLabel = getBudgetCtaLabel(summary)
   const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const trendPoints = isSampleMode
     ? demoBudgetTrend
@@ -525,7 +444,7 @@ export default function DashboardView() {
             <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
             {!isSampleMode && (
               <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
-                {budgetCtaLabel}
+                {heroState.budget ? 'Edit budget' : 'Set budget'}
               </button>
             )}
           </div>
@@ -740,7 +659,7 @@ export default function DashboardView() {
               <div className="detail-sheet__copy">
                 <span className="entry-chip">{formatMonthPeriod(currentMonth)}</span>
                 <h2 className="detail-sheet__title" id="budget-sheet-title">
-                  {budgetCtaLabel}
+                  {heroState.budget ? 'Edit budget' : 'Set budget'}
                 </h2>
                 <p className="detail-sheet__subtitle">
                   Monthly spending limit for {formatMonthPeriod(currentMonth)}
@@ -780,7 +699,9 @@ export default function DashboardView() {
                   <div className="inline-error" role="alert">{budgetSaveError}</div>
                 ) : (
                   <span className="entry-sheet__hint">
-                    {getBudgetHintText(summary)}
+                    {heroState.budget
+                      ? `Current limit: ${formatCurrency(heroState.budget)}. Changes take effect immediately.`
+                      : 'Setting a limit enables the budget tracker and spending trend.'}
                   </span>
                 )}
                 <div className="entry-sheet__actions">
@@ -797,7 +718,7 @@ export default function DashboardView() {
                     disabled={isBudgetSaving || !budgetDraft.monthly_limit || Number(budgetDraft.monthly_limit) <= 0}
                     type="submit"
                   >
-                    {isBudgetSaving ? 'Saving...' : hasOverallMonthlyLimit(summary) ? 'Update budget' : hasCategoryBudgets(summary) ? 'Set overall limit' : 'Set budget'}
+                    {isBudgetSaving ? 'Saving...' : heroState.budget ? 'Update budget' : 'Set budget'}
                   </button>
                 </div>
               </div>

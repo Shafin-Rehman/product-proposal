@@ -134,43 +134,6 @@ function buildLiveExpenseBreakdown(expenses = []) {
     .sort((left, right) => right.amount - left.amount)
 }
 
-export function getExpenseItems(categoryStatuses, monthlyExpenses = []) {
-  if (Array.isArray(categoryStatuses)) {
-    return [...categoryStatuses]
-      .sort((left, right) => Number(right.spent ?? 0) - Number(left.spent ?? 0))
-      .slice(0, BREAKDOWN_LIMIT)
-      .map((item) => {
-        const visual = getCategoryVisual(item.category_name)
-        const spent = Number(item.spent ?? 0)
-        const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
-        return {
-          id: item.category_id ?? item.category_name,
-          name: item.category_name,
-          amount: spent,
-          summaryLine: `This month: ${formatCurrency(spent)}`,
-          detailLine: item.monthly_limit == null
-            ? 'No budget set'
-            : `Budget: ${formatCurrency(item.monthly_limit)}`,
-          secondary: item.monthly_limit == null
-            ? 'No budget set'
-            : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
-          color: visual.color,
-          soft: visual.soft,
-          symbol: item.category_icon || visual.symbol,
-        }
-      })
-  }
-
-  return buildLiveExpenseBreakdown(monthlyExpenses)
-    .slice(0, BREAKDOWN_LIMIT)
-    .map((item) => ({
-      ...item,
-      summaryLine: `This month: ${formatCurrency(item.amount)}`,
-      detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-      secondary: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
-    }))
-}
-
 function getCombinedMessage(...messages) {
   return Array.from(new Set(messages.filter(Boolean))).join(' ')
 }
@@ -376,7 +339,14 @@ export default function InsightsView() {
         symbol: visual.symbol,
       }
     })
-    : getExpenseItems(liveState.summary?.category_statuses, monthlyExpenses)
+    : buildLiveExpenseBreakdown(monthlyExpenses)
+      .slice(0, BREAKDOWN_LIMIT)
+      .map((item) => ({
+        ...item,
+        summaryLine: `This month: ${formatCurrency(item.amount)}`,
+        detailLine: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
+        secondary: `${item.count} transaction${item.count === 1 ? '' : 's'}`,
+      }))
 
   const incomeSourceCounts = new Map()
   monthlyIncome.forEach((entry) => {
@@ -426,9 +396,7 @@ export default function InsightsView() {
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
   const spentValue = summary ? Number(summary.total_expenses ?? derivedSpent) : derivedSpent
   const incomeValue = summary ? Number(summary.total_income ?? derivedIncome) : derivedIncome
-  const budgetLimit = summary?.total_budget == null
-    ? (summary?.monthly_limit == null ? null : Number(summary.monthly_limit))
-    : Number(summary.total_budget)
+  const budgetLimit = summary?.monthly_limit == null ? null : Number(summary.monthly_limit)
   const remainingBudget = budgetLimit == null
     ? null
     : summary?.remaining_budget != null
