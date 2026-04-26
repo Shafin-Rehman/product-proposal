@@ -19,6 +19,12 @@ const ENTRY_CATEGORY_OPTIONS = {
   income: ['Income', 'Transfer', 'Freelance', 'Refund', 'Gift'],
 }
 
+const REPEATING_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+]
+
 const EXTRA_SAMPLE_ACTIVITY = [
   {
     id: 'demo-exp-9',
@@ -157,6 +163,7 @@ function createEntryDraft() {
     counterparty: '',
     category: ENTRY_CATEGORY_OPTIONS.expense[0],
     occurredOn: getTodayInputValue(),
+    repeating: 'off',
     note: '',
   }
 }
@@ -167,6 +174,7 @@ function createEditDraft(entry) {
     amount: String(entry.amount),
     category: entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
     occurredOn: entry.occurredOn || getTodayInputValue(),
+    repeating: 'off',
     note: '',
   }
   if (entry.kind === 'expense') {
@@ -851,6 +859,22 @@ export default function TransactionsView() {
                     value={entryDraft.occurredOn}
                   />
                 </label>
+              </div>
+
+              <div className="entry-sheet__field">
+                <span>Repeating</span>
+                <div className="segment-control segment-control--strong entry-sheet__repeat" role="group" aria-label="Repeating cadence">
+                  {REPEATING_OPTIONS.map((option) => (
+                    <button
+                      className={`segment-control__button${entryDraft.repeating === option.value ? ' segment-control__button--active' : ''}`}
+                      key={option.value}
+                      onClick={() => updateDraft('repeating', option.value)}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <label className="entry-sheet__field">

@@ -10,6 +10,7 @@ import {
   demoBudgetSummary,
   demoCategoryBudgets,
   demoIncomeSources,
+  demoRecurringCharges,
 } from '@/lib/demoData'
 import { getCategoryVisual, getEntryVisual } from '@/lib/financeVisuals'
 import {
@@ -459,6 +460,10 @@ export default function InsightsView() {
     patternRotation: index % 2 === 0 ? 34 : -34,
   }))
   const liveMessage = getCombinedMessage(liveState.summaryMessage, liveState.listMessage)
+  const subscriptions = isSampleMode ? demoRecurringCharges : []
+  const subscriptionsCopy = isSampleMode
+    ? 'Bills coming up for the selected month.'
+    : 'Recurring bills will appear here when available for the selected month.'
   const centerLabel = viewMode === 'expenses' ? 'Spent this month' : 'Income this month'
   const centerLabelWords = centerLabel.split(' ')
   const budgetStatusValue = budgetLimit == null
@@ -708,6 +713,33 @@ export default function InsightsView() {
                 <span>{topExpensesEmptyCopy}</span>
               </div>
             )}
+          </article>
+
+          <article className="insight-card insight-pocket insight-card--subscriptions">
+            <div className="insight-card__header">
+              <div>
+                <span className="insight-pocket__eyebrow">Coming up</span>
+                <h2 className="insight-card__title">Upcoming subscriptions</h2>
+                <p className="insight-card__copy">{subscriptionsCopy}</p>
+              </div>
+            </div>
+
+            <div className="insight-pocket__list">
+              {subscriptions.length ? subscriptions.map((charge) => (
+                <div className="insight-pocket__row" key={charge.id}>
+                  <div>
+                    <strong>{charge.title}</strong>
+                    <span>Due {charge.dueLabel}</span>
+                  </div>
+                  <div className="entry-amount entry-amount--expense">-{formatCurrency(charge.amount)}</div>
+                </div>
+              )) : (
+                <div className="blank-state blank-state--compact">
+                  <strong>No subscriptions yet</strong>
+                  <span>Recurring bills will show here once they are available for the selected month.</span>
+                </div>
+              )}
+            </div>
           </article>
         </div>
       </div>
