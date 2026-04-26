@@ -82,8 +82,8 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (!isReady || isAuthenticated) return
-    router.replace('/login')
-  }, [isAuthenticated, isReady, router])
+    window.location.replace('/login')
+  }, [isAuthenticated, isReady])
 
   if (!isReady || !isAuthenticated) {
     return <AppLoadingShell />

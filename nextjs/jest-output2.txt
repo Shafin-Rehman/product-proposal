@@ -1,0 +1,116 @@
+npx : FAIL __tests__/fr
+ontend/apiClient.integr
+ation.test.js
+At line:1 char:1
++ npx jest > 
+jest-output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (FAIL __tests_   
+ _/...gration.test.    
+js:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+  ??? session ??? 
+apiGet ??? cleared 
+session produces a 
+null token which 
+apiGet rejects with 401
+
+    expect(received).re
+jects.toMatchObject(exp
+ected)
+
+    - Expected  - 4
+    + Received  + 1
+
+    - Object {
+    -   "name": 
+"ApiError",
+    -   "status": 401,
+    - }
+    + [TypeError: 
+Cannot read properties 
+of undefined (reading 
+'pathname')]
+
+    [0m [90m 44 
+|[39m     expect(sessi
+on)[33m.[39mtoBeNull(
+)
+     [90m 45 |[39m   
+  [36mawait[39m expec
+t(apiGet([32m'/api/exp
+enses'[39m[33m,[39m 
+{ 
+accessToken[33m:[39m 
+session[33m?[39m[33m
+.[39maccessToken }))
+    [31m[1m>[22m[39
+m[90m 46 |[39m       
+[33m.[39mrejects[33m
+.[39mtoMatchObject({ 
+name[33m:[39m [32m'A
+piError'[39m[33m,[39
+m status[33m:[39m 
+[35m401[39m })
+     [90m    |[39m   
+             
+[31m[1m^[22m[39m
+     [90m 47 |[39m   
+})
+     [90m 48 |[39m })
+     [90m 49 
+|[39m[0m
+
+      at 
+Object.toMatchObject (n
+ode_modules/expect/buil
+d/index.js:218:22)
+      at 
+Object.toMatchObject (_
+_tests__/frontend/apiCl
+ient.integration.test.j
+s:46:16)
+
+PASS __tests__/frontend
+/financeUtils.unit.test
+.js
+PASS __tests__/planner.
+test.js
+PASS __tests__/frontend
+/finance.integration.te
+st.js
+PASS __tests__/dashboar
+d.test.js
+PASS __tests__/apiClien
+t.test.js
+PASS __tests__/insights
+.test.js
+PASS __tests__/frontend
+/session.unit.test.js
+PASS __tests__/frontend
+/financeVisuals.unit.te
+st.js
+PASS 
+__tests__/auth.test.js
+PASS __tests__/budget.t
+est.js
+PASS __tests__/income.t
+est.js
+PASS __tests__/expenses
+.test.js
+
+Test Suites: 1 failed, 
+12 passed, 13 total
+Tests:       1 failed, 
+163 passed, 164 total
+Snapshots:   0 total
+Time:        4.171 s, 
+estimated 5 s
+Ran all test suites.

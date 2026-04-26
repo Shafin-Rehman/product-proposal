@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { clearSession, readSession, writeSession } from '@/lib/session'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
@@ -56,7 +55,6 @@ function ThemeProvider({ children }) {
 }
 
 function AuthProvider({ children }) {
-  const router = useRouter()
   const [session, setSession] = useState(null)
   const [isReady, setIsReady] = useState(false)
 
@@ -70,7 +68,7 @@ function AuthProvider({ children }) {
         setSession(nextSession)
         
         if (!nextSession && window.location.pathname !== '/login') {
-          router.replace('/login')
+          window.location.replace('/login')
         }
       }
     }
@@ -93,7 +91,7 @@ function AuthProvider({ children }) {
   const logout = () => {
     clearSession()
     setSession(null)
-    router.replace('/login')
+    window.location.replace('/login')
   }
 
   const value = useMemo(() => ({
