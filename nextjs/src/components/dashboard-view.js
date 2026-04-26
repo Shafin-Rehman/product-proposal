@@ -267,6 +267,7 @@ export function getBudgetPressureHighlight(summary, expenses = [], derivedCatego
       name: card.name,
       note: card.note,
       progress: card.progress,
+      amount: card.amount,
     })),
   })
 }
