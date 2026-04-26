@@ -20,20 +20,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # PR-Agent has no "NVIDIA" section. The NVIDIA URL is an OpenAI-*compatible* HTTP API, so
-          # the tool sets [openai].api_key + [openai].api_base. LiteLLM is the client library PR-Agent
-          # uses; your key and model are still DeepSeek on NVIDIA.
-          OPENAI_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          OPENAI.API_BASE: "https://integrate.api.nvidia.com/v1"
+          # Official DeepSeek API via LiteLLM's native DeepSeek provider.
+          # PR-Agent maps DEEPSEEK.KEY to the DEEPSEEK_API_KEY env var used by LiteLLM.
+          DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
-          # LiteLLM uses the openai/ prefix for OpenAI-compatible custom endpoints, then sends the
-          # unprefixed model name to NVIDIA's API.
-          config.model: "openai/deepseek-ai/deepseek-v4-pro"
-          config.fallback_models: '["openai/deepseek-ai/deepseek-v4-pro"]'
+          config.model: "deepseek/deepseek-v4-pro"
+          config.fallback_models: '["deepseek/deepseek-v4-pro"]'
           # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
           # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
-          config.custom_model_max_tokens: "128000"
-          config.max_model_tokens: "64000"
+          config.custom_model_max_tokens: "256000"
+          config.max_model_tokens: "128000"
           config.ai_timeout: "300"
           config.large_patch_policy: "clip"
           # Helps /improve when the model needs stronger few-shot style prompts for structured output.
