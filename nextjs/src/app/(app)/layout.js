@@ -20,8 +20,7 @@ function AppLoadingShell() {
       <div className="route-shell-loading__glow route-shell-loading__glow--bottom" />
       <section className="route-shell-loading__card">
         <span className="brand-pill">BudgetBuddy</span>
-        <h1>Loading your budget space</h1>
-        <p>Checking your session and restoring the app shell.</p>
+        <p>Loading your workspace...</p>
       </section>
     </div>
   )
