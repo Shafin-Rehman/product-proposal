@@ -22,7 +22,7 @@ jobs:
       # PR-Agent maps DEEPSEEK.KEY to the DEEPSEEK_API_KEY env var used by LiteLLM.
       DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
-      config.fallback_models: '["deepseek/deepseek-v4-pro"]'
+      config.fallback_models: '["deepseek/deepseek-v4-flash"]'
       # Required for models not listed in PR-Agent's built-in MAX_TOKENS table.
       # Use conservative review-sized limits so large PRs are clipped/chunked reliably.
       config.custom_model_max_tokens: "256000"
@@ -58,6 +58,7 @@ jobs:
         env:
           # Cheap summary-only model for the compatible /describe tool.
           config.model: "deepseek/deepseek-v4-flash"
+          config.reasoning_effort: "max"
           github_action_config.auto_describe: "true"
           github_action_config.auto_review: "false"
           github_action_config.auto_improve: "false"
@@ -67,9 +68,9 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: Codium-ai/pr-agent@0e37fc84fcc8207561e64eef8f7f634fb57e8447
         env:
-          # Main AI review line via the compatible /improve tool.
-          config.model: "deepseek/deepseek-v4-pro"
-          config.reasoning_effort: "high"
+          # Main automated AI review line via the compatible /improve tool.
+          config.model: "deepseek/deepseek-v4-flash"
+          config.reasoning_effort: "max"
           github_action_config.auto_describe: "false"
           github_action_config.auto_review: "false"
           github_action_config.auto_improve: "true"
@@ -125,6 +126,7 @@ jobs:
           # /improve    - code review suggestions
           # /ask ...
           config.model: "deepseek/deepseek-v4-pro"
+          config.fallback_models: '["deepseek/deepseek-v4-pro"]'
           config.reasoning_effort: "high"
           github_action_config.auto_describe: "false"
           github_action_config.auto_review: "false"
@@ -162,7 +164,6 @@ jobs:
 
             const body = describeComment.body;
             const titleBlock = (body.match(/^## Title\s+([\s\S]*?)\n___/m)?.[1] || '').trim();
-            const descriptionBlock = (body.match(/### \*\*Description\*\*\s*([\s\S]*?)(?:\n\n___|\n<details|$)/)?.[1] || '').trim();
             const fallbackTitle = titleBlock
               .split(/\r?\n/)
               .map((line) => line.trim())
@@ -183,8 +184,9 @@ jobs:
                 !/no\s+major\s+issues\s+found/i.test(line)
               );
 
-            const rawBullets = descriptionBlock || body;
-            const bullets = rawBullets
+            const changesBlock = body.match(/\*\*Changes:\*\*\s*\n([\s\S]*?)(?=\n\s*\n|\n#{1,6}\s|\n<details|\n\s*\||$)/i)?.[1] || '';
+
+            const bullets = changesBlock
               .split(/\r?\n/)
               .map((line) => line.trim())
               .filter((line) => /^[-*]\s+/.test(line))
