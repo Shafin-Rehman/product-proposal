@@ -18,6 +18,7 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
     : entry.note && entry.note !== entry.chip
       ? entry.note
       : formatLongDate(entry.occurredOn)
+  const categoryOrSourceLabel = entry.kind === 'income' ? 'Source' : 'Category'
 
   return (
     <div className="detail-overlay" role="presentation">
@@ -59,7 +60,7 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
 
         <div className="detail-grid">
           <div>
-            <span>Category</span>
+            <span>{categoryOrSourceLabel}</span>
             <strong>{entry.chip}</strong>
           </div>
           <div>

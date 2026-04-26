@@ -69,6 +69,43 @@ describe('TransactionDetailSheet', () => {
     expect(screen.getByText('Cafe on Main')).toBeTruthy()
   })
 
+  it('labels the chip as Category for an expense entry', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Cafe',
+        merchant: 'Cafe',
+        occurredOn: '2026-03-12',
+        amount: 4,
+        chip: 'Dining',
+        note: '',
+      },
+    }))
+
+    const categoryCell = screen.getByText('Category').parentElement
+    expect(categoryCell.querySelector('strong').textContent).toBe('Dining')
+  })
+
+  it('labels the chip as Source for an income entry', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Payday',
+        merchant: 'Acme',
+        occurredOn: '2026-03-01',
+        amount: 2500,
+        chip: 'No source',
+        note: '',
+      },
+    }))
+
+    const sourceCell = screen.getByText('Source').parentElement
+    expect(sourceCell.querySelector('strong').textContent).toBe('No source')
+    expect(screen.queryByText('Category')).toBeNull()
+  })
+
   it('uses a long-form date in the subtitle when the merchant is not a separate display name', () => {
     const { formatLongDate } = require('@/lib/financeUtils')
     render(React.createElement(TransactionDetailSheet, {
@@ -115,8 +152,8 @@ describe('TransactionDetailSheet', () => {
         merchant: 'Acme',
         occurredOn: '2026-03-01',
         amount: 2500,
-        chip: 'Income',
-        note: 'Income',
+        chip: 'Salary',
+        note: 'Salary',
       },
     }))
 

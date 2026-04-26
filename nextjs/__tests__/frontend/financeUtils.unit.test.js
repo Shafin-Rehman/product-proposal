@@ -1,3 +1,4 @@
+const { UNCATEGORIZED_EXPENSE_DISPLAY } = require('@/lib/financeVisuals')
 const {
   parseCalendarDate,
   isInMonth,
@@ -7,6 +8,8 @@ const {
   buildMonthlySpendTrend,
   buildActivityFeed,
   buildDailySpendDetailsFromExpenses,
+  getEditFormCategoryName,
+  resolveCategoryOrSourceMutation,
   groupActivityByDate,
   buildIncomeSourceBreakdown,
   buildRecentCashFlow,
@@ -92,6 +95,12 @@ describe('buildActivityFeed', () => {
     expect(entry.title).toBe('Coffee')
   })
 
+  it('uses a compact no-category label for expenses without a category name', () => {
+    const expenseRow = { id: 'e2', amount: '5.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: '' }
+    const [entry] = buildActivityFeed([expenseRow], [])
+    expect(entry.chip).toBe(UNCATEGORIZED_EXPENSE_DISPLAY)
+  })
+
   it('sorts combined entries with the most recent first', () => {
     const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-25T09:00:00Z' }]
     const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01T09:00:00Z', source_name: 'Payroll' }]
@@ -110,6 +119,91 @@ describe('buildActivityFeed', () => {
     const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', source_name: 'Payroll' }]
     const [entry] = buildActivityFeed([], income)
     expect(entry.note).toBe('')
+  })
+
+  it('threads category_icon and source_icon for list visuals', () => {
+    const [exp] = buildActivityFeed([{
+      id: 'e1',
+      amount: '10.00',
+      date: '2026-03-10',
+      created_at: '2026-03-10T00:00:00Z',
+      category_name: 'Food',
+      category_icon: '🥘',
+    }], [])
+    expect(exp.chip).toBe('Food')
+    expect(exp.categoryIcon).toBe('🥘')
+
+    const [inc] = buildActivityFeed([], [{
+      id: 'i1',
+      amount: '1.00',
+      date: '2026-03-20',
+      source_name: 'X',
+      source_icon: '💰',
+    }])
+    expect(inc.sourceIcon).toBe('💰')
+  })
+})
+
+describe('getEditFormCategoryName', () => {
+  it('prefers raw category_name over a stale display chip for expenses', () => {
+    const name = getEditFormCategoryName({
+      kind: 'expense',
+      chip: 'Dining',
+      raw: { category_name: 'Food' },
+    })
+    expect(name).toBe('Food')
+  })
+
+  it('returns empty when raw category is missing (chip is display-only, not a form value)', () => {
+    const name = getEditFormCategoryName({
+      kind: 'expense',
+      chip: 'No cat',
+      raw: { category_name: null },
+    })
+    expect(name).toBe('')
+  })
+
+  it('returns empty when raw income source is missing', () => {
+    expect(
+      getEditFormCategoryName({ kind: 'income', chip: 'No source', raw: { source_name: null, source_id: null } })
+    ).toBe('')
+  })
+})
+
+describe('resolveCategoryOrSourceMutation (Issue #58 clear-on-edit)', () => {
+  const expOpts = [{ id: 'c1', name: 'Food' }, { id: 'c2', name: 'Transit' }]
+  const incOpts = [{ id: 's1', name: 'Salary' }]
+
+  it('create expense: no key when unselected, id when selected', () => {
+    expect(resolveCategoryOrSourceMutation({ isEdit: false, selectedName: '', options: expOpts, kind: 'expense' })).toEqual({})
+    expect(
+      resolveCategoryOrSourceMutation({ isEdit: false, selectedName: 'Food', options: expOpts, kind: 'expense' })
+    ).toEqual({ category_id: 'c1' })
+  })
+
+  it('update expense: null when unselected, id when selected', () => {
+    expect(resolveCategoryOrSourceMutation({ isEdit: true, selectedName: '', options: expOpts, kind: 'expense' })).toEqual({
+      category_id: null,
+    })
+    expect(
+      resolveCategoryOrSourceMutation({ isEdit: true, selectedName: 'Food', options: expOpts, kind: 'expense' })
+    ).toEqual({ category_id: 'c1' })
+  })
+
+  it('create income: no key when unselected, id when selected', () => {
+    expect(resolveCategoryOrSourceMutation({ isEdit: false, selectedName: '', options: incOpts, kind: 'income' })).toEqual({})
+    expect(
+      resolveCategoryOrSourceMutation({ isEdit: false, selectedName: 'Salary', options: incOpts, kind: 'income' })
+    ).toEqual({ source_id: 's1' })
+  })
+
+  it('update income: null when unselected, id when selected', () => {
+    expect(resolveCategoryOrSourceMutation({ isEdit: true, selectedName: '', options: incOpts, kind: 'income' })).toEqual({
+      source_id: null,
+    })
+    expect(
+      resolveCategoryOrSourceMutation({ isEdit: true, selectedName: 'Salary', options: incOpts, kind: 'income' })
+    ).toEqual({ source_id: 's1' })
   })
 })
 

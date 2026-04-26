@@ -43,46 +43,51 @@ jest.mock('@/lib/demoData', () => ({
       kind: 'income',
       merchant: 'Mockville Payroll',
       title: 'Mockville Payroll',
-      chip: 'Income',
+      chip: 'Salary',
       occurredOn: '2026-03-01',
       amount: 2400,
       note: '',
     },
   ],
 }))
-jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value,
-    color: '#123456',
-    soft: '#abcdef',
-    symbol: value?.[0] || '?',
-  })),
-  getEntryVisual: jest.fn((entry) => ({
-    color: entry.kind === 'income' ? '#0f9d58' : '#123456',
-    soft: '#abcdef',
-    symbol: entry.kind === 'income' ? '+' : '$',
-  })),
-}))
-jest.mock('@/lib/financeUtils', () => ({
-  buildActivityFeed: jest.fn(),
-  formatCurrency: jest.fn((value) => `$${value}`),
-  formatLongDate: jest.fn((value) => `Long ${value}`),
-  formatShortDate: jest.fn((value) => value),
-  groupActivityByDate: jest.fn((entries) => {
-    const grouped = new Map()
-    entries.forEach((entry) => {
-      const key = entry.occurredOn
-      if (!grouped.has(key)) grouped.set(key, { key, label: `On ${key}`, entries: [] })
-      grouped.get(key).entries.push(entry)
-    })
-    return Array.from(grouped.values()).sort((left, right) => right.key.localeCompare(left.key))
-  }),
-}))
+jest.mock('@/lib/financeVisuals', () => {
+  const actual = jest.requireActual('@/lib/financeVisuals')
+  return {
+    ...actual,
+    getEntryVisual: jest.fn((entry) => {
+      if (entry?.chip) {
+        const serverIcon = entry.kind === 'income' ? entry?.sourceIcon : entry?.categoryIcon
+        return actual.getCategoryPresentation({ name: entry.chip, icon: serverIcon, kind: entry?.kind })
+      }
+      if (entry?.categoryName) {
+        return actual.getCategoryPresentation({
+          name: entry.categoryName,
+          icon: entry.kind === 'income' ? entry?.sourceIcon : entry?.categoryIcon,
+          kind: entry?.kind,
+        })
+      }
+      return actual.getEntryVisual(entry)
+    }),
+  }
+})
+jest.mock('@/lib/financeUtils', () => {
+  const actual = jest.requireActual('@/lib/financeUtils')
+  return {
+    ...actual,
+    buildActivityFeed: jest.fn(() => []),
+    formatCurrency: jest.fn((value) => `$${value}`),
+    formatLongDate: jest.fn((value) => `Long ${value}`),
+    formatShortDate: jest.fn((value) => value),
+  }
+})
 
 const React = require('react')
-const { render, screen, fireEvent, cleanup, act } = require('@testing-library/react')
+const { render, screen, fireEvent, cleanup, act, waitFor, within } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode, useDataChanged } = require('@/components/providers')
+const { apiGet, apiPost } = require('@/lib/apiClient')
+const financeUtils = require('@/lib/financeUtils')
+const actualFinanceUtils = jest.requireActual('@/lib/financeUtils')
 const { default: TransactionsView } = require('@/components/transactions-view')
 
 beforeEach(() => {
@@ -183,5 +188,190 @@ describe('TransactionsView (sample data)', () => {
       fireEvent.change(screen.getByPlaceholderText(/Search merchant/i), { target: { value: 'zzzzz' } })
     })
     expect(screen.getByText('No matching transactions')).toBeTruthy()
+  })
+})
+
+describe('TransactionsView (live) entry form (Issue #58)', () => {
+  afterEach(() => {
+    financeUtils.buildActivityFeed.mockImplementation(() => [])
+  })
+
+  beforeEach(() => {
+    useDataMode.mockReturnValue({ isSampleMode: false })
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses' || url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') {
+        return Promise.resolve([
+          { id: 'c-edu', name: 'Education', icon: '\u{1F4DA}' },
+          { id: 'c-food', name: 'Food', icon: '\u{1F354}' },
+        ])
+      }
+      if (url === '/api/income/categories') {
+        return Promise.resolve([{ id: 'i-bus', name: 'Business', icon: '\u{1F3E2}' }])
+      }
+      return Promise.resolve([])
+    })
+    apiPost.mockResolvedValue({})
+  })
+
+  it('opens add sheet with an empty category select (not Education) and a matching preview, not a letter fallback', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => {
+      expect(screen.queryByText('Loading activity')).toBeNull()
+    })
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
+    })
+    const dialog = screen.getByRole('dialog')
+    const select = within(dialog).getByRole('combobox')
+    expect(select.value).toBe('')
+    const previewAvatar = dialog.querySelector('.entry-avatar--large span')
+    expect(previewAvatar.textContent).toBe('\u{1F3F7}\uFE0F')
+  })
+
+  it('posts a new expense without category_id when the user does not select a category', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    const amountInput = dialog.querySelector('input[inputmode="decimal"]')
+    act(() => { fireEvent.change(amountInput, { target: { value: '12.5' } }) })
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Add transaction' })) })
+    await waitFor(() => { expect(apiPost).toHaveBeenCalled() })
+    const expensePost = apiPost.mock.calls.find((c) => c[0] === '/api/expenses')
+    expect(expensePost).toBeTruthy()
+    expect(expensePost[1].category_id).toBeUndefined()
+  })
+
+  it('switches to income with an empty source select, not the first listed source (Business)', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
+    const select = within(dialog).getByRole('combobox')
+    expect(select.value).toBe('')
+    const previewAvatar = dialog.querySelector('.entry-avatar--large span')
+    expect(previewAvatar.textContent).toBe('\u{1F4CB}')
+  })
+
+  it('posts a new income row without source_id when the user does not select a source', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
+    const amountInput = dialog.querySelector('input.input-field[inputmode="decimal"]')
+    act(() => { fireEvent.change(amountInput, { target: { value: '100' } }) })
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Add transaction' })) })
+    await waitFor(() => { expect(apiPost).toHaveBeenCalled() })
+    const incPost = apiPost.mock.calls.find((c) => c[0] === '/api/income')
+    expect(incPost).toBeTruthy()
+    expect(incPost[1].source_id).toBeUndefined()
+  })
+
+  it('sends category_id: null on update when editing an expense and clearing the category', async () => {
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') {
+        return Promise.resolve([{
+          id: 55,
+          amount: '8.00',
+          date: '2026-03-12',
+          description: 'Snack',
+          category_name: 'Food',
+          category_id: 'c-food-uuid',
+        }])
+      }
+      if (url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') {
+        return Promise.resolve([{ id: 'c-food-uuid', name: 'Food', icon: null }])
+      }
+      if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-1', name: 'Business', icon: null }])
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByText('Snack')) })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
+    const formDialog = screen.getByRole('dialog')
+    const select = within(formDialog).getByRole('combobox')
+    act(() => { fireEvent.change(select, { target: { value: '' } }) })
+    act(() => { fireEvent.click(within(formDialog).getByRole('button', { name: 'Save changes' })) })
+    await waitFor(() => {
+      const updateCall = apiPost.mock.calls.find((c) => c[0] === '/api/expenses/update')
+      expect(updateCall[1].category_id).toBeNull()
+    })
+  })
+
+  it('sends source_id: null on update when editing income and clearing the source', async () => {
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') return Promise.resolve([])
+      if (url === '/api/income') {
+        return Promise.resolve([{
+          id: 90,
+          amount: '200.00',
+          date: '2026-03-05',
+          notes: 'Pay',
+          source_name: 'Freelance',
+          source_id: 'src-f',
+        }])
+      }
+      if (url === '/api/expenses/categories') {
+        return Promise.resolve([{ id: 'c1', name: 'Food', icon: null }])
+      }
+      if (url === '/api/income/categories') {
+        return Promise.resolve([{ id: 'src-f', name: 'Freelance', icon: null }])
+      }
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getAllByText('Freelance')[0]) })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
+    const formDialog = screen.getByRole('dialog')
+    const select = within(formDialog).getByRole('combobox')
+    act(() => { fireEvent.change(select, { target: { value: '' } }) })
+    act(() => { fireEvent.click(within(formDialog).getByRole('button', { name: 'Save changes' })) })
+    await waitFor(() => {
+      const updateCall = apiPost.mock.calls.find((c) => c[0] === '/api/income/update')
+      expect(updateCall[1].source_id).toBeNull()
+    })
+  })
+
+  it('sends a stable category_id on update when editing and keeping Food selected', async () => {
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') {
+        return Promise.resolve([{
+          id: 60,
+          amount: '3.00',
+          date: '2026-03-14',
+          description: 'Tea',
+          category_name: 'Food',
+          category_id: 'c-food-uuid-2',
+        }])
+      }
+      if (url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') {
+        return Promise.resolve([{ id: 'c-food-uuid-2', name: 'Food', icon: null }])
+      }
+      if (url === '/api/income/categories') return Promise.resolve([])
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByText('Tea')) })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
+    const formDialog = screen.getByRole('dialog')
+    act(() => { fireEvent.click(within(formDialog).getByRole('button', { name: 'Save changes' })) })
+    await waitFor(() => {
+      const updateCall = apiPost.mock.calls.find((c) => c[0] === '/api/expenses/update')
+      expect(updateCall[1].category_id).toBe('c-food-uuid-2')
+    })
   })
 })

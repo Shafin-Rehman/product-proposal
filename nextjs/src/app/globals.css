@@ -3879,6 +3879,12 @@ html[data-theme='dark'] .tab-link--active {
   animation: detail-sheet-in 220ms ease both;
 }
 
+/* Add/Edit transaction: short form; give slightly more headroom on desktop so the primary fields rarely scroll. */
+.detail-sheet.entry-sheet {
+  max-height: min(52rem, calc(100dvh - 1.25rem));
+  padding: 0.9rem 1rem 1rem;
+}
+
 .detail-sheet__handle {
   margin-bottom: 0.25rem;
 }
@@ -5536,7 +5542,7 @@ html[data-theme='dark'] .transactions-fab {
 }
 
 .entry-sheet__textarea {
-  min-height: 6rem;
+  min-height: 4.5rem;
   resize: vertical;
 }
 

@@ -1,4 +1,4 @@
-import { getCategoryLabel, getCategoryVisual } from './financeVisuals'
+import { getCategoryLabel, getCategoryPresentation } from './financeVisuals'
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -144,6 +144,55 @@ export function formatPercentage(value) {
   return `${Math.round(Number(value) || 0)}%`
 }
 
+/**
+ * Category/source name to match against API lists when opening the transaction edit form.
+ * Uses raw persisted row fields, not presentation-only chip values (e.g. keeps category_id resolution stable).
+ */
+export function getEditFormCategoryName(entry) {
+  if (entry == null) return ''
+  if (entry.kind === 'expense') {
+    const n = entry.raw?.category_name
+    if (n != null && String(n).trim() !== '') return String(n).trim()
+    return ''
+  }
+  const s = entry.raw?.source_name
+  if (s != null && String(s).trim() !== '') return String(s).trim()
+  return ''
+}
+
+/**
+ * Maps the transaction form’s selected category or source *name* (from the API list) to
+ * `category_id` / `source_id` fields for create vs update.
+ * - Create: omit the key when unselected (POST routes use null from missing body as needed).
+ * - Update: send explicit `null` when the user selects the empty placeholder to clear a prior id.
+ * Matching uses exact `name` on `options` (not display chip strings).
+ * @param {{ isEdit: boolean, selectedName: string, options: { id: unknown, name: string }[], kind: 'expense' | 'income' }} p
+ * @returns {Record<string, never> | { category_id: unknown } | { category_id: null } | { source_id: unknown } | { source_id: null }}
+ */
+export function resolveCategoryOrSourceMutation({ isEdit, selectedName, options = [], kind }) {
+  const name = selectedName == null ? '' : String(selectedName)
+  const id = options.find((o) => o.name === name)?.id
+  if (kind === 'expense') {
+    if (isEdit) {
+      if (id !== undefined && id !== null) return { category_id: id }
+      if (!name.trim()) return { category_id: null }
+      return {}
+    }
+    if (id !== undefined && id !== null) return { category_id: id }
+    return {}
+  }
+  if (kind === 'income') {
+    if (isEdit) {
+      if (id !== undefined && id !== null) return { source_id: id }
+      if (!name.trim()) return { source_id: null }
+      return {}
+    }
+    if (id !== undefined && id !== null) return { source_id: id }
+    return {}
+  }
+  return {}
+}
+
 export function buildMonthlySpendTrend(expenses = [], month) {
   const monthDate = parseCalendarDate(month)
   if (!monthDate) return []
@@ -195,15 +244,15 @@ export function buildActivityFeed(expenses = [], income = []) {
   }
 
   const expenseEntries = expenses.map((expense) => {
-    const categoryName = expense?.category_name || 'Expense'
     const description = expense?.description?.trim()
-    const displayCategory = getCategoryLabel(categoryName, 'expense')
+    const displayCategory = getCategoryLabel(expense?.category_name ?? '', 'expense')
 
     return {
       id: `expense-${expense.id}`,
       kind: 'expense',
       title: description || displayCategory,
       chip: displayCategory,
+      categoryIcon: expense.category_icon ?? null,
       amount: Number(expense.amount ?? 0),
       occurredOn: expense.date || expense.created_at,
       sortOn: parseCalendarDate(expense.date || expense.created_at)?.getTime() ?? 0,
@@ -214,20 +263,21 @@ export function buildActivityFeed(expenses = [], income = []) {
   })
 
   const incomeEntries = income.map((entry) => {
-    const sourceName = entry?.source_name || 'Income'
+    const sourceName = entry?.source_name ?? ''
     const notes = entry?.notes?.trim()
     const displayCategory = getCategoryLabel(sourceName, 'income')
 
     return {
       id: `income-${entry.id}`,
       kind: 'income',
-      title: sourceName,
+      title: notes || sourceName || displayCategory,
       chip: displayCategory,
+      sourceIcon: entry.source_icon ?? null,
       amount: Number(entry.amount ?? 0),
       occurredOn: entry.date || entry.created_at,
       sortOn: parseCalendarDate(entry.date || entry.created_at)?.getTime() ?? 0,
       note: notes || '',
-      merchant: sourceName,
+      merchant: sourceName || displayCategory,
       raw: entry,
     }
   })
@@ -262,26 +312,29 @@ export function buildDailySpendDetailsFromExpenses(rows = []) {
   const grouped = new Map()
   const fallbackOrdinalByKey = new Map()
 
-  rows.forEach((row, index) => {
+  rows.forEach((row) => {
     const dateValue = row.date || row.created_at || row.occurred_on
     const key = toDayKey(dateValue)
     if (!key || key === 'unknown') return
 
     const description = row.description != null ? String(row.description).trim() : ''
-    const categorySeed = row.category_name || description || `Expense ${index + 1}`
-    const visual = getCategoryVisual(categorySeed)
-    const title = description || row.category_name || visual.label
+    const presentation = getCategoryPresentation({
+      name: row.category_name,
+      icon: row.category_icon,
+      kind: 'expense',
+    })
+    const title = description || presentation.label
 
     const nextEntry = {
       id: buildDailyExpenseDetailId(row, key, fallbackOrdinalByKey),
       key,
       amount: toAmountDetail(row.amount),
       title,
-      categoryName: visual.label,
+      categoryName: presentation.label,
       occurredOn: key,
-      color: visual.color,
-      soft: visual.soft,
-      symbol: row.category_icon || visual.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
+      symbol: presentation.symbol,
     }
 
     if (!grouped.has(key)) grouped.set(key, [])

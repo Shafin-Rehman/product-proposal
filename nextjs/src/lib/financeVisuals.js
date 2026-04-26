@@ -1,88 +1,147 @@
+/**
+ * Category and income-source presentation. Built-in names match DB seed
+ * (see supabase/migrations). Visuals (icon/color) are stable per name; server
+ * `icon` still overrides the symbol when present.
+ *
+ * Food vs Groceries/Dining: the DB still ships a single "Food" category. We keep
+ * that identity (no relabeling persisted names) but reserve distinct built-in
+ * keys so Groceries/Dining can be added later without reworking this module.
+ */
 const VISUAL_MATCHERS = [
   {
     kind: 'expense',
     label: 'Groceries',
     keywords: ['grocer', 'grocery', 'groceries', 'whole foods', "trader joe", 'supermarket', 'produce', 'pantry', 'costco', 'aldi'],
     symbol: '\u{1F6D2}',
-    color: '#6faa80',
+    color: '#4d9a6a',
   },
   {
     kind: 'expense',
     label: 'Dining',
-    keywords: ['dining', 'restaurant', 'cafe', 'coffee', 'lunch', 'dinner', 'meal', 'takeout', 'ubereats', 'doordash', 'chipotle', 'sweetgreen', 'five guys', 'juice press', 'starbucks', 'food'],
+    // Intentionally omit the bare word "food" so the built-in "Food" category
+    // does not match Dining heuristics (Issue #58).
+    keywords: ['dining', 'restaurant', 'cafe', 'coffee', 'lunch', 'dinner', 'meal', 'takeout', 'ubereats', 'doordash', 'chipotle', 'sweetgreen', 'five guys', 'juice press', 'starbucks'],
     symbol: '\u{1F37D}\uFE0F',
-    color: '#d29e4a',
+    color: '#c97d2e',
   },
   {
     kind: 'expense',
     label: 'Shopping',
     keywords: ['shop', 'shopping', 'retail', 'target', 'amazon', 'apple', 'store', 'mall', 'boutique', 'order'],
     symbol: '\u{1F6CD}\uFE0F',
-    color: '#c9869e',
+    color: '#c45d7a',
   },
   {
     kind: 'expense',
     label: 'Travel',
     keywords: ['uber', 'lyft', 'taxi', 'rideshare', 'ride share', 'parking', 'gas'],
     symbol: '\u{1F697}',
-    color: '#62a9b7',
+    color: '#3a8ba8',
   },
   {
     kind: 'expense',
     label: 'Travel',
     keywords: ['train', 'metro', 'subway', 'rail', 'amtrak', 'transit', 'commute'],
     symbol: '\u{1F687}',
-    color: '#62a9b7',
+    color: '#3a8ba8',
   },
   {
     kind: 'expense',
     label: 'Travel',
     keywords: ['travel', 'trip', 'flight', 'airline', 'hotel', 'airbnb', 'vacation'],
     symbol: '\u2708\uFE0F',
-    color: '#62a9b7',
+    color: '#3a8ba8',
   },
   {
     label: 'Transfer',
     keywords: ['transfer', 'zelle', 'venmo', 'cash app', 'paypal'],
     symbol: '\u{1F501}',
-    color: '#63a6cf',
+    color: '#4a8fbf',
   },
   {
     kind: 'income',
     label: 'Income',
     keywords: ['salary', 'income', 'payroll', 'deposit', 'stipend', 'job', 'paycheck', 'pay day', 'payday'],
     symbol: '\u{1F4B8}',
-    color: '#77b68d',
+    color: '#2f8f55',
   },
   {
     kind: 'expense',
     label: 'Housing',
     keywords: ['rent', 'housing', 'home', 'apartment', 'mortgage'],
     symbol: '\u{1F3E0}',
-    color: '#cb8c67',
+    color: '#b87555',
   },
   {
     kind: 'expense',
     label: 'Fun',
     keywords: ['fun', 'entertain', 'movie', 'cinema', 'stream', 'spotify', 'netflix', 'hulu', 'game', 'gaming', 'concert', 'ticket', 'music', 'arcade'],
     symbol: '\u{1F3AE}',
-    color: '#8d7fd1',
+    color: '#7a63c9',
   },
   {
     kind: 'expense',
     label: 'Health',
     keywords: ['gym', 'health', 'wellness', 'medical', 'doctor', 'pharmacy', 'fitness'],
     symbol: '\u2695\uFE0F',
-    color: '#63a6cf',
+    color: '#2e8a9a',
   },
   {
     kind: 'expense',
     label: 'Bills',
     keywords: ['bill', 'utility', 'subscription', 'phone', 'cloud', 'internet', 'electric', 'water'],
     symbol: '\u26A1',
-    color: '#7f93bf',
+    color: '#5c7eb8',
   },
 ]
+
+/**
+ * Shipped built-in expense categories (public.categories). Each has a unique primary color.
+ * Icons align with the seed; when c.icon is null, these apply.
+ * @type {Record<string, { symbol: string, color: string }>}
+ */
+export const BUILT_IN_EXPENSE_VISUALS = {
+  Food: { symbol: '\u{1F354}', color: '#d4a13a' },
+  Transit: { symbol: '\u{1F68C}', color: '#2f6fbd' },
+  Entertainment: { symbol: '\u{1F389}', color: '#9a4dca' },
+  Shopping: { symbol: '\u{1F6CD}\uFE0F', color: '#c45d7a' },
+  Utilities: { symbol: '\u{1F4A1}', color: '#d4a52a' },
+  Health: { symbol: '\u{1F48A}', color: '#e24d6a' },
+  Education: { symbol: '\u{1F4DA}', color: '#4a6ed4' },
+  Other: { symbol: '\u{1F4E6}', color: '#6d5a4a' },
+}
+
+/**
+ * Shipped built-in income sources. Each has a unique primary color (not all the same green).
+ * @type {Record<string, { symbol: string, color: string }>}
+ */
+export const BUILT_IN_INCOME_VISUALS = {
+  Salary: { symbol: '\u{1F4BC}', color: '#1f7a45' },
+  Freelance: { symbol: '\u{1F4BB}', color: '#1565a8' },
+  'Part-time': { symbol: '\u23F1\uFE0F', color: '#2d8f6f' },
+  Business: { symbol: '\u{1F3E2}', color: '#a67c1f' },
+  Investment: { symbol: '\u{1F4C8}', color: '#6b4dc9' },
+  Rental: { symbol: '\u{1F3E0}', color: '#0f9069' },
+  Gift: { symbol: '\u{1F381}', color: '#c13d6d' },
+  Other: { symbol: '\u{1F4B0}', color: '#5f6b7a' },
+}
+
+/** @deprecated Use UNCATEGORIZED_EXPENSE_DB_LABEL — kept for tests referencing SQL COALESCE. */
+export const UNCATEGORIZED_EXPENSE_LABEL = 'Uncategorized'
+
+/** Matches SQL: COALESCE(c.name, 'Uncategorized') — internal/aggregation only. */
+export const UNCATEGORIZED_EXPENSE_DB_LABEL = 'Uncategorized'
+
+/** Short user-facing label for missing expense category (compact rows, legends, chips). */
+export const UNCATEGORIZED_EXPENSE_DISPLAY = 'No cat'
+
+export const UNKNOWN_INCOME_DISPLAY = 'No source'
+
+export const UNCATEGORIZED_EXPENSE_SYMBOL = '\u{1F3F7}\uFE0F'
+export const UNKNOWN_INCOME_SYMBOL = '\u{1F4CB}'
+
+const UNCATEGORIZED_NEUTRAL_COLOR = '#8f9b95'
+const UNKNOWN_INCOME_NEUTRAL_COLOR = '#5e7568'
 
 function normalizeValue(value) {
   return String(value || '')
@@ -104,15 +163,33 @@ function toSoftColor(color, opacity = 0.18) {
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`
 }
 
-function toDisplayLabel(value, fallback) {
-  const cleaned = String(value || '')
-    .trim()
-    .replace(/[._-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+function nameKey(name) {
+  return String(name || '').trim()
+}
 
-  if (!cleaned) return fallback
+/**
+ * True when the raw value is an uncategorized expense (empty, whitespace, or SQL/legacy label).
+ */
+export function isUncategorizedExpenseName(value) {
+  const t = nameKey(value)
+  if (!t) return true
+  const l = t.toLowerCase()
+  if (l === 'uncategorized') return true
+  if (t === UNCATEGORIZED_EXPENSE_DISPLAY) return true
+  return false
+}
 
-  return cleaned.replace(/\b([a-z])/gi, (match) => match.toUpperCase())
+/**
+ * No income source: empty, or legacy placeholder that used to read as generic "Income",
+ * or the current display chip "No source".
+ */
+export function isUnknownIncomeName(value) {
+  const t = nameKey(value)
+  if (!t) return true
+  const l = t.toLowerCase()
+  if (l === 'income') return true
+  if (t === UNKNOWN_INCOME_DISPLAY) return true
+  return false
 }
 
 function findVisualMatch(value, kind = 'expense') {
@@ -120,6 +197,15 @@ function findVisualMatch(value, kind = 'expense') {
   if (!normalized) return null
 
   return VISUAL_MATCHERS.find((item) => (!item.kind || item.kind === kind) && item.keywords.some((keyword) => normalized.includes(keyword)))
+}
+
+function builtinVisualForName(value, kind) {
+  const key = nameKey(value)
+  if (!key) return null
+  if (kind === 'income') {
+    return BUILT_IN_INCOME_VISUALS[key] ?? null
+  }
+  return BUILT_IN_EXPENSE_VISUALS[key] ?? null
 }
 
 export function getInitialsLabel(value, fallback = 'BB') {
@@ -133,47 +219,132 @@ export function getInitialsLabel(value, fallback = 'BB') {
   return parts.map((part) => part[0]?.toUpperCase() || '').join('')
 }
 
+/**
+ * User-facing display label for a persisted category/source name (API / DB).
+ * Does not apply keyword heuristics. Empty/unknown → short placeholders.
+ * SQL may still return "Uncategorized" string — treated like missing.
+ */
 export function getCategoryLabel(value, kind = 'expense') {
-  const match = findVisualMatch(value, kind)
-  if (match?.label) return match.label
-
-  return toDisplayLabel(value, kind === 'income' ? 'Income' : 'Uncategorized')
+  if (kind === 'expense') {
+    if (isUncategorizedExpenseName(value)) return UNCATEGORIZED_EXPENSE_DISPLAY
+    return nameKey(value)
+  }
+  if (isUnknownIncomeName(value)) return UNKNOWN_INCOME_DISPLAY
+  return nameKey(value)
 }
 
+/**
+ * @param value Persisted name for heuristics. Display `label` always comes from getCategoryLabel.
+ */
 export function getCategoryVisual(value, kind = 'expense') {
-  const label = getCategoryLabel(value, kind)
-  const match = findVisualMatch(value || label, kind)
+  const raw = value == null ? '' : String(value)
+  const label = getCategoryLabel(raw, kind)
+  const trimmed = nameKey(raw)
 
-  if (match) {
+  if (kind === 'expense' && isUncategorizedExpenseName(raw)) {
     return {
-      ...match,
       label,
-      soft: toSoftColor(match.color),
-      initials: getInitialsLabel(label, kind === 'income' ? 'IN' : 'TX'),
+      symbol: UNCATEGORIZED_EXPENSE_SYMBOL,
+      color: UNCATEGORIZED_NEUTRAL_COLOR,
+      soft: toSoftColor(UNCATEGORIZED_NEUTRAL_COLOR),
+      initials: '–',
     }
   }
 
-  const fallbackColor = kind === 'income' ? '#77b68d' : '#9ba7a0'
+  if (kind === 'income' && isUnknownIncomeName(raw)) {
+    return {
+      label,
+      symbol: UNKNOWN_INCOME_SYMBOL,
+      color: UNKNOWN_INCOME_NEUTRAL_COLOR,
+      soft: toSoftColor(UNKNOWN_INCOME_NEUTRAL_COLOR),
+      initials: '–',
+    }
+  }
+
+  const builtin = builtinVisualForName(raw, kind)
+  if (builtin) {
+    return {
+      label,
+      symbol: builtin.symbol,
+      color: builtin.color,
+      soft: toSoftColor(builtin.color),
+      initials: getInitialsLabel(trimmed, kind === 'income' ? 'IN' : 'TX'),
+    }
+  }
+
+  const match = findVisualMatch(trimmed || label, kind)
+  if (match) {
+    return {
+      label,
+      symbol: match.symbol,
+      color: match.color,
+      soft: toSoftColor(match.color),
+      initials: getInitialsLabel(trimmed, kind === 'income' ? 'IN' : 'TX'),
+    }
+  }
+
+  const fallbackColor = kind === 'income' ? '#1f7a45' : '#7d8c84'
   return {
     label,
-    symbol: getInitialsLabel(label, kind === 'income' ? 'IN' : 'TX'),
+    symbol: getInitialsLabel(trimmed, kind === 'income' ? 'IN' : 'TX'),
     color: fallbackColor,
     soft: toSoftColor(fallbackColor),
-    initials: getInitialsLabel(label, kind === 'income' ? 'IN' : 'TX'),
+    initials: getInitialsLabel(trimmed, kind === 'income' ? 'IN' : 'TX'),
+  }
+}
+
+/**
+ * Heuristic keyword map applies to visuals (color/symbol) only, not to renaming persisted names.
+ * Server `icon` overrides built-in or heuristic `symbol` when present.
+ */
+export function getCategoryPresentation({ name, icon, kind = 'expense' } = {}) {
+  const raw = name == null ? '' : String(name)
+  const base = getCategoryVisual(raw, kind)
+  return {
+    label: base.label,
+    symbol: icon || base.symbol,
+    color: base.color,
+    soft: base.soft,
+    initials: base.initials,
   }
 }
 
 export function getEntryVisual(entry) {
+  const kind = entry?.kind
   if (entry?.chip) {
-    return getCategoryVisual(entry.chip, entry?.kind)
+    const serverIcon = kind === 'income' ? entry?.sourceIcon : entry?.categoryIcon
+    return getCategoryPresentation({ name: entry.chip, icon: serverIcon, kind })
   }
 
   if (entry?.categoryName) {
-    return getCategoryVisual(entry.categoryName, entry?.kind)
+    return getCategoryPresentation({
+      name: entry.categoryName,
+      icon: kind === 'income' ? entry?.sourceIcon : entry?.categoryIcon,
+      kind,
+    })
   }
 
   return getCategoryVisual(
     [entry?.chip, entry?.merchant, entry?.title, entry?.note].filter(Boolean).join(' '),
-    entry?.kind
+    kind,
   )
+}
+
+/**
+ * Jest: every built-in expense key must have a unique primary color.
+ * @returns {{ expense: string[], income: string[] }}
+ */
+export function getBuiltInColorCollisions() {
+  const ex = Object.values(BUILT_IN_EXPENSE_VISUALS).map((v) => v.color)
+  const inc = Object.values(BUILT_IN_INCOME_VISUALS).map((v) => v.color)
+  const dup = (arr) => {
+    const seen = new Set()
+    const d = []
+    arr.forEach((c) => {
+      if (seen.has(c)) d.push(c)
+      seen.add(c)
+    })
+    return d
+  }
+  return { expense: dup(ex), income: dup(inc) }
 }

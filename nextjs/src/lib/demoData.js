@@ -103,7 +103,7 @@ export const demoActivity = [
     id: 'demo-inc-1',
     kind: 'income',
     title: 'Campus job deposit',
-    chip: 'Income',
+    chip: 'Salary',
     amount: 3200,
     occurredOn: '2026-03-28',
     note: 'Student assistant stipend',
@@ -268,7 +268,7 @@ export const demoInsightsSnapshot = {
     details: [
       { id: 'demo-exp-8', key: '2026-03-18', amount: 18.5, title: 'Five Guys', categoryName: 'Dining', occurredOn: '2026-03-18', color: '#d29e4a', soft: 'rgba(210, 158, 74, 0.18)', symbol: '\u{1F37D}\uFE0F' },
       { id: 'demo-exp-6', key: '2026-03-21', amount: 89.5, title: "Trader Joe's", categoryName: 'Groceries', occurredOn: '2026-03-21', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
-      { id: 'demo-exp-7', key: '2026-03-22', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
+      { id: 'demo-exp-7', key: '2026-03-22', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', categoryIcon: '\u{1F6CD}\uFE0F', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
       { id: 'demo-exp-5', key: '2026-03-24', amount: 23.45, title: 'Weekend subway', categoryName: 'Travel', occurredOn: '2026-03-24', color: '#62a9b7', soft: 'rgba(98, 169, 183, 0.18)', symbol: '\u2708\uFE0F' },
       { id: 'demo-exp-9', key: '2026-03-25', amount: 87.27, title: 'JetBlue baggage fee', categoryName: 'Travel', occurredOn: '2026-03-25', color: '#62a9b7', soft: 'rgba(98, 169, 183, 0.18)', symbol: '\u2708\uFE0F' },
       { id: 'demo-exp-10', key: '2026-03-27', amount: 94.56, title: 'Arcade bundle', categoryName: 'Fun', occurredOn: '2026-03-27', color: '#8d7fd1', soft: 'rgba(141, 127, 209, 0.18)', symbol: '\u{1F3AE}' },
@@ -281,7 +281,7 @@ export const demoInsightsSnapshot = {
     ],
   },
   topExpenses: [
-    { id: 'demo-exp-7', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
+    { id: 'demo-exp-7', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', categoryIcon: '\u{1F6CD}\uFE0F', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
     { id: 'demo-exp-2', amount: 145.32, title: 'Whole Foods', categoryName: 'Groceries', occurredOn: '2026-03-29', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
     { id: 'demo-exp-6', amount: 89.5, title: "Trader Joe's", categoryName: 'Groceries', occurredOn: '2026-03-21', color: '#6faa80', soft: 'rgba(111, 170, 128, 0.18)', symbol: '\u{1F6D2}' },
     { id: 'demo-exp-1', amount: 80, title: 'Target run', categoryName: 'Shopping', occurredOn: '2026-03-29', color: '#c9869e', soft: 'rgba(201, 134, 158, 0.18)', symbol: '\u{1F6CD}\uFE0F' },
