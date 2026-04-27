@@ -216,4 +216,71 @@ describe('TransactionDetailSheet', () => {
 
     expect(screen.getByTestId('extra').textContent).toBe('Extra copy')
   })
+
+  it('uses the default "Expense" title when both title and visual label are empty', () => {
+    const { getEntryVisual } = require('@/lib/financeVisuals')
+    getEntryVisual.mockReturnValueOnce({
+      label: undefined,
+      color: '#111',
+      soft: '#222',
+      symbol: '•',
+    })
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: '',
+        merchant: 'Only merchant',
+        occurredOn: '2026-01-10',
+        amount: 2,
+        note: '',
+      },
+    }))
+    expect(screen.getByRole('heading', { name: 'Expense' })).toBeTruthy()
+  })
+
+  it('uses the default "Income" title when the transaction is income and title and label are empty', () => {
+    const { getEntryVisual } = require('@/lib/financeVisuals')
+    getEntryVisual.mockReturnValueOnce({
+      label: undefined,
+      color: '#111',
+      soft: '#222',
+      symbol: '•',
+    })
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: '',
+        merchant: 'Bank',
+        occurredOn: '2026-01-10',
+        amount: 1,
+        note: '',
+      },
+    }))
+    expect(screen.getByRole('heading', { name: 'Income' })).toBeTruthy()
+  })
+
+  it('shows a blank entry chip when the visual label and entry chip are both missing', () => {
+    const { getEntryVisual } = require('@/lib/financeVisuals')
+    getEntryVisual.mockReturnValueOnce({
+      label: '',
+      color: '#111',
+      soft: '#222',
+      symbol: '•',
+    })
+    const { container } = render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Bank drop',
+        merchant: 'Bank',
+        occurredOn: '2026-01-10',
+        amount: 5,
+        note: 'memo',
+      },
+    }))
+    const chip = container.querySelector('.detail-sheet__copy .entry-chip')
+    expect(chip && chip.textContent).toBe('')
+  })
 })

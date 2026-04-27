@@ -377,7 +377,7 @@ export function buildIncomeSourceBreakdown(incomeEntries = [], month) {
   incomeEntries
     .filter((entry) => isInMonth(entry.date || entry.created_at, month))
     .forEach((entry) => {
-      const label = entry?.source_name || 'Income'
+      const label = String(entry?.source_name ?? '').trim()
       grouped.set(label, (grouped.get(label) || 0) + Number(entry.amount ?? 0))
     })
 

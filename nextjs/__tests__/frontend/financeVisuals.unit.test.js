@@ -6,6 +6,7 @@ const {
   getCategoryVisual,
   getCategoryPresentation,
   isUncategorizedExpenseName,
+  isUnknownIncomeName,
   UNCATEGORIZED_EXPENSE_DISPLAY,
   UNCATEGORIZED_EXPENSE_SYMBOL,
   UNKNOWN_INCOME_DISPLAY,
@@ -35,12 +36,30 @@ describe('getCategoryLabel', () => {
   it('treats null, SQL labels, and old compact fallback values as uncategorized', () => {
     expect(isUncategorizedExpenseName(null)).toBe(true)
     expect(isUncategorizedExpenseName('')).toBe(true)
+    expect(isUncategorizedExpenseName('   ')).toBe(true)
     expect(isUncategorizedExpenseName('Uncategorized')).toBe(true)
     expect(isUncategorizedExpenseName('No cat')).toBe(true)
   })
 
   it('uses no-source display for empty income, not a fake source name', () => {
     expect(getCategoryLabel('', 'income')).toBe(UNKNOWN_INCOME_DISPLAY)
+  })
+
+  it('preserves a real persisted income source named "Income"', () => {
+    expect(getCategoryLabel('Income', 'income')).toBe('Income')
+  })
+})
+
+describe('isUnknownIncomeName', () => {
+  it('treats blank and explicit no-source display as unknown', () => {
+    expect(isUnknownIncomeName(null)).toBe(true)
+    expect(isUnknownIncomeName('')).toBe(true)
+    expect(isUnknownIncomeName('  ')).toBe(true)
+    expect(isUnknownIncomeName(UNKNOWN_INCOME_DISPLAY)).toBe(true)
+  })
+
+  it('does not treat the literal name "Income" as unknown', () => {
+    expect(isUnknownIncomeName('Income')).toBe(false)
   })
 })
 
@@ -58,6 +77,18 @@ describe('getCategoryVisual', () => {
     expect(visual.label).toBe('grocery store')
     expect(visual.color).toBe('#4d9a6a')
   })
+
+  it('uses the income-specific fallback color when there is no built-in or keyword match', () => {
+    const v = getCategoryVisual('QwertyZzzNoHeuristic99', 'income')
+    expect(v.label).toBe('QwertyZzzNoHeuristic99')
+    expect(v.color).toBe('#1f7a45')
+    expect(v.initials).toBeTruthy()
+  })
+
+  it('uses the expense-specific fallback when there is no built-in or keyword match', () => {
+    const v = getCategoryVisual('QwertyXxxNoHeuristic99', 'expense')
+    expect(v.color).toBe('#7d8c84')
+  })
 })
 
 describe('getCategoryPresentation', () => {
@@ -74,9 +105,24 @@ describe('getCategoryPresentation', () => {
     expect(presentation.symbol).toBe(UNCATEGORIZED_EXPENSE_SYMBOL)
   })
 
+  it('matches the no-source display for a missing or blank income name', () => {
+    const p = getCategoryPresentation({ name: '   ', kind: 'income' })
+    expect(p.label).toBe(UNKNOWN_INCOME_DISPLAY)
+    expect(p.initials).toBe('–')
+    const v = getCategoryVisual('No source', 'income')
+    expect(v.label).toBe(UNKNOWN_INCOME_DISPLAY)
+    expect(v.initials).toBe('–')
+  })
+
   it('uses the server icon when provided (overrides built-in or heuristic symbol, not id)', () => {
     const presentation = getCategoryPresentation({ name: 'Dining', icon: '🧾', kind: 'expense' })
     expect(presentation.symbol).toBe('🧾')
+  })
+
+  it('server icon on income still uses built-in or heuristic colors (symbol override only)', () => {
+    const p = getCategoryPresentation({ name: 'Salary', icon: '💵', kind: 'income' })
+    expect(p.symbol).toBe('💵')
+    expect(p.color).toBe(BUILT_IN_INCOME_VISUALS.Salary.color)
   })
 
   it('aligns display label with getCategoryLabel and does not rename "grocery run"', () => {
@@ -156,5 +202,25 @@ describe('getEntryVisual', () => {
       sourceIcon: '💵',
     })
     expect(incomeV.symbol).toBe('💵')
+  })
+
+  it('uses categoryName when chip is missing (e.g. detail rows)', () => {
+    const v = getEntryVisual({
+      kind: 'expense',
+      categoryName: 'Health',
+      categoryIcon: '💊',
+    })
+    expect(v.label).toBe('Health')
+    expect(v.symbol).toBe('💊')
+  })
+
+  it('merges chip, merchant, title, and note when there is no chip or categoryName (heuristics on combined text)', () => {
+    const v = getEntryVisual({
+      kind: 'expense',
+      merchant: 'Refill at CVS pharmacy',
+    })
+    expect(v.label).toBe('Refill at CVS pharmacy')
+    // Keyword "pharmacy" matches the Health heuristic (not a persisted rename)
+    expect(v.color).toBe('#2e8a9a')
   })
 })

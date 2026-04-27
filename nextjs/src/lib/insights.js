@@ -204,14 +204,14 @@ async function getIncomeBreakdown(userId, month) {
   const endMonth = nextMonth(month)
   const { rows } = await db.query(
     `SELECT
-       COALESCE(s.name, 'Income') AS source_name,
+       COALESCE(NULLIF(BTRIM(s.name), ''), '') AS source_name,
        s.icon AS source_icon,
        COUNT(*)::INT AS entry_count,
        COALESCE(SUM(i.amount), 0.00)::TEXT AS amount
      FROM public.income i
      LEFT JOIN public.income_sources s ON i.source_id = s.id
      WHERE i.user_id = $1 AND i.date >= $2 AND i.date < $3
-     GROUP BY COALESCE(s.name, 'Income'), s.icon
+     GROUP BY COALESCE(NULLIF(BTRIM(s.name), ''), ''), s.icon
      ORDER BY amount DESC, source_name ASC`,
     [userId, month, endMonth]
   )
@@ -227,7 +227,7 @@ async function getIncomeBreakdown(userId, month) {
         kind: 'income',
       })
       return {
-        id: `income-${row.source_name || 'Income'}-${index}`,
+        id: `income-${String(row.source_name ?? '').trim() || 'no-source'}-${index}`,
         name: presentation.label,
         amount,
         color: presentation.color,

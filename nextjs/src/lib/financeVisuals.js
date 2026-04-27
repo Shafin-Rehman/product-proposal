@@ -183,14 +183,12 @@ export function isUncategorizedExpenseName(value) {
 }
 
 /**
- * No income source: empty, or legacy placeholder that used to read as generic "Income",
- * or the current display chip "No source".
+ * No income source: empty/whitespace, or the explicit display chip "No source"
+ * (persisted or legacy).
  */
 export function isUnknownIncomeName(value) {
   const t = nameKey(value)
   if (!t) return true
-  const l = t.toLowerCase()
-  if (l === 'income') return true
   if (t === UNKNOWN_INCOME_DISPLAY) return true
   return false
 }

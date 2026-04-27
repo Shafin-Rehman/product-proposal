@@ -1,9 +1,14 @@
-const { UNCATEGORIZED_EXPENSE_DISPLAY } = require('@/lib/financeVisuals')
+const { UNCATEGORIZED_EXPENSE_DISPLAY, UNKNOWN_INCOME_DISPLAY } = require('@/lib/financeVisuals')
 const {
+  getCurrentMonthStart,
   parseCalendarDate,
   isInMonth,
   shiftMonth,
   formatCurrency,
+  formatMonthLabel,
+  formatShortDate,
+  formatSyncLabel,
+  formatPercentage,
   formatMonthPeriod,
   buildMonthlySpendTrend,
   buildActivityFeed,
@@ -17,10 +22,22 @@ const {
   buildTrendChartAxes,
 } = require('@/lib/financeUtils')
 
+describe('getCurrentMonthStart', () => {
+  it('returns the first day of the month for a given date', () => {
+    expect(getCurrentMonthStart(new Date(Date.UTC(2026, 3, 15)))).toBe('2026-04-01')
+  })
+})
+
 describe('parseCalendarDate', () => {
   it('returns null for falsy input', () => {
     expect(parseCalendarDate(null)).toBeNull()
     expect(parseCalendarDate('')).toBeNull()
+  })
+
+  it('returns null for non-strings and invalid Date values', () => {
+    expect(parseCalendarDate(99)).toBeNull()
+    const invalid = new Date('not a real date')
+    expect(parseCalendarDate(invalid)).toBeNull()
   })
 
   it('parses a YYYY-MM-DD string into the correct UTC date parts', () => {
@@ -28,6 +45,54 @@ describe('parseCalendarDate', () => {
     expect(d.getUTCFullYear()).toBe(2026)
     expect(d.getUTCMonth()).toBe(2)
     expect(d.getUTCDate()).toBe(15)
+  })
+
+  it('accepts a valid Date instance', () => {
+    const d = new Date(Date.UTC(2026, 0, 2))
+    expect(parseCalendarDate(d)).toBe(d)
+  })
+})
+
+describe('formatMonthLabel', () => {
+  it('uses a long month and year in UTC for a real calendar value', () => {
+    const label = formatMonthLabel('2026-08-10')
+    expect(label).toMatch(/August/)
+    expect(label).toMatch(/2026/)
+  })
+
+  it('returns "This month" when the value does not parse', () => {
+    expect(formatMonthLabel('')).toBe('This month')
+  })
+})
+
+describe('formatShortDate', () => {
+  it('returns a short month+day in UTC for valid input', () => {
+    const s = formatShortDate('2026-02-20')
+    expect(s).toMatch(/Feb/)
+    expect(s).toMatch(/20/)
+  })
+
+  it('returns "Date unavailable" for invalid input', () => {
+    expect(formatShortDate('')).toBe('Date unavailable')
+  })
+})
+
+describe('formatSyncLabel', () => {
+  it('returns a default when there is no sync time', () => {
+    expect(formatSyncLabel(null)).toBe('Waiting for live data')
+  })
+
+  it('returns an Updated prefix when a Date is present', () => {
+    const d = new Date(2026, 3, 1, 14, 5, 0)
+    const label = formatSyncLabel(d)
+    expect(label.startsWith('Updated ')).toBe(true)
+  })
+})
+
+describe('formatPercentage', () => {
+  it('rounds to an integer percent string', () => {
+    expect(formatPercentage(3.2)).toBe('3%')
+    expect(formatPercentage('x')).toBe('0%')
   })
 })
 
@@ -83,6 +148,18 @@ describe('buildMonthlySpendTrend', () => {
     expect(points[19]).toBe(80)
     expect(points[30]).toBe(80)
   })
+
+  it('returns an empty array when the month has no positive spend (all zeros or out of month)', () => {
+    expect(buildMonthlySpendTrend([], '2025-01-01')).toEqual([])
+    expect(buildMonthlySpendTrend(
+      [{ id: 1, amount: '0', date: '2025-01-10', created_at: '2025-01-10T00:00:00Z' }],
+      '2025-01-01',
+    )).toEqual([])
+    expect(buildMonthlySpendTrend(
+      [{ id: 1, amount: '20', date: '2025-02-10', created_at: '2025-02-10T00:00:00Z' }],
+      '2025-01-01',
+    )).toEqual([])
+  })
 })
 
 describe('buildActivityFeed', () => {
@@ -124,10 +201,61 @@ describe('buildActivityFeed', () => {
     expect(feed[0].kind).toBe('income')
   })
 
+  it('resolves a tie with created_at when one side uses a Date object', () => {
+    const t1 = new Date('2026-03-20T10:00:00Z').getTime()
+    const t2 = new Date('2026-03-20T11:00:00Z').getTime()
+    const expenses = [{
+      id: 'e1',
+      amount: '1',
+      date: '2026-03-20',
+      created_at: new Date('2026-03-20T10:00:00Z'),
+    }]
+    const income = [{
+      id: 'i1',
+      amount: '2',
+      date: '2026-03-20',
+      created_at: new Date('2026-03-20T11:00:00Z'),
+      source_name: 'Payroll',
+    }]
+    const feed = buildActivityFeed(expenses, income)
+    expect(feed[0].kind).toBe('income')
+    expect(feed[0].raw.created_at.getTime()).toBe(t2)
+    expect(feed[1].raw.created_at.getTime()).toBe(t1)
+  })
+
+  it('treats unparseable created_at strings as 0 in the sort tie-breaker (stable when tie-break is neutral)', () => {
+    const row = (id, amount) => ({
+      id,
+      amount,
+      date: '2026-03-20',
+      created_at: 'not a valid timestamp',
+    })
+    const feed = buildActivityFeed([row('e1', 1), row('e2', 2)], [row('i1', 3)])
+    expect(feed).toHaveLength(3)
+    expect(feed[0].sortOn).toBe(feed[1].sortOn)
+  })
+
   it('does not invent a month-style note for income entries without notes', () => {
     const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', source_name: 'Payroll' }]
     const [entry] = buildActivityFeed([], income)
     expect(entry.note).toBe('')
+  })
+
+  it('treats explicit "No source" the same as missing for chip display, but keeps a literal "Income" source name', () => {
+    const [noSource] = buildActivityFeed([], [{
+      id: 'a',
+      amount: 1,
+      date: '2026-03-20',
+      source_name: 'No source',
+    }])
+    expect(noSource.chip).toBe(UNKNOWN_INCOME_DISPLAY)
+    const [named] = buildActivityFeed([], [{
+      id: 'b',
+      amount: 1,
+      date: '2026-03-20',
+      source_name: 'Income',
+    }])
+    expect(named.chip).toBe('Income')
   })
 
   it('threads category_icon and source_icon for list visuals', () => {
@@ -177,6 +305,18 @@ describe('getEditFormCategoryName', () => {
       getEditFormCategoryName({ kind: 'income', chip: 'No source', raw: { source_name: null, source_id: null } })
     ).toBe('')
   })
+
+  it('returns the raw source name "Income" (not a display placeholder)', () => {
+    expect(getEditFormCategoryName({
+      kind: 'income',
+      chip: UNKNOWN_INCOME_DISPLAY,
+      raw: { source_name: 'Income' },
+    })).toBe('Income')
+  })
+
+  it('returns empty for a null entry', () => {
+    expect(getEditFormCategoryName(null)).toBe('')
+  })
 })
 
 describe('resolveCategoryOrSourceMutation (Issue #58 clear-on-edit)', () => {
@@ -213,6 +353,36 @@ describe('resolveCategoryOrSourceMutation (Issue #58 clear-on-edit)', () => {
     expect(
       resolveCategoryOrSourceMutation({ isEdit: true, selectedName: 'Salary', options: incOpts, kind: 'income' })
     ).toEqual({ source_id: 's1' })
+  })
+
+  it('edit: unknown non-empty name with no list match returns empty object (no id corruption)', () => {
+    expect(resolveCategoryOrSourceMutation({
+      isEdit: true,
+      selectedName: 'Not in list',
+      options: expOpts,
+      kind: 'expense',
+    })).toEqual({})
+    expect(resolveCategoryOrSourceMutation({
+      isEdit: true,
+      selectedName: 'Ghost source',
+      options: incOpts,
+      kind: 'income',
+    })).toEqual({})
+  })
+
+  it('returns an empty object when kind is not expense or income', () => {
+    expect(resolveCategoryOrSourceMutation({
+      isEdit: true,
+      selectedName: 'x',
+      options: [],
+      kind: 'transfer',
+    })).toEqual({})
+  })
+
+  it('create: no mutation key when a listed name is missing a usable id (null id)', () => {
+    const opts = [{ id: null, name: 'Food' }]
+    expect(resolveCategoryOrSourceMutation({ isEdit: false, selectedName: 'Food', options: opts, kind: 'expense' })).toEqual({})
+    expect(resolveCategoryOrSourceMutation({ isEdit: false, selectedName: 'Food', options: opts, kind: 'income' })).toEqual({})
   })
 })
 
@@ -271,6 +441,21 @@ describe('buildIncomeSourceBreakdown', () => {
     expect(result).toHaveLength(1)
     expect(result[0].name).toBe('Payroll')
     expect(result[0].amount).toBe(2500)
+  })
+
+  it('groups missing or blank source_name under an empty key (display as no source in UI)', () => {
+    const income = [
+      { id: 1, source_name: null, amount: '100.00', date: '2026-03-03' },
+      { id: 2, source_name: '', amount: '50.00', date: '2026-03-04' },
+      { id: 3, source_name: '   ', amount: '25.00', date: '2026-03-05' },
+      { id: 4, source_name: 'Income', amount: '10.00', date: '2026-03-06' },
+    ]
+    const result = buildIncomeSourceBreakdown(income, '2026-03-01')
+    expect(result).toHaveLength(2)
+    const noSource = result.find((r) => r.name === '')
+    const namedIncome = result.find((r) => r.name === 'Income')
+    expect(noSource?.amount).toBe(175)
+    expect(namedIncome?.amount).toBe(10)
   })
 })
 
