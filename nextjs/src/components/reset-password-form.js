@@ -45,6 +45,7 @@ export default function ResetPasswordForm() {
     }
   }, [])
 
+  const isInit = !parsed
   const isInvalid = parsed && !tokens
   const isSuccess = status === 'success'
   const isSubmitting = status === 'submitting'
@@ -119,19 +120,21 @@ export default function ResetPasswordForm() {
 
       <div className="auth-card__intro">
         <div className="auth-card__eyebrow">
-          {isInvalid ? 'Link problem' : isSuccess ? 'All done' : 'New password'}
+          {isInit ? 'One moment' : isInvalid ? 'Link problem' : isSuccess ? 'All done' : 'New password'}
         </div>
         <h1 className="auth-card__title" id="reset-title">
-          {isInvalid ? 'Link expired' : isSuccess ? 'All set' : 'Choose a password'}
+          {isInit ? 'Checking your link' : isInvalid ? 'Link expired' : isSuccess ? 'All set' : 'Choose a password'}
         </h1>
         <p className="auth-card__copy">
-          {isInvalid && isCodeFlow
-            ? 'This reset link uses a format that requires a browser code exchange — something went wrong on our end. Please request a fresh reset link and it will work correctly.'
-            : isInvalid
-              ? 'This reset link is invalid or has already been used. Request a fresh one from the login page.'
-              : isSuccess
-                ? 'Your password has been updated. You can now sign in with your new credentials.'
-                : 'Pick something memorable. Passwords need to be at least 6 characters.'}
+          {isInit
+            ? 'Please wait while we verify your reset link.'
+            : isInvalid && isCodeFlow
+              ? 'This reset link uses a format that requires a browser code exchange — something went wrong on our end. Please request a fresh reset link and it will work correctly.'
+              : isInvalid
+                ? 'This reset link is invalid or has already been used. Request a fresh one from the login page.'
+                : isSuccess
+                  ? 'Your password has been updated. You can now sign in with your new credentials.'
+                  : 'Pick something memorable. Passwords need to be at least 6 characters.'}
         </p>
       </div>
 
@@ -153,7 +156,7 @@ export default function ResetPasswordForm() {
         </div>
       ) : null}
 
-      {!isInvalid && !isSuccess ? (
+      {!isInit && !isInvalid && !isSuccess ? (
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="field-group">
             <span className="field-label">New password</span>
@@ -188,7 +191,7 @@ export default function ResetPasswordForm() {
 
           <button
             className="button-primary"
-            disabled={isSubmitting || !parsed}
+            disabled={isSubmitting}
             type="submit"
           >
             {isSubmitting ? 'Updating...' : 'Set new password'}

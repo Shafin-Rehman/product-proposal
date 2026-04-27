@@ -37,6 +37,11 @@ export default function ChangePasswordForm() {
     event.preventDefault()
     clearError()
 
+    if (!session?.accessToken) {
+      setErrorMessage('Your session has expired. Please log in again.')
+      return
+    }
+
     if (newPassword !== confirmPassword) {
       setErrorMessage('New passwords do not match.')
       return
@@ -85,6 +90,7 @@ export default function ChangePasswordForm() {
         </div>
         <button
           className="button-secondary"
+          disabled={!session?.accessToken}
           onClick={() => setIsOpen(true)}
           type="button"
         >
@@ -177,7 +183,7 @@ export default function ChangePasswordForm() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     className="button-primary"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !session?.accessToken}
                     type="submit"
                   >
                     {isSubmitting ? 'Saving...' : 'Update password'}

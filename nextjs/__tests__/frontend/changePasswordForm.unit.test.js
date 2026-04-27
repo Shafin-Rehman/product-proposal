@@ -165,3 +165,25 @@ describe('ChangePasswordForm — submission', () => {
   })
 
 })
+
+describe('ChangePasswordForm — no session', () => {
+  it('disables the Change password opener button when there is no access token', async () => {
+    const { useAuth } = require('@/components/providers')
+    useAuth.mockReturnValueOnce({ session: null })
+    await act(async () => { render(React.createElement(ChangePasswordForm)) })
+    expect(screen.getByRole('button', { name: /change password/i }).disabled).toBe(true)
+  })
+
+  it('disables the submit button inside the popup when there is no access token', async () => {
+    const { useAuth } = require('@/components/providers')
+    // First call: opener render — session present so button enabled and popup opens
+    // Second call: re-render after open — no session
+    useAuth
+      .mockReturnValueOnce({ session: { accessToken: 'tok' } })
+      .mockReturnValueOnce({ session: null })
+    await act(async () => { render(React.createElement(ChangePasswordForm)) })
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }))
+    await act(async () => {})
+    expect(screen.getByRole('button', { name: /update password/i }).disabled).toBe(true)
+  })
+})

@@ -224,3 +224,11 @@ describe('ResetPasswordForm — valid token, form interactions', () => {
   })
 
 })
+
+describe('ResetPasswordForm — loading state', () => {
+  it('submit button is enabled (not gated on !parsed) once effects have run', async () => {
+    setLocationHash('#access_token=tok-abc&refresh_token=ref-xyz&type=recovery')
+    await act(async () => { render(React.createElement(ResetPasswordForm)) })
+    expect(screen.getByRole('button', { name: /set new password/i }).disabled).toBe(false)
+  })
+})
