@@ -5,25 +5,22 @@ import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
 import { demoActivity } from '@/lib/demoData'
-import { getCategoryVisual, getEntryVisual } from '@/lib/financeVisuals'
+import { getCategoryPresentation, getEntryVisual } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
   formatCurrency,
   formatLongDate,
   formatShortDate,
+  getEditFormCategoryName,
   groupActivityByDate,
+  resolveCategoryOrSourceMutation,
 } from '@/lib/financeUtils'
+import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ENTRY_CATEGORY_OPTIONS = {
   expense: ['Groceries', 'Dining', 'Shopping', 'Housing', 'Travel', 'Fun', 'Bills', 'Health'],
   income: ['Income', 'Transfer', 'Freelance', 'Refund', 'Gift'],
 }
-
-const REPEATING_OPTIONS = [
-  { value: 'off', label: 'Off' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-]
 
 const EXTRA_SAMPLE_ACTIVITY = [
   {
@@ -161,20 +158,19 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: ENTRY_CATEGORY_OPTIONS.expense[0],
+    category: '',
     occurredOn: getTodayInputValue(),
-    repeating: 'off',
     note: '',
   }
 }
 
 function createEditDraft(entry) {
+  const fromPersisted = getEditFormCategoryName(entry)
   const base = {
     kind: entry.kind,
     amount: String(entry.amount),
-    category: entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+    category: fromPersisted,
     occurredOn: entry.occurredOn || getTodayInputValue(),
-    repeating: 'off',
     note: '',
   }
   if (entry.kind === 'expense') {
@@ -385,28 +381,22 @@ export default function TransactionsView() {
   })
   const groupedFeed = groupActivityByDate(filteredFeed)
   const isLoading = !isSampleMode && liveState.status === 'loading' && !feed.length
-  const selectedVisual = selectedEntry ? getEntryVisual(selectedEntry) : null
-  const entryPreview = getCategoryVisual(
-    [entryDraft.category, entryDraft.counterparty].filter(Boolean).join(' '),
-    entryDraft.kind
-  )
+  const selectedCategoryOrSource = entryDraft.kind === 'expense'
+    ? expenseCategories.find((c) => c.name === entryDraft.category)
+    : incomeCategories.find((c) => c.name === entryDraft.category)
+  const entryPreview = getCategoryPresentation({
+    name: entryDraft.category,
+    icon: selectedCategoryOrSource?.icon ?? null,
+    kind: entryDraft.kind,
+  })
   const entryAmountValue = Number(entryDraft.amount)
   const entryAmountLabel = entryDraft.amount ? formatCurrency(Math.abs(entryAmountValue || 0)) : '$0.00'
   const entryTitle = entryDraft.counterparty.trim() || (entryDraft.kind === 'income' ? 'New income' : 'New expense')
-  const counterpartyLabel = entryDraft.kind === 'income' ? 'Source' : 'Merchant'
+  const counterpartyLabel = entryDraft.kind === 'income' ? 'Description' : 'Merchant'
+  const categoryFieldLabel = entryDraft.kind === 'income' ? 'Source' : 'Category'
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
-  const selectedNote = selectedEntry && selectedEntry.note && selectedEntry.note !== selectedEntry.chip
-    ? selectedEntry.note
-    : selectedEntry?.kind === 'income'
-      ? 'No note added'
-      : 'Live expense'
-  const selectedSubtitle = selectedEntry
-    ? selectedEntry.merchant && selectedEntry.merchant !== selectedEntry.title
-      ? selectedEntry.merchant
-      : selectedEntry.note || selectedEntry.chip
-    : ''
   const hideFab = Boolean(selectedEntry) || isEntrySheetOpen
 
   const updateDraft = (field, value) => {
@@ -436,12 +426,16 @@ export default function TransactionsView() {
     setSaveError('')
     try {
       if (entryDraft.kind === 'expense') {
-        const categoryId = expenseCategories.find((c) => c.name === entryDraft.category)?.id
         const body = {
           amount: Number(entryDraft.amount),
           description: entryDraft.counterparty.trim() || undefined,
           date: entryDraft.occurredOn,
-          ...(categoryId ? { category_id: categoryId } : {}),
+          ...resolveCategoryOrSourceMutation({
+            isEdit: Boolean(editingEntry),
+            selectedName: entryDraft.category,
+            options: expenseCategories,
+            kind: 'expense',
+          }),
         }
         if (editingEntry) {
           await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -449,12 +443,16 @@ export default function TransactionsView() {
           await apiPost('/api/expenses', body, { accessToken: session.accessToken })
         }
       } else {
-        const sourceId = incomeCategories.find((c) => c.name === entryDraft.category)?.id
         const body = {
           amount: Number(entryDraft.amount),
           date: entryDraft.occurredOn,
           notes: (entryDraft.note.trim() || entryDraft.counterparty.trim()) || undefined,
-          ...(sourceId ? { source_id: sourceId } : {}),
+          ...resolveCategoryOrSourceMutation({
+            isEdit: Boolean(editingEntry),
+            selectedName: entryDraft.category,
+            options: incomeCategories,
+            kind: 'income',
+          }),
         }
         if (editingEntry) {
           await apiPost('/api/income/update', { income_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -633,109 +631,54 @@ export default function TransactionsView() {
       </div>
 
       {selectedEntry ? (
-        <div className="detail-overlay" role="presentation">
-          <button
-            aria-label="Close transaction details"
-            className="detail-overlay__backdrop"
-            onClick={() => setSelectedEntry(null)}
-            type="button"
-          />
-          <div aria-labelledby="transaction-detail-title" aria-modal="true" className="detail-sheet" role="dialog">
-            <div className="detail-sheet__handle" />
-            <div
-              className="detail-sheet__hero"
-              style={{
-                '--entry-color': selectedVisual.color,
-                '--entry-soft': selectedVisual.soft,
-              }}
-            >
-              <div className="entry-avatar entry-avatar--large">
-                <span>{selectedVisual.symbol}</span>
-              </div>
-              <div className="detail-sheet__copy">
-                <span className="entry-chip">{selectedEntry.kind === 'income' ? 'Income' : 'Expense'}</span>
-                <h2 className="detail-sheet__title" id="transaction-detail-title">{selectedEntry.title}</h2>
-                <p className="detail-sheet__subtitle">{selectedSubtitle}</p>
-              </div>
-              <button className="button-secondary page-retry" onClick={() => setSelectedEntry(null)} type="button">
-                Close
-              </button>
-            </div>
-
-            <div className="detail-sheet__amount">
-              <span className={`entry-amount entry-amount--${selectedEntry.kind}`}>
-                {selectedEntry.kind === 'income' ? '+' : '-'}
-                {formatCurrency(selectedEntry.amount)}
-              </span>
-            </div>
-
-            <div className="detail-grid">
-              <div>
-                <span>Category</span>
-                <strong>{selectedEntry.chip}</strong>
-              </div>
-              <div>
-                <span>Date</span>
-                <strong>{formatLongDate(selectedEntry.occurredOn)}</strong>
-              </div>
-              <div>
-                <span>Type</span>
-                <strong>{selectedEntry.kind === 'income' ? 'Income' : 'Expense'}</strong>
-              </div>
-              <div>
-                <span>Note</span>
-                <strong>{selectedNote}</strong>
-              </div>
-            </div>
-
-            {!isSampleMode && selectedEntry.raw && (
-              <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
-                {deleteConfirm ? (
-                  <>
-                    <div className="inline-error" role="alert">
-                      <span>Delete this transaction? This cannot be undone.</span>
-                    </div>
-                    <div className="entry-sheet__actions">
-                      <button
-                        className="button-secondary"
-                        disabled={isDeleting}
-                        onClick={() => setDeleteConfirm(false)}
-                        type="button"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="button-danger"
-                        disabled={isDeleting}
-                        onClick={handleDeleteEntry}
-                        type="button"
-                      >
-                        {isDeleting ? 'Deleting...' : 'Confirm delete'}
-                      </button>
-                    </div>
-                  </>
-                ) : (
+        <TransactionDetailSheet entry={selectedEntry} onClose={() => setSelectedEntry(null)}>
+          {!isSampleMode && selectedEntry.raw && (
+            <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
+              {deleteConfirm ? (
+                <>
+                  <div className="inline-error" role="alert">
+                    <span>Delete this transaction? This cannot be undone.</span>
+                  </div>
                   <div className="entry-sheet__actions">
                     <button
                       className="button-secondary"
-                      onClick={() => openEntrySheet(selectedEntry)}
+                      disabled={isDeleting}
+                      onClick={() => setDeleteConfirm(false)}
                       type="button"
                     >
-                      Edit
+                      Cancel
                     </button>
                     <button
                       className="button-danger"
-                      onClick={() => setDeleteConfirm(true)}
+                      disabled={isDeleting}
+                      onClick={handleDeleteEntry}
                       type="button"
                     >
-                      Delete
+                      {isDeleting ? 'Deleting...' : 'Confirm delete'}
                     </button>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+                </>
+              ) : (
+                <div className="entry-sheet__actions">
+                  <button
+                    className="button-secondary"
+                    onClick={() => openEntrySheet(selectedEntry)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="button-danger"
+                    onClick={() => setDeleteConfirm(true)}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </TransactionDetailSheet>
       ) : null}
 
       {isEntrySheetOpen ? (
@@ -788,7 +731,7 @@ export default function TransactionsView() {
                 onClick={() => setEntryDraft((current) => ({
                   ...current,
                   kind: 'expense',
-                  category: expenseCategories[0]?.name ?? ENTRY_CATEGORY_OPTIONS.expense[0],
+                  category: '',
                 }))}
                 type="button"
               >
@@ -800,7 +743,7 @@ export default function TransactionsView() {
                 onClick={() => setEntryDraft((current) => ({
                   ...current,
                   kind: 'income',
-                  category: incomeCategories[0]?.name ?? ENTRY_CATEGORY_OPTIONS.income[0],
+                  category: '',
                 }))}
                 type="button"
               >
@@ -836,12 +779,15 @@ export default function TransactionsView() {
 
               <div className="entry-sheet__grid entry-sheet__grid--secondary">
                 <label className="entry-sheet__field">
-                  <span>Category</span>
+                  <span>{categoryFieldLabel}</span>
                   <select
                     className="input-field"
                     onChange={(event) => updateDraft('category', event.target.value)}
                     value={entryDraft.category}
                   >
+                    <option value="">
+                      {entryDraft.kind === 'income' ? 'Select source' : 'Select category'}
+                    </option>
                     {entryCategories.map((option) => (
                       <option key={option.name} value={option.name}>
                         {option.icon ? `${option.icon} ${option.name}` : option.name}
@@ -859,22 +805,6 @@ export default function TransactionsView() {
                     value={entryDraft.occurredOn}
                   />
                 </label>
-              </div>
-
-              <div className="entry-sheet__field">
-                <span>Repeating</span>
-                <div className="segment-control segment-control--strong entry-sheet__repeat" role="group" aria-label="Repeating cadence">
-                  {REPEATING_OPTIONS.map((option) => (
-                    <button
-                      className={`segment-control__button${entryDraft.repeating === option.value ? ' segment-control__button--active' : ''}`}
-                      key={option.value}
-                      onClick={() => updateDraft('repeating', option.value)}
-                      type="button"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <label className="entry-sheet__field">

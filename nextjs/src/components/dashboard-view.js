@@ -11,22 +11,38 @@ import {
   demoBudgetSummary,
   demoBudgetTrend,
   demoCategoryBudgets,
+  demoInsightsSnapshot,
 } from '@/lib/demoData'
-import { getCategoryVisual, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
+import { getCategoryPresentation, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
+  buildDailySpendDetailsFromExpenses,
   buildMonthlySpendTrend,
+  buildRecentCashFlow,
   formatCurrency,
   formatMonthPeriod,
   formatShortDate,
   getCurrentMonthStart,
   isInMonth,
 } from '@/lib/financeUtils'
-const PREVIEW_LIMIT = 4
-const INCOME_LIMIT = 4
-const CHART_WIDTH = 312
-const CHART_HEIGHT = 148
-const CHART_INSET = 18
+import {
+  buildBudgetPressureHighlight as buildSharedBudgetPressureHighlight,
+  buildCategoryBudgetHealth,
+  buildFinancialHealth,
+  buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
+  getMonthProgressState as getSharedMonthProgressState,
+} from '@/lib/budgetHealth'
+import AllocationBar from '@/components/ui/AllocationBar'
+import BudgetHudMetrics from '@/components/ui/BudgetHudMetrics'
+import CashFlowSnapshot from '@/components/ui/CashFlowSnapshot'
+import CategoryProgressRow from '@/components/ui/CategoryProgressRow'
+import CategoryTransactionsModal from '@/components/ui/CategoryTransactionsModal'
+import FinancialHealthTile from '@/components/ui/FinancialHealthTile'
+import MonthPacingChart from '@/components/ui/MonthPacingChart'
+import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
+
+const ACTIVITY_PREVIEW_LIMIT = 6
+const CATEGORY_PREVIEW_LIMIT = 5
 
 function getErrorMessage(error) {
   if (error instanceof ApiError) return error.message
@@ -77,162 +93,113 @@ export function getBudgetHintText(summary) {
   return 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'
 }
 
-function getHeroState(summary) {
-  const budget = Number(summary?.total_budget ?? summary?.monthly_limit ?? 0)
-  const spent = Number(summary?.total_expenses ?? 0)
-  const income = Number(summary?.total_income ?? 0)
-  const remaining = Number(summary?.remaining_budget ?? 0)
+function getSafeMoneyNumber(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : 0
+}
 
-  if (!summary) {
-    return {
-      tone: 'neutral',
-      badge: 'Waiting',
-      value: 'Waiting on live totals',
-      supportingText: 'Budget snapshot',
-      spent,
-      budget,
-      income,
-    }
-  }
+export function getMonthProgressState(month, { observedDayCount = 0, referenceDate = new Date() } = {}) {
+  return getSharedMonthProgressState(month, { observedDayCount, referenceDate })
+}
 
-  if (!budget) {
-    return {
-      tone: 'neutral',
-      badge: 'Live spend',
-      value: `${formatCurrency(spent)} spent`,
-      supportingText: `${formatCurrency(income)} in income tracked so far.`,
-      spent,
-      budget,
-      income,
-    }
-  }
+export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date(), availability = summary ? 'ready' : 'loading' } = {}) {
+  const overallHealth = buildSharedOverallBudgetHealth({
+    summary,
+    availability,
+    month,
+    observedDayCount,
+    referenceDate,
+  })
+  const financialHealth = buildFinancialHealth({ summary, availability })
+  const budget = overallHealth.totalBudget ?? 0
+  const spent = overallHealth.spent ?? 0
+  const income = getSafeMoneyNumber(summary?.total_income)
+  const net = financialHealth.netAmount ?? (income != null && overallHealth.spent != null
+    ? Number((income - overallHealth.spent).toFixed(2))
+    : 0)
+  const hasBudget = overallHealth.key !== 'no_budget' && overallHealth.key !== 'loading' && overallHealth.key !== 'unavailable'
 
-  if (remaining < 0 || summary.threshold_exceeded) {
-    return {
-      tone: 'warning',
-      badge: 'Over budget',
-      value: `${formatCurrency(Math.abs(remaining))} over`,
-      supportingText: `out of ${formatCurrency(budget)} budgeted`,
-      spent,
-      budget,
-      income,
-    }
-  }
+  const metrics = overallHealth.key === 'loading' || overallHealth.key === 'unavailable'
+    ? [
+      { label: 'Spent', value: '--', hint: 'Current month' },
+      {
+        label: 'Days left',
+        value: overallHealth.monthState.daysRemaining ? String(overallHealth.monthState.daysRemaining) : '--',
+        hint: 'Including today',
+      },
+      { label: 'Daily allowance', value: '--', hint: 'Left per day' },
+      { label: 'Net this month', value: '--', hint: 'Income minus spend' },
+    ]
+    : [
+      {
+        label: 'Spent',
+        value: formatCurrency(spent),
+        hint: hasBudget ? `${Math.round(overallHealth.progressPercentage)}% of budget used` : 'Current month',
+      },
+      {
+        label: 'Days left',
+        value: overallHealth.daysRemaining == null ? '--' : String(overallHealth.daysRemaining),
+        hint: 'Including today',
+      },
+      {
+        label: 'Daily allowance',
+        value: overallHealth.dailyAllowance == null ? '--' : formatCurrency(overallHealth.dailyAllowance),
+        hint: overallHealth.key === 'over_budget' ? 'Needs correction' : 'Left per day',
+      },
+      {
+        label: 'Net this month',
+        value: financialHealth.netAmount == null ? '--' : formatCurrency(financialHealth.netAmount),
+        hint: financialHealth.key === 'negative_cash_flow'
+          ? 'Expenses above income'
+          : 'Income minus spend',
+      },
+    ]
 
   return {
-    tone: 'positive',
-    badge: 'On track',
-    value: `${formatCurrency(remaining)} left`,
-    supportingText: `out of ${formatCurrency(budget)} budgeted`,
-    spent,
+    ...overallHealth,
+    badge: overallHealth.label,
+    value: overallHealth.primaryValue,
+    progressWidth: `${overallHealth.progressPercentage}%`,
     budget,
-    income,
-  }
-}
-
-function getMonthShape(month) {
-  const monthDate = new Date(`${month}T12:00:00Z`)
-  if (Number.isNaN(monthDate.getTime())) return null
-
-  const year = monthDate.getUTCFullYear()
-  const monthIndex = monthDate.getUTCMonth()
-  return {
-    monthLength: new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate(),
-  }
-}
-
-function buildProjectedTrend(month, budget, pointCount) {
-  const monthShape = getMonthShape(month)
-  if (!monthShape || !budget || pointCount < 1) return []
-
-  return Array.from({ length: pointCount }, (_, index) => Number((
-    budget * ((index + 1) / monthShape.monthLength)
-  ).toFixed(2)))
-}
-
-function getTrendCeiling(points, projectedPoints = [], budget = 0) {
-  const referencePoints = [...points, ...projectedPoints].filter((point) => Number.isFinite(point))
-  if (!referencePoints.length) return 1
-
-  const maxPoint = Math.max(...referencePoints)
-  if (budget > 0) {
-    return Math.max(maxPoint * 1.14, maxPoint + 120)
-  }
-
-  return Math.max(maxPoint * 1.18, maxPoint + 120)
-}
-
-function buildTrendPath(points, width, height, inset, maxValue) {
-  if (!points.length) return ''
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-
-  return points
-    .map((point, index) => {
-      const x = inset + ((width - inset * 2) / Math.max(points.length - 1, 1)) * index
-      const y = height - inset - ((height - inset * 2) * point) / safeMax
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
-function buildAreaPath(points, width, height, inset, maxValue) {
-  if (!points.length) return ''
-
-  const linePath = buildTrendPath(points, width, height, inset, maxValue)
-  const baseline = height - inset
-  return `${linePath} L ${width - inset} ${baseline} L ${inset} ${baseline} Z`
-}
-
-function buildComparisonAreaPath(topPoints, bottomPoints, width, height, inset, maxValue) {
-  if (!topPoints.length || topPoints.length !== bottomPoints.length) return ''
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-  const buildPoint = (point, index) => {
-    const x = inset + ((width - inset * 2) / Math.max(topPoints.length - 1, 1)) * index
-    const y = height - inset - ((height - inset * 2) * point) / safeMax
-    return `${x.toFixed(2)} ${y.toFixed(2)}`
-  }
-
-  const topPath = topPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${buildPoint(point, index)}`).join(' ')
-  const bottomPath = bottomPoints
-    .map((point, index) => ({ point, index }))
-    .reverse()
-    .map(({ point, index }) => `L ${buildPoint(point, index)}`)
-    .join(' ')
-
-  return `${topPath} ${bottomPath} Z`
-}
-
-function getTrendPoint(points, width, height, inset, maxValue, index = points.length - 1) {
-  if (!points.length || index < 0 || index >= points.length) return null
-
-  const safeMax = maxValue > 0 ? maxValue : 1
-  return {
-    x: inset + ((width - inset * 2) / Math.max(points.length - 1, 1)) * index,
-    y: height - inset - ((height - inset * 2) * points[index]) / safeMax,
+    spent,
+    income: income ?? 0,
+    remaining: overallHealth.remaining,
+    net,
+    daysRemaining: overallHealth.daysRemaining,
+    hasBudget,
+    isOverBudget: overallHealth.key === 'over_budget',
+    isNearLimit: overallHealth.key === 'near_limit',
+    metrics,
   }
 }
 
 function buildLiveCategoryCards(categoryStatuses = []) {
   return categoryStatuses.map((item) => {
-    const displayName = item.category_name || 'Uncategorized'
-    const visual = getCategoryVisual(displayName)
+    const presentation = getCategoryPresentation({
+      name: item.category_name,
+      icon: item.category_icon,
+      kind: 'expense',
+    })
     const amount = Number(item.spent ?? 0)
-    const remainingBudget = item.remaining_budget == null ? null : Number(item.remaining_budget)
-    const progress = item.monthly_limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
+    const categoryHealth = buildCategoryBudgetHealth({
+      monthlyLimit: item.monthly_limit,
+      spent: item.spent,
+      actualsAvailable: true,
+    })
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: displayName,
-      symbol: item.category_icon || visual.symbol,
-      color: visual.color,
-      soft: visual.soft,
-      progress,
+      name: presentation.label,
+      symbol: presentation.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
+      progress: categoryHealth.progressPercentage,
       amount,
-      note: item.monthly_limit == null
-        ? 'No budget set'
-        : `${formatCurrency(Math.abs(remainingBudget ?? 0))} ${remainingBudget != null && remainingBudget < 0 ? 'over' : 'left'}`,
+      monthlyLimit: Number(item.monthly_limit ?? 0) > 0 ? Number(item.monthly_limit) : null,
+      remainingAmount: categoryHealth.remainingAmount,
+      note: categoryHealth.remainingText,
+      statusLabel: categoryHealth.label,
+      statusTone: categoryHealth.tone,
     }
   })
 }
@@ -243,11 +210,19 @@ export function buildDerivedCategoryCards(expenses = []) {
   expenses.forEach((expense) => {
     const amount = Number(expense.amount ?? 0)
     const key = expense.category_id ?? expense.category_name ?? 'uncategorized'
-    const displayName = expense.category_name || 'Uncategorized'
-    const current = grouped.get(key) ?? {
+    const displayName = expense.category_name
+      && String(expense.category_name).trim() !== ''
+      ? String(expense.category_name).trim()
+      : ''
+    const existing = grouped.get(key)
+    const current = existing ?? {
       category_name: displayName,
+      category_icon: expense.category_icon ?? null,
       total_amount: 0,
       count: 0,
+    }
+    if (!current.category_icon && expense.category_icon) {
+      current.category_icon = expense.category_icon
     }
 
     current.total_amount += amount
@@ -259,6 +234,7 @@ export function buildDerivedCategoryCards(expenses = []) {
     .map(([key, item]) => ({
       category_id: key,
       category_name: item.category_name,
+      category_icon: item.category_icon ?? null,
       total_amount: Number(item.total_amount.toFixed(2)),
       count: item.count,
     }))
@@ -267,27 +243,49 @@ export function buildDerivedCategoryCards(expenses = []) {
   const totalExpenses = breakdown.reduce((sum, item) => sum + Number(item.total_amount ?? 0), 0)
 
   return breakdown.map((item) => {
-    const visual = getCategoryVisual(item.category_name || 'Uncategorized')
+    const presentation = getCategoryPresentation({
+      name: item.category_name,
+      icon: item.category_icon,
+      kind: 'expense',
+    })
     const amount = Number(item.total_amount ?? 0)
     const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: item.category_name || 'Uncategorized',
-      symbol: visual.symbol,
-      color: visual.color,
-      soft: visual.soft,
+      name: presentation.label,
+      symbol: presentation.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
       progress: Math.min(share, 100),
       amount,
+      monthlyLimit: null,
+      remainingAmount: null,
       note: `${Math.round(share) || 0}% of spend`,
     }
   })
 }
 
-export function getCategoryCards(categoryStatuses, expenses = []) {
+export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null) {
   return hasBudgetedCategoryStatuses(categoryStatuses)
     ? buildLiveCategoryCards(categoryStatuses)
+    : Array.isArray(derivedCategoryCards) ? derivedCategoryCards : buildDerivedCategoryCards(expenses)
+}
+
+export function getBudgetPressureHighlight(summary, expenses = [], derivedCategoryCards = null) {
+  const spendShareCards = Array.isArray(derivedCategoryCards)
+    ? derivedCategoryCards
     : buildDerivedCategoryCards(expenses)
+
+  return buildSharedBudgetPressureHighlight({
+    categoryStatuses: summary?.category_statuses,
+    fallbackSpendCards: spendShareCards.map((card) => ({
+      name: card.name,
+      note: card.note,
+      progress: card.progress,
+      amount: card.amount,
+    })),
+  })
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -324,6 +322,9 @@ export default function DashboardView() {
   const [budgetDraft, setBudgetDraft] = useState({ monthly_limit: '' })
   const [isBudgetSaving, setIsBudgetSaving] = useState(false)
   const [budgetSaveError, setBudgetSaveError] = useState('')
+  const [activityFilter, setActivityFilter] = useState('all')
+  const [categoryDrillDown, setCategoryDrillDown] = useState(null)
+  const [activityDetailEntry, setActivityDetailEntry] = useState(null)
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -403,6 +404,15 @@ export default function DashboardView() {
     return () => controller.abort()
   }, [currentMonth, dataChangedToken, isReady, isSampleMode, logout, reloadToken, router, session?.accessToken])
 
+  useEffect(() => {
+    if (!activityDetailEntry) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setActivityDetailEntry(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activityDetailEntry])
+
   const openBudgetSheet = () => {
     const currentLimit = isSampleMode
       ? demoBudgetSummary?.monthly_limit
@@ -446,54 +456,96 @@ export default function DashboardView() {
   }
 
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
+  const summaryAvailability = isSampleMode
+    ? 'ready'
+    : liveState.summary
+      ? 'ready'
+      : liveState.status === 'loading'
+        ? 'loading'
+        : 'unavailable'
   const currentMonthExpenses = isSampleMode
     ? []
     : liveState.expenses.filter((expense) => isInMonth(expense.date || expense.created_at, currentMonth))
+  const categoryTransactionDetails = isSampleMode
+    ? (demoInsightsSnapshot?.dailySpend?.details ?? [])
+    : buildDailySpendDetailsFromExpenses(currentMonthExpenses)
   const activity = isSampleMode
     ? demoActivity
     : buildActivityFeed(liveState.expenses, liveState.income)
-  const recentActivity = activity.slice(0, PREVIEW_LIMIT)
-  const recentIncome = activity.filter((entry) => entry.kind === 'income').slice(0, INCOME_LIMIT)
+  const filteredActivity = activityFilter === 'all'
+    ? activity
+    : activity.filter((entry) => entry.kind === activityFilter)
+  const recentActivity = filteredActivity.slice(0, ACTIVITY_PREVIEW_LIMIT)
+  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
+  const hasBudgetedStatuses = hasBudgetedCategoryStatuses(summary?.category_statuses)
+  const derivedCategoryCards = !isSampleMode && !hasBudgetedStatuses
+    ? buildDerivedCategoryCards(currentMonthExpenses)
+    : null
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
-      const visual = getCategoryVisual(item.name)
-      const remaining = item.budget - item.spent
+      const presentation = getCategoryPresentation({ name: item.name, kind: 'expense' })
+      const categoryHealth = buildCategoryBudgetHealth({
+        monthlyLimit: item.budget,
+        spent: item.spent,
+        actualsAvailable: true,
+      })
       return {
         id: item.id,
-        name: visual.label,
-        symbol: visual.symbol,
-        color: visual.color,
-        soft: visual.soft,
-        progress: Math.min((item.spent / item.budget) * 100, 100),
+        name: presentation.label,
+        symbol: presentation.symbol,
+        color: presentation.color,
+        soft: presentation.soft,
+        progress: categoryHealth.progressPercentage,
         amount: item.spent,
-        note: `${formatCurrency(Math.abs(remaining))} ${remaining < 0 ? 'over' : 'left'}`,
+        monthlyLimit: item.budget,
+        remainingAmount: categoryHealth.remainingAmount,
+        note: categoryHealth.remainingText,
+        statusLabel: categoryHealth.label,
+        statusTone: categoryHealth.tone,
       }
     })
-    : getCategoryCards(summary?.category_statuses, currentMonthExpenses)
-  const heroState = getHeroState(summary)
+    : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
   const budgetCtaLabel = getBudgetCtaLabel(summary)
-  const chartMonth = isSampleMode ? DEMO_MONTH : summary?.month || currentMonth
   const trendPoints = isSampleMode
     ? demoBudgetTrend
     : buildMonthlySpendTrend(liveState.expenses, currentMonth)
-  const projectedTrendPoints = buildProjectedTrend(chartMonth, heroState.budget, trendPoints.length)
-  const chartCeiling = getTrendCeiling(trendPoints, projectedTrendPoints, heroState.budget)
-  const linePath = buildTrendPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const projectedPath = buildTrendPath(projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const areaPath = buildAreaPath(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const overrunTrendPoints = trendPoints.map((point, index) => Math.max(point, projectedTrendPoints[index] ?? point))
-  const hasPaceOverrun = projectedTrendPoints.some((point, index) => trendPoints[index] > point)
-  const overrunPath = hasPaceOverrun
-    ? buildComparisonAreaPath(overrunTrendPoints, projectedTrendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-    : ''
-  const overrunAmount = projectedTrendPoints.length
-    ? Math.max((trendPoints.at(-1) ?? 0) - (projectedTrendPoints.at(-1) ?? 0), 0)
-    : 0
-  const currentPoint = getTrendPoint(trendPoints, CHART_WIDTH, CHART_HEIGHT, CHART_INSET, chartCeiling)
-  const currentPointLeft = currentPoint ? `${(currentPoint.x / CHART_WIDTH) * 100}%` : '50%'
-  const currentPointTop = currentPoint ? `${(currentPoint.y / CHART_HEIGHT) * 100}%` : '50%'
+  const hudState = getBudgetHudModel(summary, {
+    month: chartMonth,
+    observedDayCount: trendPoints.length,
+    availability: summaryAvailability,
+  })
+  const financialHealth = buildFinancialHealth({
+    summary,
+    availability: summaryAvailability,
+  })
+  const recentCashFlow = isSampleMode
+    ? (() => {
+      const monthlyIncome = getSafeMoneyNumber(demoBudgetSummary?.total_income)
+      const monthlyExpenses = getSafeMoneyNumber(demoBudgetSummary?.total_expenses)
+      return [
+        { month: '2026-01-01', label: 'Jan', incomeAmount: monthlyIncome * 0.95, expenseAmount: monthlyExpenses * 0.88, netAmount: Number((monthlyIncome * 0.95 - monthlyExpenses * 0.88).toFixed(2)) },
+        { month: '2026-02-01', label: 'Feb', incomeAmount: monthlyIncome * 1.02, expenseAmount: monthlyExpenses * 1.05, netAmount: Number((monthlyIncome * 1.02 - monthlyExpenses * 1.05).toFixed(2)) },
+        { month: '2026-03-01', label: 'Mar', incomeAmount: monthlyIncome, expenseAmount: monthlyExpenses, netAmount: Number((monthlyIncome - monthlyExpenses).toFixed(2)) },
+      ]
+    })()
+    : buildRecentCashFlow(liveState.expenses, liveState.income, chartMonth, 3)
   const firstName = getFirstName(session?.user?.email)
-
+  const periodLabel = formatMonthPeriod(chartMonth)
+  const previewCategories = [...categoryCards]
+    .sort((left, right) => {
+      const leftBudgeted = left.monthlyLimit != null && Number(left.monthlyLimit) > 0
+      const rightBudgeted = right.monthlyLimit != null && Number(right.monthlyLimit) > 0
+      if (leftBudgeted && rightBudgeted) {
+        return (Number(right.progress) || 0) - (Number(left.progress) || 0)
+      }
+      if (leftBudgeted !== rightBudgeted) return leftBudgeted ? -1 : 1
+      return (Number(right.amount) || 0) - (Number(left.amount) || 0)
+    })
+    .slice(0, CATEGORY_PREVIEW_LIMIT)
+  const monthMarkerLabel = hudState.monthState?.monthLength
+    ? `Today · Day ${hudState.monthState.activeDay}`
+    : null
+  const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0) : '--'
   return (
     <>
     <section className="app-screen dashboard-screen">
@@ -515,14 +567,13 @@ export default function DashboardView() {
         onRetry={() => setReloadToken((value) => value + 1)}
       />
 
-      <article className={`budget-hero budget-hero--${heroState.tone}`}>
-        <div className="budget-hero__header">
-          <div className="budget-hero__headline">
-            <h2 className="budget-hero__value">{heroState.value}</h2>
-            <p className="budget-hero__suffix">{heroState.supportingText}</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.55rem' }}>
-            <span className={`budget-hero__badge budget-hero__badge--${heroState.tone}`}>{heroState.badge}</span>
+      <article
+        className={`budget-hero budget-hero--${hudState.tone}${hudState.isOverBudget ? ' budget-hero--over' : ''}${hudState.isNearLimit ? ' budget-hero--risk' : ''}`}
+      >
+        <div className="budget-hero__topline">
+          <span className="budget-hero__eyebrow">{periodLabel} budget HUD</span>
+          <div className="budget-hero__actions">
+            <span className={`budget-hero__badge budget-hero__badge--${hudState.tone}`}>{hudState.badge}</span>
             {!isSampleMode && (
               <button className="button-secondary page-retry" onClick={openBudgetSheet} type="button">
                 {budgetCtaLabel}
@@ -531,51 +582,54 @@ export default function DashboardView() {
           </div>
         </div>
 
-        {trendPoints.length ? (
-          <div className="budget-hero__chart">
-            <svg aria-hidden="true" className="trend-chart" viewBox="0 0 312 148">
-              <defs>
-                <linearGradient id="budgetHeroFill" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(122, 181, 146, 0.26)" />
-                  <stop offset="100%" stopColor="rgba(122, 181, 146, 0.02)" />
-                </linearGradient>
-                <linearGradient id="budgetHeroOverrun" x1="0%" x2="0%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(201, 130, 90, 0.28)" />
-                  <stop offset="100%" stopColor="rgba(201, 130, 90, 0.05)" />
-                </linearGradient>
-              </defs>
-              {projectedPath ? <path className="trend-chart__guide" d={projectedPath} fill="none" pathLength="1" /> : null}
-              <path className="trend-chart__fill" d={areaPath} fill="url(#budgetHeroFill)" />
-              {overrunPath ? <path className="trend-chart__overrun" d={overrunPath} fill="url(#budgetHeroOverrun)" /> : null}
-              <path className="trend-chart__line" d={linePath} fill="none" pathLength="1" />
-              {currentPoint ? (
-                <circle
-                  className={`trend-chart__point${overrunAmount > 0 ? ' trend-chart__point--warning' : ''}`}
-                  cx={currentPoint.x}
-                  cy={currentPoint.y}
-                  r="4.5"
-                />
-              ) : null}
-            </svg>
-            {currentPoint && trendPoints.length ? (
-              <div
-                className="budget-hero__callout"
-                style={{
-                  left: currentPointLeft,
-                  top: currentPointTop,
-                }}
-              >
-                {formatCurrency(trendPoints.at(-1) ?? 0)} spent
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="blank-state blank-state--compact">
-            <strong>Waiting on activity</strong>
-            <span>This curve will appear once month-to-date spending lands.</span>
-          </div>
-        )}
+        <div className="budget-hero__headline">
+          <h2 className="budget-hero__value">{hudState.value}</h2>
+          <p className="budget-hero__suffix">{hudState.supportingText}</p>
+        </div>
+
+        <AllocationBar
+          progressPercentage={hudState.progressPercentage}
+          tone={hudState.tone}
+          ariaLabel="Monthly budget progress"
+          ariaValueText={hudState.progressLabel}
+          monthLength={hudState.monthState?.monthLength}
+          activeDay={hudState.monthState?.activeDay}
+          monthMarkerLabel={monthMarkerLabel}
+          isOverBudget={hudState.isOverBudget}
+          showMarker={hudState.hasBudget}
+        />
+
+        <BudgetHudMetrics metrics={hudState.metrics} />
       </article>
+
+      <section className="section-block dashboard-trend">
+        <div className="section-headline">
+          <h2>Month pacing</h2>
+          <span className="section-link">{chartSpendValue} spent</span>
+        </div>
+
+        <MonthPacingChart
+          trendPoints={trendPoints}
+          budget={hudState.budget}
+          monthLength={hudState.monthState?.monthLength ?? 30}
+          activeDay={hudState.monthState?.activeDay ?? 0}
+          isOverBudget={hudState.isOverBudget}
+          emptyState={(
+            <div className="blank-state blank-state--compact">
+              <strong>Waiting on activity</strong>
+              <span>Your pacing line will appear once expenses land this month.</span>
+            </div>
+          )}
+        />
+      </section>
+
+      <section className="dashboard-glance dashboard-glance--single" aria-label="At a glance">
+        <FinancialHealthTile
+          health={financialHealth}
+          income={hudState.income}
+          expenses={hudState.spent}
+        />
+      </section>
 
       <section className="section-block">
         <div className="section-headline">
@@ -585,32 +639,31 @@ export default function DashboardView() {
           </Link>
         </div>
 
-        {categoryCards.length ? (
-          <div className="budget-glance-scroll">
-            <div className="budget-glance">
-              {categoryCards.map((item) => (
-                <div
-                  className="budget-glance__item"
-                  key={item.id}
-                  style={{
-                    '--entry-color': item.color,
-                    '--entry-soft': item.soft,
-                  }}
-                >
-                  <div
-                    className="budget-glance__ring"
-                    style={{
-                      background: `conic-gradient(var(--entry-color) 0 ${item.progress}%, rgba(122, 136, 127, 0.12) ${item.progress}% 100%)`,
-                    }}
-                  >
-                    <div className="budget-glance__inner">{item.symbol}</div>
-                  </div>
-                  <strong>{item.name}</strong>
-                  <span>{formatCurrency(item.amount)}</span>
-                  <small>{item.note}</small>
-                </div>
-              ))}
-            </div>
+        {previewCategories.length ? (
+          <div className="category-progress-list">
+            {previewCategories.map((item) => (
+              <CategoryProgressRow
+                amount={item.amount}
+                color={item.color}
+                fallbackShareText={item.monthlyLimit == null ? item.note : null}
+                key={item.id}
+                monthlyLimit={item.monthlyLimit}
+                name={item.name}
+                onSelect={() => setCategoryDrillDown({
+                  name: item.name,
+                  symbol: item.symbol,
+                  color: item.color,
+                  soft: item.soft,
+                })}
+                progressPercentage={item.progress}
+                remainingAmount={item.remainingAmount}
+                selectLabel={`View ${item.name} transactions for ${periodLabel}`}
+                soft={item.soft}
+                statusLabel={item.statusLabel}
+                symbol={item.symbol}
+                tone={item.statusTone || 'neutral'}
+              />
+            ))}
           </div>
         ) : (
           <div className="blank-state blank-state--compact">
@@ -629,19 +682,48 @@ export default function DashboardView() {
             </Link>
           </div>
 
+          <div className="segment-control segment-control--strong dashboard-activity-filter" role="group" aria-label="Activity filter">
+            <button
+              aria-pressed={activityFilter === 'all'}
+              className={`segment-control__button${activityFilter === 'all' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('all')}
+              type="button"
+            >
+              All
+            </button>
+            <button
+              aria-pressed={activityFilter === 'expense'}
+              className={`segment-control__button${activityFilter === 'expense' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('expense')}
+              type="button"
+            >
+              Expenses
+            </button>
+            <button
+              aria-pressed={activityFilter === 'income'}
+              className={`segment-control__button${activityFilter === 'income' ? ' segment-control__button--active' : ''}`}
+              onClick={() => setActivityFilter('income')}
+              type="button"
+            >
+              Income
+            </button>
+          </div>
+
           {recentActivity.length ? (
             <div className="activity-feed">
               {recentActivity.map((entry) => {
                 const visual = getEntryVisual(entry)
 
                 return (
-                  <div
-                    className="activity-feed__row"
+                  <button
+                    className={`activity-feed__row activity-feed__row--${entry.kind} activity-feed__row--interactive`}
                     key={entry.id}
+                    onClick={() => setActivityDetailEntry(entry)}
                     style={{
                       '--entry-color': visual.color,
                       '--entry-soft': visual.soft,
                     }}
+                    type="button"
                   >
                     <div className="entry-avatar">
                       <span>{visual.symbol}</span>
@@ -659,63 +741,37 @@ export default function DashboardView() {
                       {entry.kind === 'income' ? '+' : '-'}
                       {formatCurrency(entry.amount)}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
           ) : (
             <div className="blank-state blank-state--compact">
-              <strong>No activity yet</strong>
-              <span>New transactions will land here once the month starts moving.</span>
+              <strong>
+                {activityFilter === 'income'
+                  ? 'No income yet'
+                  : activityFilter === 'expense'
+                    ? 'No expenses yet'
+                    : 'No activity yet'}
+              </strong>
+              <span>
+                {activityFilter === 'income'
+                  ? 'Income entries will show up here as they land.'
+                  : activityFilter === 'expense'
+                    ? 'Expenses will show up here as they land.'
+                    : 'New transactions will land here once the month starts moving.'}
+              </span>
             </div>
           )}
         </section>
 
-        <section className="section-block dashboard-panel dashboard-panel--income">
-          <div className="section-headline">
-            <h2>Recent income</h2>
-            <Link className="section-link" href="/transactions">
-              View all
-            </Link>
-          </div>
-
-          {recentIncome.length ? (
-            <div className="activity-feed">
-              {recentIncome.map((entry) => {
-                const visual = getEntryVisual(entry)
-                return (
-                  <div
-                    className="activity-feed__row"
-                    key={entry.id}
-                    style={{
-                      '--entry-color': visual.color,
-                      '--entry-soft': visual.soft,
-                    }}
-                  >
-                    <div className="entry-avatar">
-                      <span>{visual.symbol}</span>
-                    </div>
-                    <div className="entry-main">
-                      <strong>{entry.title}</strong>
-                      <div className="entry-meta">
-                        <span className="entry-chip">{entry.chip}</span>
-                        <span>{formatShortDate(entry.occurredOn)}</span>
-                      </div>
-                    </div>
-                    <div className="entry-amount entry-amount--income">
-                      +{formatCurrency(entry.amount)}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="blank-state blank-state--compact">
-              <strong>No income yet</strong>
-              <span>Income entries will show up here as they land.</span>
-            </div>
-          )}
-        </section>
+        <CashFlowSnapshot
+          expenses={hudState.spent}
+          income={hudState.income}
+          monthLabel={periodLabel}
+          trend={recentCashFlow}
+          viewMoreHref="/insights"
+        />
       </div>
     </section>
 
@@ -804,6 +860,23 @@ export default function DashboardView() {
             </form>
           </div>
         </div>
+      ) : null}
+
+      <CategoryTransactionsModal
+        category={categoryDrillDown}
+        currentMonthDetails={categoryTransactionDetails}
+        currentMonthLabel={periodLabel}
+        isOpen={Boolean(categoryDrillDown)}
+        onClose={() => setCategoryDrillDown(null)}
+        previousMonthDetails={null}
+        previousMonthLabel={null}
+      />
+
+      {activityDetailEntry ? (
+        <TransactionDetailSheet
+          entry={activityDetailEntry}
+          onClose={() => setActivityDetailEntry(null)}
+        />
       ) : null}
     </>
   )
