@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers'
 
 function AuthRouteLoading() {
@@ -15,14 +15,19 @@ function AuthRouteLoading() {
   )
 }
 
+function isRecoveryUrl(pathname) {
+  if (pathname !== '/reset-password') return false
+  if (typeof window === 'undefined') return false
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  return hash.get('type') === 'recovery' && !!hash.get('access_token')
+}
+
 export default function AuthLayout({ children }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { isReady, isAuthenticated } = useAuth()
-  const [isRecovery] = useState(() => {
-    if (typeof window === 'undefined') return false
-    const hash = new URLSearchParams(window.location.hash.slice(1))
-    return hash.get('type') === 'recovery' && !!hash.get('access_token')
-  })
+
+  const isRecovery = isRecoveryUrl(pathname)
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return
