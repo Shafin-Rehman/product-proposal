@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useTheme } from '@/components/providers'
+import ChangePasswordForm from '@/components/change-password-form'
 
 function getDisplayName(email) {
   if (!email) return 'BudgetBuddy member'
@@ -33,6 +34,7 @@ export default function AccountPage() {
   const { user, logout } = useAuth()
   const { mode, isSampleMode, setMode } = useDataMode()
   const { theme, setTheme } = useTheme()
+
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = () => {
@@ -47,7 +49,9 @@ export default function AccountPage() {
         <div className="account-hero__avatar">{getInitials(user?.email)}</div>
         <div className="account-hero__copy">
           <span className="account-hero__eyebrow">Account settings</span>
+
           <h1>{getDisplayName(user?.email)}</h1>
+
           <p>{user?.email || 'No email available'}</p>
         </div>
       </article>
@@ -84,7 +88,7 @@ export default function AccountPage() {
               <div aria-hidden="true" className="settings-item__icon">{isSampleMode ? '\u2726' : '\u25CF'}</div>
               <div className="settings-item__copy">
                 <strong>Data mode</strong>
-                <span>{isSampleMode ? 'Sample data' : 'Live data'}</span>
+                <span>{isSampleMode ? 'Sample data — exploring with demo content' : 'Live data — your real transactions'}</span>
               </div>
               <div className="segment-control segment-control--mini" role="group" aria-label="Data mode">
                 <button
@@ -139,13 +143,7 @@ export default function AccountPage() {
             </div>
           </div>
 
-          <div className="settings-item settings-item--static">
-            <div aria-hidden="true" className="settings-item__icon">{'\u{1F6E1}'}</div>
-            <div className="settings-item__copy">
-              <strong>Security</strong>
-              <span>Sign-in protection stays on while you switch between live and sample data.</span>
-            </div>
-          </div>
+          <ChangePasswordForm />
 
           <div className="settings-item settings-item--static">
             <div aria-hidden="true" className="settings-item__icon">{'\u2753'}</div>
@@ -159,9 +157,14 @@ export default function AccountPage() {
 
       <section className="account-group">
         <span className="account-group__label">Actions</span>
-        <button className="logout-action" disabled={isLoggingOut} onClick={handleLogout} type="button">
+        <button
+          className="logout-action"
+          disabled={isLoggingOut}
+          onClick={handleLogout}
+          type="button"
+        >
           <span aria-hidden="true" className="logout-action__icon">{'\u21A9'}</span>
-          <span>{isLoggingOut ? 'Signing out...' : 'Log out'}</span>
+          <span>{isLoggingOut ? 'Signing you out...' : 'Log out'}</span>
         </button>
       </section>
 

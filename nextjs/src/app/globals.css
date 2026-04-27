@@ -11015,3 +11015,86 @@ html[data-theme='dark'] .category-modal__row {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
+
+/* ─── Change-password inline popup ─────────────────────────────── */
+
+.cpw-popup {
+  margin-top: 0.5rem;
+  padding: 1.5rem;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--surface-strong), var(--surface-muted));
+  box-shadow: var(--shadow-raised);
+  transition:
+    background 280ms ease,
+    border-color 280ms ease;
+}
+
+.cpw-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.cpw-popup__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cpw-popup__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: background 140ms ease, color 140ms ease;
+  flex-shrink: 0;
+}
+
+.cpw-popup__close:hover {
+  background: var(--surface-strong);
+  color: var(--text-primary);
+}
+
+.cpw-popup__close:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.cpw-popup__success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0 0.5rem;
+  text-align: center;
+}
+
+.cpw-popup__success-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.cpw-popup__success-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cpw-popup__success-copy {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
