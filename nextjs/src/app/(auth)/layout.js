@@ -18,15 +18,11 @@ function AuthRouteLoading() {
 export default function AuthLayout({ children }) {
   const router = useRouter()
   const { isReady, isAuthenticated } = useAuth()
-  const [isRecovery, setIsRecovery] = useState(false)
-
-  useEffect(() => {
-    // Preserve recovery-link state from the URL hash on mount.
-    if (typeof window !== 'undefined') {
-      const hash = new URLSearchParams(window.location.hash.slice(1))
-      if (hash.get('type') === 'recovery' && hash.get('access_token')) setIsRecovery(true)
-    }
-  }, [])
+  const [isRecovery] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const hash = new URLSearchParams(window.location.hash.slice(1))
+    return hash.get('type') === 'recovery' && !!hash.get('access_token')
+  })
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return
