@@ -269,6 +269,21 @@ describe('POST /api/income/update', () => {
     })
   })
 
+  it('persists source_id null when the client explicitly clears the source on edit', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ ...row, source_id: null }] })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, source_id: null }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE public.income SET'),
+          [null, 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('rejects update without income_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,

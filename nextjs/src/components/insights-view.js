@@ -430,8 +430,16 @@ export default function InsightsView() {
   const cashFlowSeries = snapshot?.cashFlowSeries ?? []
   const rhythmTopExpenses = useMemo(() => {
     const fromDetails = pickTopExpensesFromDetails(snapshot?.dailySpend?.details, 10)
-    if (fromDetails.length) return fromDetails
-    return (snapshot?.topExpenses ?? []).slice(0, 10)
+    const topMeta = snapshot?.topExpenses ?? []
+    const source = fromDetails.length ? fromDetails : topMeta.slice(0, 10)
+    if (!source.length) return []
+    return source.map((row) => {
+      const match = topMeta.find((m) => String(m.id) === String(row.id))
+      return {
+        ...row,
+        categoryIcon: row.categoryIcon ?? match?.categoryIcon ?? null,
+      }
+    })
   }, [snapshot?.dailySpend?.details, snapshot?.topExpenses])
 
   useEffect(() => {
@@ -545,6 +553,7 @@ export default function InsightsView() {
   const selectedDayLabel = selectedDayKey ? formatLongDate(selectedDayKey) : activeMonthLabel
   const activeRhythmEntry = activeRhythmDay ? dailySpend.series.find((item) => item.key === activeRhythmDay) ?? null : null
   const centerLabelLines = viewMode === 'expenses' ? ['Spent', 'this month'] : ['Income', 'this month']
+  const detailSectionLabel = viewMode === 'income' ? 'Source detail' : 'Category detail'
   const trailingCategoryId = activeItems.length > 2 && activeItems.length % 2 === 1 ? activeItems.at(-1)?.id : null
   const moverScaleMax = Math.max(
     ...categoryMovers.flatMap((entry) => [Number(entry.amount ?? 0), Number(entry.previousAmount ?? 0)]),
@@ -927,9 +936,9 @@ export default function InsightsView() {
         </div>
 
         {activeItems.length ? (
-          <section className="section-block insights-v57__detail-section" aria-label="Category detail">
+          <section className="section-block insights-v57__detail-section" aria-label={detailSectionLabel}>
             <div className="section-headline">
-              <h2>Category detail</h2>
+              <h2>{detailSectionLabel}</h2>
               <span className="section-link">{formatCurrency(activeTotal)} {viewMode === 'expenses' ? 'spent' : 'earned'}</span>
             </div>
             <div className="category-progress-list category-progress-list--insights">
@@ -1147,6 +1156,7 @@ export default function InsightsView() {
                         kind: 'expense',
                         title: item.title,
                         chip: item.categoryName,
+                        categoryIcon: item.categoryIcon ?? null,
                         amount: item.amount,
                         occurredOn: item.occurredOn || item.key,
                         note: item.categoryName,

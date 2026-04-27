@@ -1,12 +1,18 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/budget', () => ({ buildBudgetSummary: jest.fn() }))
 jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value || 'Uncategorized',
-    color: `#${String(value || 'uncat').length}23456`,
-    soft: 'rgba(120, 140, 160, 0.18)',
-    symbol: (value || '?').slice(0, 1).toUpperCase(),
-  })),
+  // Preserve persisted labels (no "Food" → "Dining"); match production contract used by lib/insights.js
+  getCategoryPresentation: jest.fn(({ name, icon, kind = 'expense' }) => {
+    const label = (name == null || String(name).trim() === '')
+      ? (kind === 'income' ? 'No source' : 'No cat')
+      : String(name)
+    return {
+      label,
+      color: `#${String(label).length}23456`,
+      soft: 'rgba(120, 140, 160, 0.18)',
+      symbol: icon || String(label).slice(0, 1).toUpperCase(),
+    }
+  }),
 }))
 
 const {

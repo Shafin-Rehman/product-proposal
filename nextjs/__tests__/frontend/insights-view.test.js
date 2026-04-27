@@ -61,11 +61,11 @@ jest.mock('@/lib/demoData', () => ({
       peakDay: { day: 30, key: '2026-03-30', amount: 310.76 },
       series: Array.from({ length: 30 }, (_, index) => ({ day: index + 1, key: `2026-03-${String(index + 1).padStart(2, '0')}`, amount: index === 29 ? 310.76 : index === 20 ? 147 : 0 })),
       details: [
-        { id: 'expense-1', key: '2026-03-22', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201,134,158,0.18)', symbol: 'S' },
+        { id: 'expense-1', key: '2026-03-22', amount: 147, title: 'Amazon restock', categoryName: 'Shopping', categoryIcon: null, occurredOn: '2026-03-22', color: '#c9869e', soft: 'rgba(201,134,158,0.18)', symbol: 'S' },
       ],
     },
     topExpenses: [
-      { id: 'expense-1', title: 'Amazon restock', categoryName: 'Shopping', occurredOn: '2026-03-22', amount: 147, symbol: 'S', color: '#c9869e', soft: 'rgba(201,134,158,0.18)' },
+      { id: 'expense-1', title: 'Amazon restock', categoryName: 'Shopping', categoryIcon: '🧪', occurredOn: '2026-03-22', amount: 147, symbol: '🧪', color: '#c9869e', soft: 'rgba(201,134,158,0.18)' },
     ],
   },
 }))
@@ -93,7 +93,7 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen } = require('@testing-library/react')
+const { render, screen, fireEvent } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode } = require('@/components/providers')
 const { getActiveBreakdownItems, default: InsightsView } = require('@/components/insights-view')
@@ -152,9 +152,20 @@ describe('InsightsView (sample data)', () => {
     const { container } = render(React.createElement(InsightsView))
 
     expect(screen.getByRole('heading', { name: 'Category detail' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Category detail' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Pace vs last month' })).toBeTruthy()
     expect(container.querySelector('.category-progress-list--insights')).toBeTruthy()
     expect(container.querySelector('.pace-chart')).toBeTruthy()
+  })
+
+  it('uses Source detail wording for the income breakdown detail section', () => {
+    render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Income' }))
+
+    expect(screen.getByRole('heading', { name: 'Source detail' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Source detail' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Category detail' })).toBeNull()
   })
 
   it('shows a readable cash flow scale note in the card header', () => {
@@ -166,5 +177,16 @@ describe('InsightsView (sample data)', () => {
     const { container } = render(React.createElement(InsightsView))
     expect(container.querySelector('.insights-v57__sparkline')).toBeNull()
     expect(container.querySelector('.insights-v57__cashflow-summary')).toBeNull()
+  })
+
+  it('passes server categoryIcon through to the top-expense detail sheet hero', () => {
+    render(React.createElement(InsightsView))
+    const row = screen.getByText('Amazon restock').closest('button')
+    expect(row).toBeTruthy()
+    fireEvent.click(row)
+    const dialog = screen.getByRole('dialog', { name: 'Amazon restock' })
+    const hero = dialog.querySelector('.entry-avatar--large')
+    expect(hero).toBeTruthy()
+    expect(hero.textContent).toContain('🧪')
   })
 })

@@ -31,11 +31,11 @@ jest.mock('@/lib/demoData', () => ({
   demoCategoryBudgets: [],
 }))
 jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value || 'Uncategorized',
+  getCategoryPresentation: jest.fn(({ name, icon, kind: _k = 'expense' }) => ({
+    label: name == null || String(name).trim() === '' ? 'No cat' : name,
     color: '#123456',
     soft: '#abcdef',
-    symbol: value?.[0] || '?',
+    symbol: icon || (name?.[0] || '?'),
   })),
 }))
 jest.mock('@/lib/financeUtils', () => ({

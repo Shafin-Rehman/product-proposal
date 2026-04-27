@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth, useDataChanged, useDataMode } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
 import { DEMO_MONTH, demoBudgetSummary, demoCategoryBudgets } from '@/lib/demoData'
-import { getCategoryVisual } from '@/lib/financeVisuals'
+import { getCategoryPresentation } from '@/lib/financeVisuals'
 import {
   formatCurrency,
   formatMonthLabel,
@@ -496,7 +496,11 @@ export default function PlannerView() {
       notifyDataChanged()
       setFeedback({
         tone: 'success',
-        message: `${row.categoryName} plan saved for ${formatMonthPeriod(activeMonth)}.`,
+        message: `${getCategoryPresentation({
+          name: row.categoryName,
+          icon: row.categoryIcon,
+          kind: 'expense',
+        }).label} plan saved for ${formatMonthPeriod(activeMonth)}.`,
       })
       handleRetry()
     } catch (error) {
@@ -698,7 +702,11 @@ export default function PlannerView() {
         {plannerRows.length ? (
           <div className="planner-rows">
             {plannerRows.map((row) => {
-              const visual = getCategoryVisual(row.categoryName)
+              const presentation = getCategoryPresentation({
+                name: row.categoryName,
+                icon: row.categoryIcon,
+                kind: 'expense',
+              })
               const rowDraft = rowDrafts[row.id] ?? ''
               const normalizedRowDraft = normalizeMoneyDraftForSave(rowDraft)
               const normalizedPlannedAmount = normalizeMoneyDraftForSave(row.plannedAmount)
@@ -708,13 +716,13 @@ export default function PlannerView() {
                 && normalizedRowDraft === normalizedPlannedAmount
               const progressAccessibilityProps = row.spentAmount == null
                 ? {
-                    'aria-label': `${row.categoryName} budget progress`,
+                    'aria-label': `${presentation.label} budget progress`,
                     'aria-valuemin': 0,
                     'aria-valuemax': 100,
                     'aria-valuetext': row.progressAriaValueText,
                   }
                 : {
-                    'aria-label': `${row.categoryName} budget progress`,
+                    'aria-label': `${presentation.label} budget progress`,
                     'aria-valuemin': 0,
                     'aria-valuemax': 100,
                     'aria-valuenow': Math.round(row.progressPercentage),
@@ -728,14 +736,14 @@ export default function PlannerView() {
                       <div
                         className="planner-row__icon"
                         style={{
-                          '--planner-color': visual.color,
-                          '--planner-soft': visual.soft,
+                          '--planner-color': presentation.color,
+                          '--planner-soft': presentation.soft,
                         }}
                       >
-                        <span>{row.categoryIcon || visual.symbol}</span>
+                        <span>{presentation.symbol}</span>
                       </div>
                       <div className="planner-row__copy">
-                        <strong>{row.categoryName}</strong>
+                        <strong>{presentation.label}</strong>
                       </div>
                     </div>
 

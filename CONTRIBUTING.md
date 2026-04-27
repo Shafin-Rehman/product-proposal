@@ -22,7 +22,7 @@ Thank you for contributing to BudgetBuddy.
 - Add tests that match the part of the app you changed.
 - Frontend screens, components, and browser-facing helpers should be tested under `nextjs/__tests__/frontend/`.
 - Frontend render and interaction tests should follow the existing Jest + React Testing Library pattern already used in that folder.
-- Frontend helper tests commonly use `*.unit.test.js` and `*.integration.test.js` naming in `nextjs/__tests__/frontend/`.
+- In `nextjs/__tests__/frontend/`, name files to match the screen or module under test when obvious (e.g. `dashboard-view.test.js` for `dashboard-view.js`, `insights-view.test.js` for `insights-view.js`, `insights-lib.test.js` for `lib/insights.js`). Some focused helper tests still use `*.unit.test.js` or `*.integration.test.js`.
 - Shared helpers and route-adjacent logic outside the frontend test area should usually be tested in `nextjs/__tests__/`, following the existing feature-based files there.
 - API routes should usually get integration tests in `nextjs/__tests__/` using the current `next-test-api-route-handler` pattern.
 - If component logic is split into helpers, test the helper directly and keep the rendered component test focused on visible behavior.

@@ -13,7 +13,7 @@ import {
   demoCategoryBudgets,
   demoInsightsSnapshot,
 } from '@/lib/demoData'
-import { getCategoryVisual, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
+import { getCategoryPresentation, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
   buildDailySpendDetailsFromExpenses,
@@ -175,8 +175,11 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
 
 function buildLiveCategoryCards(categoryStatuses = []) {
   return categoryStatuses.map((item) => {
-    const displayName = item.category_name || 'Uncategorized'
-    const visual = getCategoryVisual(displayName)
+    const presentation = getCategoryPresentation({
+      name: item.category_name,
+      icon: item.category_icon,
+      kind: 'expense',
+    })
     const amount = Number(item.spent ?? 0)
     const categoryHealth = buildCategoryBudgetHealth({
       monthlyLimit: item.monthly_limit,
@@ -186,10 +189,10 @@ function buildLiveCategoryCards(categoryStatuses = []) {
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: displayName,
-      symbol: item.category_icon || visual.symbol,
-      color: visual.color,
-      soft: visual.soft,
+      name: presentation.label,
+      symbol: presentation.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
       progress: categoryHealth.progressPercentage,
       amount,
       monthlyLimit: Number(item.monthly_limit ?? 0) > 0 ? Number(item.monthly_limit) : null,
@@ -207,11 +210,19 @@ export function buildDerivedCategoryCards(expenses = []) {
   expenses.forEach((expense) => {
     const amount = Number(expense.amount ?? 0)
     const key = expense.category_id ?? expense.category_name ?? 'uncategorized'
-    const displayName = expense.category_name || 'Uncategorized'
-    const current = grouped.get(key) ?? {
+    const displayName = expense.category_name
+      && String(expense.category_name).trim() !== ''
+      ? String(expense.category_name).trim()
+      : ''
+    const existing = grouped.get(key)
+    const current = existing ?? {
       category_name: displayName,
+      category_icon: expense.category_icon ?? null,
       total_amount: 0,
       count: 0,
+    }
+    if (!current.category_icon && expense.category_icon) {
+      current.category_icon = expense.category_icon
     }
 
     current.total_amount += amount
@@ -223,6 +234,7 @@ export function buildDerivedCategoryCards(expenses = []) {
     .map(([key, item]) => ({
       category_id: key,
       category_name: item.category_name,
+      category_icon: item.category_icon ?? null,
       total_amount: Number(item.total_amount.toFixed(2)),
       count: item.count,
     }))
@@ -231,16 +243,20 @@ export function buildDerivedCategoryCards(expenses = []) {
   const totalExpenses = breakdown.reduce((sum, item) => sum + Number(item.total_amount ?? 0), 0)
 
   return breakdown.map((item) => {
-    const visual = getCategoryVisual(item.category_name || 'Uncategorized')
+    const presentation = getCategoryPresentation({
+      name: item.category_name,
+      icon: item.category_icon,
+      kind: 'expense',
+    })
     const amount = Number(item.total_amount ?? 0)
     const share = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
 
     return {
       id: item.category_id ?? item.category_name ?? `${item.category_name}-${amount}`,
-      name: item.category_name || 'Uncategorized',
-      symbol: visual.symbol,
-      color: visual.color,
-      soft: visual.soft,
+      name: presentation.label,
+      symbol: presentation.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
       progress: Math.min(share, 100),
       amount,
       monthlyLimit: null,
@@ -467,7 +483,7 @@ export default function DashboardView() {
     : null
   const categoryCards = isSampleMode
     ? demoCategoryBudgets.map((item) => {
-      const visual = getCategoryVisual(item.name)
+      const presentation = getCategoryPresentation({ name: item.name, kind: 'expense' })
       const categoryHealth = buildCategoryBudgetHealth({
         monthlyLimit: item.budget,
         spent: item.spent,
@@ -475,10 +491,10 @@ export default function DashboardView() {
       })
       return {
         id: item.id,
-        name: visual.label,
-        symbol: visual.symbol,
-        color: visual.color,
-        soft: visual.soft,
+        name: presentation.label,
+        symbol: presentation.symbol,
+        color: presentation.color,
+        soft: presentation.soft,
         progress: categoryHealth.progressPercentage,
         amount: item.spent,
         monthlyLimit: item.budget,

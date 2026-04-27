@@ -36,7 +36,7 @@ jest.mock('@/lib/demoData', () => ({
       id: 'demo-income-1',
       kind: 'income',
       title: 'Paycheck',
-      chip: 'Income',
+      chip: 'Salary',
       occurredOn: '2026-03-10',
       amount: 2400,
     },
@@ -82,12 +82,15 @@ jest.mock('@/lib/demoData', () => ({
   },
 }))
 jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value,
-    color: '#123456',
-    soft: '#abcdef',
-    symbol: value?.[0] || '?',
-  })),
+  getCategoryPresentation: jest.fn(({ name, icon, kind: _k = 'expense' }) => {
+    const label = name == null || String(name).trim() === '' ? 'No cat' : name
+    return {
+      label,
+      color: '#123456',
+      soft: '#abcdef',
+      symbol: icon || (label[0] || '?'),
+    }
+  }),
   getEntryVisual: jest.fn((entry) => ({
     color: entry.kind === 'income' ? '#0f9d58' : '#123456',
     soft: '#abcdef',
@@ -698,7 +701,7 @@ describe('DashboardView', () => {
     financeUtils.buildMonthlySpendTrend.mockReturnValue([320, 610, 860])
     financeUtils.buildActivityFeed.mockReturnValue([
       { id: 'expense-1', kind: 'expense', merchant: 'Grocer', title: 'Grocer', chip: 'Food', occurredOn: '2026-03-11', amount: 285 },
-      { id: 'income-1', kind: 'income', title: 'Paycheck', chip: 'Income', occurredOn: '2026-03-02', amount: 2200 },
+      { id: 'income-1', kind: 'income', title: 'Paycheck', chip: 'Salary', occurredOn: '2026-03-02', amount: 2200 },
     ])
 
     await renderDashboard()

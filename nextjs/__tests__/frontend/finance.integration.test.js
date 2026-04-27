@@ -28,7 +28,7 @@ describe('buildActivityFeed -> getEntryVisual', () => {
   it('chip and kind on feed entries map to the correct category color', () => {
     const [entry] = buildActivityFeed([EXPENSE], [])
     const visual = getCategoryVisual(entry.chip, entry.kind)
-    expect(visual.color).toBe('#6faa80')
+    expect(visual.color).toBe('#4d9a6a')
   })
 })
 
