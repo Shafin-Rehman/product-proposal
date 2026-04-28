@@ -11,3 +11,4 @@ nextjs/test-results/
 .DS_Store
 supabase/.temp
 nextjs/.vercel/
+.terraform
