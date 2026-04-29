@@ -406,6 +406,12 @@ function LiveNotice({ message, onRetry }) {
   )
 }
 
+function getFilenameFromDisposition(value, fallback) {
+  if (!value) return fallback
+  const match = value.match(/filename="?([^";]+)"?/i)
+  return match?.[1] || fallback
+}
+
 export default function InsightsView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
@@ -424,6 +430,7 @@ export default function InsightsView() {
   const [drillDown, setDrillDown] = useState(null)
   const [topExpenseDetail, setTopExpenseDetail] = useState(null)
   const [liveState, setLiveState] = useState({ status: 'loading', message: '', snapshot: null })
+  const [exportState, setExportState] = useState({ status: 'idle', message: '' })
 
   const activeMonth = isSampleMode ? DEMO_MONTH : selectedMonth
   const snapshot = isSampleMode ? demoInsightsSnapshot : liveState.snapshot
@@ -524,6 +531,59 @@ export default function InsightsView() {
     event?.stopPropagation?.()
     setSelectedDayKey((current) => current ?? getDefaultSelectedDay(snapshot?.dailySpend))
     setIsMonthViewOpen(true)
+  }
+
+  async function handleExportCsv() {
+    if (isSampleMode || exportState.status === 'loading') return
+    if (!session?.accessToken) {
+      logout()
+      router.replace('/login')
+      return
+    }
+
+    setExportState({ status: 'loading', message: '' })
+
+    try {
+      const response = await fetch(`/api/reports/export?month=${encodeURIComponent(activeMonth)}`, {
+        cache: 'no-store',
+        headers: {
+          authorization: `Bearer ${session.accessToken}`,
+        },
+      })
+
+      if (response.status === 401) {
+        logout()
+        router.replace('/login')
+        return
+      }
+
+      if (!response.ok) {
+        let message = 'The monthly CSV export is not available right now.'
+        try {
+          const body = await response.json()
+          if (body?.error) message = body.error
+        } catch {}
+        setExportState({ status: 'error', message })
+        return
+      }
+
+      const blob = await response.blob()
+      const filename = getFilenameFromDisposition(
+        response.headers.get('content-disposition'),
+        `budgetbuddy-${activeMonth.slice(0, 7)}-report.csv`
+      )
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      setExportState({ status: 'success', message: 'CSV export downloaded.' })
+    } catch {
+      setExportState({ status: 'error', message: 'The monthly CSV export is not available right now.' })
+    }
   }
 
   if (!isReady || !session?.accessToken) return null
@@ -717,10 +777,27 @@ export default function InsightsView() {
               <span aria-hidden="true">{'\u2192'}</span>
             </button>
           </div>
+          <button
+            className="button-secondary"
+            disabled={isSampleMode || exportState.status === 'loading'}
+            onClick={handleExportCsv}
+            title={isSampleMode ? 'CSV export is available in live mode' : `Export ${activeMonthLabel} report as CSV`}
+            type="button"
+          >
+            {exportState.status === 'loading' ? 'Exporting...' : isSampleMode ? 'Live export only' : 'Export CSV'}
+          </button>
         </div>
       </div>
 
       <LiveNotice message={liveState.message} onRetry={() => setReloadToken((value) => value + 1)} />
+      {exportState.message ? (
+        <div className="inline-status inline-status--compact" role="status">
+          <div>
+            <strong>{exportState.status === 'error' ? 'Export failed' : 'Export ready'}</strong>
+            <span>{exportState.message}</span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="insights-v57">
         <div className="insights-v57__metric-strip">
