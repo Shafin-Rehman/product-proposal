@@ -1,0 +1,86 @@
+name: deployment
+
+on:
+  workflow_run:
+    workflows: [App CI]
+    types: [completed]
+    branches: [main]
+
+env:
+  S3_BUCKET: terraform-state-budgetbuddy-zakariac22
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: nextjs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nextjs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js app
+        run: npm run build
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build deployment artifact
+        run: |
+          chmod +x ../deploy.sh
+          ../deploy.sh ${{ github.event.workflow_run.head_sha }}
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgetbuddy_application_artifact
+          path: nextjs/budgetbuddy_deploy-${{ github.event.workflow_run.head_sha }}.zip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload artifact to S3
+        run: |
+          ARTIFACT="budgetbuddy_deploy-${{ github.event.workflow_run.head_sha }}.zip"
+          echo "Uploading $ARTIFACT to s3://${{ env.S3_BUCKET }}"
+          aws s3 cp "$ARTIFACT" "s3://${{ env.S3_BUCKET }}/$ARTIFACT"
+
+      - name: Create Elastic Beanstalk application version
+        run: |
+          ARTIFACT_KEY="budgetbuddy_deploy-${{ github.event.workflow_run.head_sha }}.zip"
+          aws elasticbeanstalk create-application-version \
+            --application-name budgetbuddy \
+            --source-bundle S3Bucket="${{ env.S3_BUCKET }}",S3Key="$ARTIFACT_KEY" \
+            --version-label "ver-${{ github.event.workflow_run.head_sha }}" \
+            --description "commit-sha-${{ github.event.workflow_run.head_sha }}"
+
+      - name: Deploy to Elastic Beanstalk environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name budgetbuddy-environment \
+            --version-label "ver-${{ github.event.workflow_run.head_sha }}" \
+            --option-settings \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=SUPABASE_URL,Value="${{ secrets.SUPABASE_URL }}" \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=SUPABASE_ANON_KEY,Value="${{ secrets.SUPABASE_ANON_KEY }}" \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=DATABASE_URL,Value="${{ secrets.DATABASE_URL }}" \
+              Namespace=aws:elasticbeanstalk:application:environment,OptionName=NODE_ENV,Value="production"
