@@ -295,4 +295,25 @@ describe('InsightsView CSV export', () => {
       expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
     })
   })
+
+  it('does not show stale export success after the export is superseded during download', async () => {
+    let rerenderView
+    HTMLAnchorElement.prototype.click.mockImplementationOnce(() => {
+      useDataMode.mockReturnValue({ isSampleMode: true })
+      rerenderView(React.createElement(InsightsView))
+    })
+    const { rerender } = render(React.createElement(InsightsView))
+    rerenderView = rerender
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+    })
+    expect(screen.queryByText('CSV export downloaded.')).toBeNull()
+    expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
+  })
 })

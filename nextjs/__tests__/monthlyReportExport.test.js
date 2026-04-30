@@ -88,6 +88,33 @@ describe('monthly report CSV helpers', () => {
     expect(csv.split('\r\n')[1]).toBe("summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,'-10.00,50.00,'-10.00,,")
   })
 
+  it('normalizes Date object days and summary months with local date parts', () => {
+    const localMonth = new Date(2026, 2, 1)
+    const localDay = new Date(2026, 2, 10)
+    const expectedMonth = `${localMonth.getFullYear()}-${String(localMonth.getMonth() + 1).padStart(2, '0')}-${String(localMonth.getDate()).padStart(2, '0')}`
+    const expectedDay = `${localDay.getFullYear()}-${String(localDay.getMonth() + 1).padStart(2, '0')}-${String(localDay.getDate()).padStart(2, '0')}`
+
+    const csv = buildMonthlyReportCsv({
+      month: localMonth,
+      summary: { total_income: '100.00', total_expenses: '25.00' },
+      transactions: [
+        {
+          id: 'date-object-row',
+          month: localMonth,
+          type: 'expense',
+          date: localDay,
+          title: 'Date object row',
+          amount: '25.00',
+          created_at: '2026-03-10T08:00:00Z',
+        },
+      ],
+    })
+
+    const lines = csv.split('\r\n')
+    expect(lines[1].startsWith(`summary,${expectedMonth},monthly_summary`)).toBe(true)
+    expect(lines[2]).toContain(`transaction,${expectedMonth},expense,${expectedDay}`)
+  })
+
   it('sorts same-day transactions by Date object created_at values', () => {
     const csv = buildMonthlyReportCsv({
       month: '2026-03-01',

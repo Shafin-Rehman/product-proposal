@@ -560,6 +560,7 @@ export default function InsightsView() {
     const controller = new AbortController()
     exportAbortRef.current = controller
     const exportMonth = activeMonth
+    const isCurrentExport = () => exportAbortRef.current === controller && !controller.signal.aborted
 
     try {
       const response = await fetch(`/api/reports/export?month=${encodeURIComponent(exportMonth)}`, {
@@ -583,7 +584,7 @@ export default function InsightsView() {
           const body = await response.json()
           if (body?.error) message = body.error
         } catch {}
-        if (controller.signal.aborted) return
+        if (!isCurrentExport()) return
         setExportState({ status: 'error', message })
         return
       }
@@ -602,9 +603,11 @@ export default function InsightsView() {
       link.click()
       link.remove()
       setTimeout(() => window.URL.revokeObjectURL(url), 100)
+      if (!isCurrentExport()) return
       setExportState({ status: 'success', message: 'CSV export downloaded.' })
     } catch (error) {
       if (error?.name === 'AbortError') return
+      if (!isCurrentExport()) return
       setExportState({ status: 'error', message: 'The monthly CSV export is not available right now.' })
     } finally {
       if (exportAbortRef.current === controller) exportAbortRef.current = null
