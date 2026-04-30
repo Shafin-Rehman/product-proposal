@@ -4,4 +4,4 @@ terraform {
     key    = "core/terraform.tfstate"
     region = "us-east-1"
   }
-}
+} 
