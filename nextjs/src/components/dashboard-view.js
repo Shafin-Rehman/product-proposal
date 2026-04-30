@@ -33,6 +33,12 @@ import {
   buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
   getMonthProgressState as getSharedMonthProgressState,
 } from '@/lib/budgetHealth'
+import {
+  getSavingsGoalAvatar,
+  getSavingsGoalStatusLabel,
+  getSavingsGoalStatusReason,
+  getSavingsGoalStatusTone,
+} from '@/lib/savingsGoalStatus'
 import AllocationBar from '@/components/ui/AllocationBar'
 import BudgetHudMetrics from '@/components/ui/BudgetHudMetrics'
 import CashFlowSnapshot from '@/components/ui/CashFlowSnapshot'
@@ -61,44 +67,6 @@ function getFirstName(email) {
     .filter(Boolean)
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join(' ')
-}
-
-function getGoalStatusLabel(status) {
-  if (status === 'complete') return 'Complete'
-  if (status === 'overdue') return 'Overdue'
-  if (status === 'over_budget') return 'Over budget'
-  if (status === 'tight') return 'Watch'
-  if (status === 'no_budget') return 'No budget'
-  return 'On track'
-}
-
-function getGoalStatusTone(status) {
-  if (status === 'complete' || status === 'ready') return 'positive'
-  if (status === 'tight' || status === 'no_budget') return 'warning'
-  if (status === 'over_budget' || status === 'overdue') return 'danger'
-  return 'neutral'
-}
-
-function getGoalAvatar(goal) {
-  if (goal?.icon) return goal.icon
-  const words = String(goal?.name ?? '').trim().split(/\s+/).filter(Boolean)
-  return (words.length > 1 ? `${words[0][0]}${words[1][0]}` : words[0]?.slice(0, 2) || 'SG').toUpperCase()
-}
-
-function getGoalStatusReason(goal) {
-  const status = goal?.budget_context?.status ?? 'ready'
-  const remaining = Number(goal?.remaining_amount ?? 0)
-  const monthlyRequired = Number(goal?.monthly_required ?? 0)
-  const remainingBudget = Number(goal?.budget_context?.remaining_budget)
-
-  if (status === 'complete') return 'Saved amount reached the target.'
-  if (status === 'overdue') return `Target date passed with ${formatCurrency(remaining)} left.`
-  if (status === 'over_budget' && Number.isFinite(remainingBudget)) {
-    return `Needs ${formatCurrency(monthlyRequired)}/month but only ${formatCurrency(remainingBudget)} remains.`
-  }
-  if (status === 'tight') return `Needs ${formatCurrency(monthlyRequired)}/month, leaving little room in budget.`
-  if (status === 'no_budget') return 'No monthly budget is set yet.'
-  return 'Monthly need fits your remaining budget.'
 }
 
 export function hasOverallMonthlyLimit(summary) {
@@ -698,18 +666,18 @@ export default function DashboardView() {
           </Link>
         </div>
         {topSavingsGoal ? (
-          <article className={`savings-goal savings-goal--${getGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
+          <article className={`savings-goal savings-goal--${getSavingsGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
             <div className="savings-goal__top">
               <div className="savings-goal__identity">
-                <div className="savings-goal__avatar" aria-hidden="true">{getGoalAvatar(topSavingsGoal)}</div>
+                <div className="savings-goal__avatar" aria-hidden="true">{getSavingsGoalAvatar(topSavingsGoal)}</div>
                 <div>
                   <strong>{topSavingsGoal.name}</strong>
                   <span>{Math.round(topSavingsGoal.progress_percentage ?? 0)}% saved toward {formatCurrency(topSavingsGoal.target_amount)}</span>
-                  <small>{getGoalStatusReason(topSavingsGoal)}</small>
+                  <small>{getSavingsGoalStatusReason(topSavingsGoal)}</small>
                 </div>
               </div>
-              <span className={`planner-status planner-status--${getGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
-                {getGoalStatusLabel(topSavingsGoal.budget_context?.status)}
+              <span className={`planner-status planner-status--${getSavingsGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
+                {getSavingsGoalStatusLabel(topSavingsGoal.budget_context?.status)}
               </span>
             </div>
             <div className="savings-goal__progress" role="progressbar" aria-label={`${topSavingsGoal.name} savings progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(topSavingsGoal.progress_percentage ?? 0)}>

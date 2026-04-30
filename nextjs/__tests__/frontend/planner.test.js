@@ -245,6 +245,43 @@ describe('PlannerView', () => {
     expect(screen.getByText('\u{1F6E1}\uFE0F')).toBeTruthy()
   })
 
+  it('shows a clear over-budget savings goal reason without remaining budget', async () => {
+    mockPlannerResponses({
+      goalsPayload: {
+        goals: [
+          {
+            id: 'goal-1',
+            name: 'Trip fund',
+            icon: null,
+            target_amount: '1200.00',
+            current_amount: '200.00',
+            remaining_amount: '1000.00',
+            target_date: '2026-12-31',
+            archived: false,
+            progress_percentage: 16.67,
+            monthly_required: '125.00',
+            budget_context: { status: 'over_budget', remaining_budget: null },
+          },
+        ],
+        summary: {
+          active_count: 1,
+          current_total: '200.00',
+          remaining_total: '1000.00',
+          monthly_required_total: '125.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'over_budget',
+        },
+      },
+    })
+
+    await renderPlanner()
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    expect(screen.getByText('Over budget')).toBeTruthy()
+    expect(screen.getByText('Needs $125.00/month without a clear remaining budget.')).toBeTruthy()
+  })
+
   it('shows a partial-data notice and does not invent actuals when the live summary request fails', async () => {
     apiGet
       .mockResolvedValueOnce([
@@ -402,7 +439,7 @@ describe('PlannerView', () => {
       await flushAsyncUpdates()
     })
 
-    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Goal icons' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Use Emergency icon' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Use Medical icon' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Use Wedding icon' })).toBeTruthy()
@@ -415,7 +452,7 @@ describe('PlannerView', () => {
       await flushAsyncUpdates()
     })
 
-    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Goal icons' })).toBeNull()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Create goal' }))
@@ -457,24 +494,24 @@ describe('PlannerView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose goal icon' }))
       await flushAsyncUpdates()
     })
-    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Goal icons' })).toBeTruthy()
 
     await act(async () => {
       fireEvent.mouseDown(screen.getByLabelText('Goal name'))
       await flushAsyncUpdates()
     })
-    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Goal icons' })).toBeNull()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose goal icon' }))
       await flushAsyncUpdates()
     })
-    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Goal icons' })).toBeTruthy()
 
     await act(async () => {
       fireEvent.keyDown(document, { key: 'Escape' })
       await flushAsyncUpdates()
     })
-    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Goal icons' })).toBeNull()
   })
 })

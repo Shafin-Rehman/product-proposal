@@ -12,10 +12,6 @@ function toMoneyNumber(value) {
   return Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0
 }
 
-function toMoneyString(value) {
-  return toMoneyNumber(value).toFixed(2)
-}
-
 function toDateOnly(value) {
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null
@@ -186,7 +182,7 @@ export async function createSavingsGoal(userId, payload = {}) {
   if (!isNonNegativeMoneyValue(currentAmount)) throw new Error('current_amount must be a valid non-negative money amount')
   if (!targetDate) throw new Error('Valid target_date is required')
 
-  if (payload.icon !== undefined && payload.icon !== null && !icon) throw new Error('icon must be a short text value')
+  if (payload.icon !== undefined && payload.icon !== null && String(payload.icon).trim() && !icon) throw new Error('icon must be a short text value')
 
   const { rows } = await db.query(
     `INSERT INTO public.savings_goals (user_id, name, icon, target_amount, current_amount, target_date)

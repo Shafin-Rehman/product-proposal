@@ -28,6 +28,12 @@ import {
   mergePlannerDrafts,
   normalizeMoneyDraftForSave,
 } from '@/lib/planner'
+import {
+  getSavingsGoalAvatar,
+  getSavingsGoalStatusLabel,
+  getSavingsGoalStatusReason,
+  getSavingsGoalStatusTone,
+} from '@/lib/savingsGoalStatus'
 
 function areDraftMapsEqual(left = {}, right = {}) {
   const leftEntries = Object.entries(left)
@@ -92,22 +98,6 @@ function PlannerFeedback({ feedback }) {
   )
 }
 
-function getGoalStatusLabel(status) {
-  if (status === 'complete') return 'Complete'
-  if (status === 'overdue') return 'Overdue'
-  if (status === 'over_budget') return 'Over budget'
-  if (status === 'tight') return 'Watch'
-  if (status === 'no_budget') return 'No budget'
-  return 'On track'
-}
-
-function getGoalStatusTone(status) {
-  if (status === 'complete' || status === 'ready') return 'positive'
-  if (status === 'tight' || status === 'no_budget') return 'warning'
-  if (status === 'over_budget' || status === 'overdue') return 'danger'
-  return 'neutral'
-}
-
 const GOAL_ICON_OPTIONS = [
   { icon: '\u{1F6E1}\uFE0F', label: 'Emergency' },
   { icon: '\u2708\uFE0F', label: 'Travel' },
@@ -158,39 +148,6 @@ function getGoalFormDefaults(goal = null) {
     current_amount: goal?.current_amount ?? '0.00',
     target_date: goal?.target_date ?? '',
   }
-}
-
-function getGoalAvatar(goal) {
-  if (goal?.icon) return goal.icon
-  const name = String(goal?.name ?? '').toLowerCase()
-  if (name.includes('emergency')) return 'EF'
-  if (name.includes('trip') || name.includes('travel')) return 'TR'
-  if (name.includes('car')) return 'CA'
-  if (name.includes('home') || name.includes('rent')) return 'HM'
-  if (name.includes('laptop') || name.includes('computer')) return 'LT'
-  const words = String(goal?.name ?? '').trim().split(/\s+/).filter(Boolean)
-  return (words.length > 1 ? `${words[0][0]}${words[1][0]}` : words[0]?.slice(0, 2) || 'SG').toUpperCase()
-}
-
-function getGoalStatusReason(goal) {
-  const status = goal?.budget_context?.status ?? 'ready'
-  const remaining = Number(goal?.remaining_amount ?? 0)
-  const monthlyRequired = Number(goal?.monthly_required ?? 0)
-  const remainingBudget = Number(goal?.budget_context?.remaining_budget)
-
-  if (status === 'complete') return 'Saved amount reached the target.'
-  if (status === 'overdue') return `Target date passed with ${formatCurrency(remaining)} left.`
-  if (status === 'over_budget') {
-    if (Number.isFinite(remainingBudget)) {
-      return `Needs ${formatCurrency(monthlyRequired)}/month but only ${formatCurrency(remainingBudget)} remains.`
-    }
-    return `Needs ${formatCurrency(monthlyRequired)}/month from this month's budget.`
-  }
-  if (status === 'tight') return `Needs ${formatCurrency(monthlyRequired)}/month, leaving little room in budget.`
-  if (status === 'no_budget') return 'No monthly budget is set yet.'
-  return monthlyRequired > 0
-    ? 'Monthly need fits your remaining budget.'
-    : 'No monthly contribution needed right now.'
 }
 
 export default function PlannerView() {
@@ -1061,7 +1018,7 @@ export default function PlannerView() {
           </button>
         </div>
 
-        <div className={`savings-goals__summary savings-goals__summary--${getGoalStatusTone(goalSummary.pressure_level)}`}>
+        <div className={`savings-goals__summary savings-goals__summary--${getSavingsGoalStatusTone(goalSummary.pressure_level)}`}>
           <article>
             <span>Active goals</span>
             <strong>{goalSummary.active_count ?? 0}</strong>
@@ -1111,7 +1068,7 @@ export default function PlannerView() {
                     ref={goalIconButtonRef}
                     type="button"
                   >
-                    {getGoalAvatar({ name: goalDraft.name || 'Savings goal', icon: goalDraft.icon })}
+                    {getSavingsGoalAvatar({ name: goalDraft.name || 'Savings goal', icon: goalDraft.icon }, { semanticFallbacks: true })}
                   </button>
                   {goalIconPickerRendered ? (
                     <div
@@ -1122,12 +1079,12 @@ export default function PlannerView() {
                       onAnimationEnd={(event) => {
                         if (event.currentTarget === event.target) finishGoalIconPickerClose()
                       }}
-                      role="listbox"
+                      role="group"
                     >
                       {GOAL_ICON_OPTIONS.map((option) => (
                         <button
                           aria-label={`Use ${option.label} icon`}
-                          aria-selected={goalDraft.icon === option.icon}
+                          aria-pressed={goalDraft.icon === option.icon}
                           className={goalDraft.icon === option.icon ? 'is-selected' : ''}
                           key={option.icon}
                           onClick={() => {
@@ -1142,7 +1099,7 @@ export default function PlannerView() {
                       ))}
                       <button
                         aria-label="Use initials icon"
-                        aria-selected={!goalDraft.icon}
+                        aria-pressed={!goalDraft.icon}
                         className={!goalDraft.icon ? 'is-selected' : ''}
                         onClick={() => {
                           setGoalDraft((current) => ({ ...current, icon: '' }))
@@ -1238,19 +1195,19 @@ export default function PlannerView() {
           <div className="savings-goals__list">
             {goalRows.map((goal) => {
               const status = goal.budget_context?.status ?? 'ready'
-              const tone = getGoalStatusTone(status)
+              const tone = getSavingsGoalStatusTone(status)
               return (
                 <article className={`savings-goal savings-goal--${tone}`} key={goal.id}>
                   <div className="savings-goal__top">
                     <div className="savings-goal__identity">
-                      <div className="savings-goal__avatar" aria-hidden="true">{getGoalAvatar(goal)}</div>
+                      <div className="savings-goal__avatar" aria-hidden="true">{getSavingsGoalAvatar(goal, { semanticFallbacks: true })}</div>
                       <div>
                         <strong>{goal.name}</strong>
                         <span>Target {formatMonthPeriod(goal.target_date)}</span>
-                        <small>{getGoalStatusReason(goal)}</small>
+                        <small>{getSavingsGoalStatusReason(goal)}</small>
                       </div>
                     </div>
-                    <span className={`planner-status planner-status--${tone} savings-goal__status`}>{getGoalStatusLabel(status)}</span>
+                    <span className={`planner-status planner-status--${tone} savings-goal__status`}>{getSavingsGoalStatusLabel(status)}</span>
                   </div>
                   <div
                     aria-label={`${goal.name} savings progress`}

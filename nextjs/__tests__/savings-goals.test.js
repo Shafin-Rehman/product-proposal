@@ -275,6 +275,43 @@ describe('POST /api/savings-goals', () => {
         expect(body.icon).toBe('💻')
       },
     })
+
+    expect(db.query.mock.calls[0][1][2]).toEqual(expect.any(String))
+    expect(db.query.mock.calls[0][1][2]).not.toBe('')
+  })
+
+  it('normalizes blank create icons to null', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [goalRow({ icon: null })] })
+      .mockResolvedValueOnce({ rows: [goalRow({ icon: null })] })
+
+    await testApiHandler({
+      appHandler: goalsHandler,
+      async test({ fetch }) {
+        const blankRes = await fetch(post({
+          name: 'Emergency cushion',
+          icon: '',
+          target_amount: 1000,
+          current_amount: 250,
+          target_date: '2026-12-31',
+        }))
+        expect(blankRes.status).toBe(200)
+        expect((await blankRes.json()).icon).toBeNull()
+
+        const whitespaceRes = await fetch(post({
+          name: 'Emergency cushion',
+          icon: '   ',
+          target_amount: 1000,
+          current_amount: 250,
+          target_date: '2026-12-31',
+        }))
+        expect(whitespaceRes.status).toBe(200)
+        expect((await whitespaceRes.json()).icon).toBeNull()
+      },
+    })
+
+    expect(db.query.mock.calls[0][1][2]).toBeNull()
+    expect(db.query.mock.calls[1][1][2]).toBeNull()
   })
 
   it('rejects invalid create payloads', async () => {
@@ -355,6 +392,21 @@ describe('POST /api/savings-goals/update', () => {
         expect(body.icon).toBe('🎓')
       },
     })
+  })
+
+  it('can clear an icon when updating', async () => {
+    db.query.mockResolvedValueOnce({ rows: [goalRow({ icon: null })] })
+
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ goal_id: GOAL_ID, icon: '   ' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).icon).toBeNull()
+      },
+    })
+
+    expect(db.query.mock.calls[0][1][0]).toBeNull()
   })
 
   it('rejects no fields and returns 404 for missing goals', async () => {

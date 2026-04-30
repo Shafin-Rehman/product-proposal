@@ -749,6 +749,47 @@ describe('DashboardView', () => {
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
   })
 
+  it('shows a clear over-budget savings goal reason without remaining budget', async () => {
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '400.00',
+        total_income: '2200.00',
+        remaining_budget: '600.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [
+          {
+            id: 'goal-1',
+            name: 'Trip fund',
+            icon: null,
+            target_amount: '1200.00',
+            current_amount: '200.00',
+            remaining_amount: '1000.00',
+            target_date: '2026-12-31',
+            progress_percentage: 16.67,
+            monthly_required: '125.00',
+            budget_context: { status: 'over_budget', remaining_budget: null },
+          },
+        ],
+        summary: { active_count: 1, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledTimes(4)
+    })
+
+    expect(screen.getByText('Over budget')).toBeTruthy()
+    expect(screen.getByText('Needs $125/month without a clear remaining budget.')).toBeTruthy()
+  })
+
   it('renders unavailable budget state instead of no-budget when only the summary call fails', async () => {
     apiGet
       .mockRejectedValueOnce(new Error('summary unavailable'))
