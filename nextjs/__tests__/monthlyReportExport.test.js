@@ -73,6 +73,21 @@ describe('monthly report CSV helpers', () => {
     expect(transactions.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
   })
 
+  it('neutralizes formula-like values in numeric CSV columns', () => {
+    const csv = buildMonthlyReportCsv({
+      month: '2026-03-01',
+      summary: {
+        total_income: '10.00',
+        total_expenses: '20.00',
+        total_budget: '50.00',
+        remaining_budget: '-10.00',
+      },
+      transactions: [],
+    })
+
+    expect(csv.split('\r\n')[1]).toBe("summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,'-10.00,50.00,'-10.00,,")
+  })
+
   it('sorts same-day transactions by Date object created_at values', () => {
     const csv = buildMonthlyReportCsv({
       month: '2026-03-01',
@@ -111,7 +126,7 @@ describe('monthly report CSV helpers', () => {
 })
 
 describe('monthly report data access', () => {
-  it('queries selected-month expenses and income, then sorts the combined rows', async () => {
+  it('queries selected-month expenses and income, then returns the combined rows unsorted', async () => {
     db.query
       .mockResolvedValueOnce({
         rows: [
@@ -140,37 +155,7 @@ describe('monthly report data access', () => {
 
     expect(db.query).toHaveBeenNthCalledWith(1, expect.stringContaining('FROM public.expenses'), ['uid', '2026-03-01', '2026-04-01'])
     expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM public.income'), ['uid', '2026-03-01', '2026-04-01'])
-    expect(rows.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
-  })
-
-  it('sorts rows with matching dates by Date object created_at values', async () => {
-    db.query
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: 'older-expense',
-            type: 'expense',
-            date: '2026-03-05',
-            created_at: new Date('2026-03-05T10:00:00Z'),
-            amount: '12.00',
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: 'newer-income',
-            type: 'income',
-            date: '2026-03-05',
-            created_at: new Date('2026-03-05T11:00:00Z'),
-            amount: '200.00',
-          },
-        ],
-      })
-
-    const rows = await getMonthlyReportTransactions('uid', '2026-03-01')
-
-    expect(rows.map((row) => row.id)).toEqual(['newer-income', 'older-expense'])
+    expect(rows.map((row) => row.id)).toEqual(['exp-1', 'inc-1'])
   })
 
   it('builds the full CSV from budget summary and selected-month transactions', async () => {

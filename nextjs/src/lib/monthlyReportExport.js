@@ -69,15 +69,7 @@ export function escapeCsvCell(value, { text = true } = {}) {
 
 function buildCsvLine(row) {
   return MONTHLY_REPORT_COLUMNS.map((column) => {
-    const isNumericColumn = [
-      'amount',
-      'total_income',
-      'total_expenses',
-      'net_cash_flow',
-      'total_budget',
-      'remaining_budget',
-    ].includes(column)
-    return escapeCsvCell(row[column], { text: !isNumericColumn })
+    return escapeCsvCell(row[column], { text: true })
   }).join(',')
 }
 
@@ -198,7 +190,7 @@ export async function getMonthlyReportTransactions(userId, month) {
     ),
   ])
 
-  return [...expenseResult.rows, ...incomeResult.rows].sort(compareTransactions)
+  return [...expenseResult.rows, ...incomeResult.rows]
 }
 
 export async function buildMonthlyReportExport(userId, month) {
