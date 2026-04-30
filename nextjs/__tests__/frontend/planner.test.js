@@ -29,6 +29,17 @@ jest.mock('@/lib/demoData', () => ({
     category_statuses: [],
   },
   demoCategoryBudgets: [],
+  demoSavingsGoals: {
+    goals: [],
+    summary: {
+      active_count: 0,
+      current_total: '0.00',
+      remaining_total: '0.00',
+      monthly_required_total: '0.00',
+      available_after_goal_contributions: null,
+      pressure_level: 'none',
+    },
+  },
 }))
 jest.mock('@/lib/financeVisuals', () => ({
   getCategoryPresentation: jest.fn(({ name, icon, kind: _k = 'expense' }) => ({
@@ -51,10 +62,10 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen, waitFor, cleanup, act } = require('@testing-library/react')
+const { render, screen, waitFor, cleanup, act, fireEvent } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataChanged, useDataMode } = require('@/components/providers')
-const { apiGet } = require('@/lib/apiClient')
+const { ApiError, apiGet, apiPost } = require('@/lib/apiClient')
 const PlannerView = require('@/components/planner-view').default
 
 async function flushAsyncUpdates() {
@@ -63,10 +74,12 @@ async function flushAsyncUpdates() {
 }
 
 async function renderPlanner() {
+  let result
   await act(async () => {
-    render(React.createElement(PlannerView))
+    result = render(React.createElement(PlannerView))
     await flushAsyncUpdates()
   })
+  return result
 }
 
 beforeEach(() => {
@@ -89,6 +102,44 @@ afterEach(() => {
 })
 
 describe('PlannerView', () => {
+  function mockPlannerResponses({ goalsPayload = null } = {}) {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '200.00',
+        total_income: '1200.00',
+        remaining_budget: '800.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce(goalsPayload ?? {
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+  }
+
   it('renders monthly health from category budgets when no explicit overall cap exists', async () => {
     apiGet
       .mockResolvedValueOnce([
@@ -137,13 +188,42 @@ describe('PlannerView', () => {
         monthly_limit: null,
         category_budgets: [],
       })
+      .mockResolvedValueOnce({
+        goals: [
+          {
+            id: 'goal-1',
+            name: 'Emergency cushion',
+            icon: '🛡️',
+            target_amount: '1000.00',
+            current_amount: '250.00',
+            remaining_amount: '750.00',
+            target_date: '2026-12-31',
+            archived: false,
+            progress_percentage: 25,
+            monthly_required: '83.33',
+            budget_context: { status: 'ready', remaining_budget: '800.00', available_after_goal_contributions: '716.67' },
+          },
+        ],
+        summary: {
+          active_count: 1,
+          current_total: '250.00',
+          remaining_total: '750.00',
+          monthly_required_total: '83.33',
+          available_after_goal_contributions: '716.67',
+          pressure_level: 'ready',
+        },
+      })
 
     await renderPlanner()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(5)
     })
 
+    expect(apiGet).toHaveBeenCalledWith(
+      `/api/savings-goals?month=${encodeURIComponent('2026-03-01')}`,
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
     expect(screen.getByText('Monthly budget health')).toBeTruthy()
     expect(screen.getAllByText('Near limit').length).toBeGreaterThan(0)
     expect(screen.getByText('$48.00 left')).toBeTruthy()
@@ -155,6 +235,14 @@ describe('PlannerView', () => {
     expect(screen.getAllByText('No overall cap set').length).toBeGreaterThan(0)
     expect(screen.getByText('Category progress')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
+    expect(screen.getByText('Savings goals')).toBeTruthy()
+    expect(screen.getByText('Emergency cushion')).toBeTruthy()
+    const statusPill = screen.getByText('On track')
+    expect(statusPill).toBeTruthy()
+    expect(statusPill.className).toContain('savings-goal__status')
+    expect(statusPill.closest('.savings-goal__top')).toBeTruthy()
+    expect(screen.getByText('Monthly need fits your remaining budget.')).toBeTruthy()
+    expect(screen.getByText('\u{1F6E1}\uFE0F')).toBeTruthy()
   })
 
   it('shows a partial-data notice and does not invent actuals when the live summary request fails', async () => {
@@ -175,13 +263,28 @@ describe('PlannerView', () => {
         monthly_limit: null,
         category_budgets: [],
       })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
 
     await renderPlanner()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(5)
     })
 
+    expect(apiGet).toHaveBeenCalledWith(
+      `/api/savings-goals?month=${encodeURIComponent('2026-03-01')}`,
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
     expect(screen.getByText('Planner data is limited right now')).toBeTruthy()
     expect(screen.getByText('Some planner details are missing right now, but you can still review the rest of the month.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
@@ -192,5 +295,186 @@ describe('PlannerView', () => {
     expect(screen.getByText('Actual spend')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
     expect(screen.getByText('Save update')).toBeTruthy()
+  })
+
+  it('opens the inline Add goal form from the savings goals CTA', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner()
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Choose goal icon' })).toBeTruthy()
+    expect(screen.getByLabelText('Goal name')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create goal' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Add goal' }).className).toContain('button-primary')
+  })
+
+  it('toggles and cancels the inline Add goal form with a closing state', async () => {
+    mockPlannerResponses()
+
+    const { container } = await renderPlanner()
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    let closingShell = container.querySelector('.savings-goal-form-shell--closing')
+    expect(closingShell).toBeTruthy()
+    expect(closingShell.getAttribute('data-state')).toBe('closing')
+    expect(container.querySelector('.savings-goal-form--closing')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.transitionEnd(closingShell, { propertyName: 'grid-template-rows' })
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.queryByRole('heading', { name: 'Add savings goal' })).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Goal name'), { target: { value: 'Trip fund' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await flushAsyncUpdates()
+    })
+
+    closingShell = container.querySelector('.savings-goal-form-shell--closing')
+    expect(closingShell).toBeTruthy()
+    expect(container.querySelector('.savings-goal-form--closing')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.transitionEnd(closingShell, { propertyName: 'grid-template-rows' })
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.queryByRole('heading', { name: 'Add savings goal' })).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByLabelText('Goal name').value).toBe('')
+  })
+
+  it('keeps the inline form open and preserves values when create fails', async () => {
+    mockPlannerResponses()
+    apiPost.mockRejectedValueOnce(new ApiError('Local database unavailable', 500))
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Goal name'), { target: { value: 'New laptop' } })
+      fireEvent.change(screen.getByLabelText('Target amount ($)'), { target: { value: '900' } })
+      fireEvent.change(screen.getByLabelText('Current saved ($)'), { target: { value: '125' } })
+      fireEvent.change(screen.getByLabelText('Target date'), { target: { value: '2026-11-30' } })
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose goal icon' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Emergency icon' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Medical icon' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Wedding icon' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Family icon' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Holiday icon' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Use .* icon/ }).length).toBeGreaterThanOrEqual(24)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use Laptop icon' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create goal' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/savings-goals',
+      expect.objectContaining({
+        name: 'New laptop',
+        target_amount: 900,
+        current_amount: 125,
+        target_date: '2026-11-30',
+        icon: '\u{1F4BB}',
+      }),
+      { accessToken: 'test-token' }
+    )
+    expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
+    expect(screen.getAllByText('Local database unavailable').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('Goal name').value).toBe('New laptop')
+    expect(screen.getByLabelText('Target amount ($)').value).toBe('900')
+    expect(screen.getByLabelText('Current saved ($)').value).toBe('125')
+    expect(screen.getByLabelText('Target date').value).toBe('2026-11-30')
+    expect(screen.getByRole('button', { name: 'Choose goal icon' }).textContent).toContain('\u{1F4BB}')
+  })
+
+  it('closes the goal icon picker from outside click and Escape', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose goal icon' }))
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByLabelText('Goal name'))
+      await flushAsyncUpdates()
+    })
+    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose goal icon' }))
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByRole('listbox', { name: 'Goal icons' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' })
+      await flushAsyncUpdates()
+    })
+    expect(screen.queryByRole('listbox', { name: 'Goal icons' })).toBeNull()
   })
 })

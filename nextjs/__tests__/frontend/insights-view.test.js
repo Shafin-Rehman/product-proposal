@@ -15,6 +15,27 @@ jest.mock('@/lib/apiClient', () => ({
 }))
 jest.mock('@/lib/demoData', () => ({
   DEMO_MONTH: '2026-03-01',
+  demoSavingsGoals: {
+    goals: [
+      {
+        id: 'goal-1',
+        name: 'Emergency cushion',
+        target_amount: '1000.00',
+        current_amount: '250.00',
+        remaining_amount: '750.00',
+        progress_percentage: 25,
+        monthly_required: '83.33',
+        budget_context: { status: 'ready' },
+      },
+    ],
+    summary: {
+      active_count: 1,
+      current_total: '250.00',
+      remaining_total: '750.00',
+      monthly_required_total: '83.33',
+      pressure_level: 'ready',
+    },
+  },
   demoInsightsSnapshot: {
     comparisonMetrics: [
       { id: 'income', label: 'Income', currentAmount: 3229, previousAmount: 3010, deltaAmount: 219, deltaPercentage: 7.3, deltaTone: 'positive' },

@@ -73,6 +73,29 @@ jest.mock('@/lib/demoData', () => ({
     { id: 'food', name: 'Food', budget: 350, spent: 320 },
     { id: 'fun', name: 'Fun', budget: 250, spent: 180 },
   ],
+  demoSavingsGoals: {
+    goals: [
+      {
+        id: 'goal-1',
+        name: 'Emergency cushion',
+        target_amount: '1000.00',
+        current_amount: '250.00',
+        remaining_amount: '750.00',
+        target_date: '2026-12-31',
+        progress_percentage: 25,
+        monthly_required: '83.33',
+        budget_context: { status: 'ready' },
+      },
+    ],
+    summary: {
+      active_count: 1,
+      current_total: '250.00',
+      remaining_total: '750.00',
+      monthly_required_total: '83.33',
+      available_after_goal_contributions: '96.67',
+      pressure_level: 'ready',
+    },
+  },
   demoInsightsSnapshot: {
     dailySpend: {
       details: [
@@ -698,6 +721,10 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
     financeUtils.buildMonthlySpendTrend.mockReturnValue([320, 610, 860])
     financeUtils.buildActivityFeed.mockReturnValue([
       { id: 'expense-1', kind: 'expense', merchant: 'Grocer', title: 'Grocer', chip: 'Food', occurredOn: '2026-03-11', amount: 285 },
@@ -707,7 +734,7 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(3)
+      expect(apiGet).toHaveBeenCalledTimes(4)
     })
     expect(apiGet).toHaveBeenNthCalledWith(
       1,
@@ -731,6 +758,10 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
 
     await renderDashboard()
 
@@ -755,6 +786,10 @@ describe('DashboardView', () => {
       }))
       .mockRejectedValueOnce(new Error('expenses unavailable'))
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
 
     await renderDashboard()
 
@@ -791,6 +826,7 @@ describe('DashboardView', () => {
       .mockRejectedValueOnce(new ApiError('Expired session', 401))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ goals: [], summary: { active_count: 0 } })
 
     await renderDashboard()
 
@@ -813,6 +849,10 @@ describe('DashboardView', () => {
       }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
       .mockResolvedValueOnce(createLiveSummary({
         monthly_limit: '3000.00',
         total_budget: '3000.00',
@@ -824,6 +864,10 @@ describe('DashboardView', () => {
       }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
     apiPost.mockResolvedValueOnce({})
 
     await renderDashboard()
@@ -851,7 +895,7 @@ describe('DashboardView', () => {
       { accessToken: 'test-token' }
     )
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(6)
+      expect(apiGet).toHaveBeenCalledTimes(8)
     })
     expect(screen.queryByText(/Current limit:/)).toBeNull()
   })
