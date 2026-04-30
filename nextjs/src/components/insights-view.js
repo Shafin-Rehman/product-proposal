@@ -481,6 +481,10 @@ export default function InsightsView() {
   }, [])
 
   useEffect(() => {
+    setExportState({ status: 'idle', message: '' })
+  }, [activeMonth, isSampleMode])
+
+  useEffect(() => {
     setActiveCashMonth(null)
   }, [activeMonth, snapshot?.cashFlowRangeLabel])
 
@@ -579,7 +583,7 @@ export default function InsightsView() {
       document.body.appendChild(link)
       link.click()
       link.remove()
-      window.URL.revokeObjectURL(url)
+      setTimeout(() => window.URL.revokeObjectURL(url), 100)
       setExportState({ status: 'success', message: 'CSV export downloaded.' })
     } catch {
       setExportState({ status: 'error', message: 'The monthly CSV export is not available right now.' })

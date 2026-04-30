@@ -147,7 +147,7 @@ function compareTransactions(left, right) {
 export function buildMonthlyReportCsv({ month, summary, transactions = [] }) {
   const rows = [
     buildSummaryRow(summary, month),
-    ...transactions.sort(compareTransactions).map(buildTransactionRow),
+    ...[...transactions].sort(compareTransactions).map(buildTransactionRow),
   ]
 
   return [

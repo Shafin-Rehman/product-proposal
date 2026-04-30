@@ -264,7 +264,9 @@ describe('InsightsView CSV export', () => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
     })
     expect(window.URL.createObjectURL).toHaveBeenCalled()
-    expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
-    expect(screen.getByText('CSV export downloaded.')).toBeTruthy()
+    await waitFor(() => {
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+    })
+    await waitFor(() => expect(screen.getByText('CSV export downloaded.')).toBeTruthy())
   })
 })

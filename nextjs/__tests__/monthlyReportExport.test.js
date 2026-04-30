@@ -30,6 +30,30 @@ describe('monthly report CSV helpers', () => {
   })
 
   it('builds a selected-month CSV with summary and sorted transaction rows', () => {
+    const transactions = [
+      {
+        id: 'inc-1',
+        month: '2026-03-01',
+        type: 'income',
+        date: '2026-03-02',
+        title: '=Payroll',
+        category_or_source: 'Salary',
+        description_or_notes: 'Campus job',
+        amount: '3200',
+        created_at: '2026-03-02T12:00:00Z',
+      },
+      {
+        id: 'exp-1',
+        month: '2026-03-01',
+        type: 'expense',
+        date: '2026-03-03',
+        title: 'Coffee, bagel',
+        category_or_source: 'Dining',
+        description_or_notes: 'Line 1\nLine 2',
+        amount: '15.5',
+        created_at: '2026-03-03T08:00:00Z',
+      },
+    ]
     const csv = buildMonthlyReportCsv({
       month: '2026-03-01',
       summary: {
@@ -38,30 +62,7 @@ describe('monthly report CSV helpers', () => {
         total_budget: '1000.00',
         remaining_budget: '984.50',
       },
-      transactions: [
-        {
-          id: 'inc-1',
-          month: '2026-03-01',
-          type: 'income',
-          date: '2026-03-02',
-          title: '=Payroll',
-          category_or_source: 'Salary',
-          description_or_notes: 'Campus job',
-          amount: '3200',
-          created_at: '2026-03-02T12:00:00Z',
-        },
-        {
-          id: 'exp-1',
-          month: '2026-03-01',
-          type: 'expense',
-          date: '2026-03-03',
-          title: 'Coffee, bagel',
-          category_or_source: 'Dining',
-          description_or_notes: 'Line 1\nLine 2',
-          amount: '15.5',
-          created_at: '2026-03-03T08:00:00Z',
-        },
-      ],
+      transactions,
     })
 
     const lines = csv.split('\r\n')
@@ -69,6 +70,7 @@ describe('monthly report CSV helpers', () => {
     expect(lines[1]).toBe('summary,2026-03-01,monthly_summary,,,,,,3200.00,15.50,3184.50,1000.00,984.50,,')
     expect(lines[2]).toContain('transaction,2026-03-01,expense,2026-03-03,"Coffee, bagel",Dining,"Line 1\nLine 2",15.50')
     expect(lines[3]).toContain("transaction,2026-03-01,income,2026-03-02,'=Payroll,Salary,Campus job,3200.00")
+    expect(transactions.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
   })
 
   it('uses safe report filenames', () => {
