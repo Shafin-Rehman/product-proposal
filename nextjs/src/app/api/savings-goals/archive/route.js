@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
-import { archiveSavingsGoal } from '@/lib/savingsGoals'
+import { archiveSavingsGoal, SavingsGoalValidationError } from '@/lib/savingsGoals'
 
 function validationError(message) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -38,9 +38,8 @@ export async function POST(request) {
     if (!goal) return NextResponse.json({ error: 'Savings goal not found' }, { status: 404 })
     return NextResponse.json(goal)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to archive savings goal'
-    if (message.includes('valid UUID')) {
-      return validationError(message)
+    if (err instanceof SavingsGoalValidationError) {
+      return validationError(err.message)
     }
     return NextResponse.json({ error: 'Failed to archive savings goal' }, { status: 500 })
   }

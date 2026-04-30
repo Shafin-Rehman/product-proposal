@@ -253,7 +253,7 @@ export async function updateSavingsGoal(userId, goalId, payload = {}) {
 }
 
 export async function archiveSavingsGoal(userId, goalId) {
-  if (!isValidGoalId(goalId)) throw new Error('goal_id must be a valid UUID')
+  if (!isValidGoalId(goalId)) throw savingsGoalValidationError('goal_id must be a valid UUID')
 
   const { rows } = await db.query(
     `UPDATE public.savings_goals

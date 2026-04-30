@@ -130,6 +130,13 @@ describe('savings goal helpers', () => {
       }
     })
   })
+
+  it('throws a validation error when archiving an invalid goal id', async () => {
+    await expect(savingsGoals.archiveSavingsGoal('uid', 'bad-id')).rejects.toBeInstanceOf(
+      savingsGoals.SavingsGoalValidationError
+    )
+    expect(db.query).not.toHaveBeenCalled()
+  })
 })
 
 describe('GET /api/savings-goals', () => {
@@ -511,7 +518,9 @@ describe('POST /api/savings-goals/archive', () => {
       appHandler: archiveHandler,
       async test({ fetch }) {
         expect((await fetch(post({}))).status).toBe(400)
-        expect((await fetch(post({ goal_id: 'bad-id' }))).status).toBe(400)
+        const invalidUuid = await fetch(post({ goal_id: 'bad-id' }))
+        expect(invalidUuid.status).toBe(400)
+        expect((await invalidUuid.json()).error).toBe('goal_id must be a valid UUID')
         expect((await fetch(post(null))).status).toBe(400)
         expect((await fetch(post([]))).status).toBe(400)
         expect((await fetch(rawPost('{'))).status).toBe(400)
@@ -531,5 +540,18 @@ describe('POST /api/savings-goals/archive', () => {
     })
 
     expect(db.query.mock.calls[0][0]).toContain('AND archived = false')
+  })
+
+  it('returns 500 for unexpected archive failures even when the message resembles validation text', async () => {
+    db.query.mockRejectedValueOnce(new Error('goal_id must be a valid UUID'))
+
+    await testApiHandler({
+      appHandler: archiveHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ goal_id: GOAL_ID }))
+        expect(res.status).toBe(500)
+        expect((await res.json()).error).toBe('Failed to archive savings goal')
+      },
+    })
   })
 })
