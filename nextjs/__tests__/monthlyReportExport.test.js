@@ -73,6 +73,37 @@ describe('monthly report CSV helpers', () => {
     expect(transactions.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
   })
 
+  it('sorts same-day transactions by Date object created_at values', () => {
+    const csv = buildMonthlyReportCsv({
+      month: '2026-03-01',
+      summary: { total_income: '100.00', total_expenses: '30.00' },
+      transactions: [
+        {
+          id: 'older',
+          month: '2026-03-01',
+          type: 'expense',
+          date: '2026-03-10',
+          title: 'Older row',
+          amount: '10.00',
+          created_at: new Date('2026-03-10T08:00:00Z'),
+        },
+        {
+          id: 'newer',
+          month: '2026-03-01',
+          type: 'income',
+          date: '2026-03-10',
+          title: 'Newer row',
+          amount: '20.00',
+          created_at: new Date('2026-03-10T09:00:00Z'),
+        },
+      ],
+    })
+
+    const lines = csv.split('\r\n')
+    expect(lines[2]).toContain('newer,2026-03-10T09:00:00.000Z')
+    expect(lines[3]).toContain('older,2026-03-10T08:00:00.000Z')
+  })
+
   it('uses safe report filenames', () => {
     expect(getMonthlyReportFilename('2026-03-01')).toBe('budgetbuddy-2026-03-report.csv')
     expect(getMonthlyReportFilename('bad/month')).toBe('budgetbuddy-monthly-report.csv')
@@ -110,6 +141,36 @@ describe('monthly report data access', () => {
     expect(db.query).toHaveBeenNthCalledWith(1, expect.stringContaining('FROM public.expenses'), ['uid', '2026-03-01', '2026-04-01'])
     expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM public.income'), ['uid', '2026-03-01', '2026-04-01'])
     expect(rows.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
+  })
+
+  it('sorts rows with matching dates by Date object created_at values', async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'older-expense',
+            type: 'expense',
+            date: '2026-03-05',
+            created_at: new Date('2026-03-05T10:00:00Z'),
+            amount: '12.00',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'newer-income',
+            type: 'income',
+            date: '2026-03-05',
+            created_at: new Date('2026-03-05T11:00:00Z'),
+            amount: '200.00',
+          },
+        ],
+      })
+
+    const rows = await getMonthlyReportTransactions('uid', '2026-03-01')
+
+    expect(rows.map((row) => row.id)).toEqual(['newer-income', 'older-expense'])
   })
 
   it('builds the full CSV from budget summary and selected-month transactions', async () => {

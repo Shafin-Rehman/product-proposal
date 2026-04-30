@@ -431,6 +431,7 @@ export default function InsightsView() {
   const [topExpenseDetail, setTopExpenseDetail] = useState(null)
   const [liveState, setLiveState] = useState({ status: 'loading', message: '', snapshot: null })
   const [exportState, setExportState] = useState({ status: 'idle', message: '' })
+  const exportAbortRef = useRef(null)
 
   const activeMonth = isSampleMode ? DEMO_MONTH : selectedMonth
   const snapshot = isSampleMode ? demoInsightsSnapshot : liveState.snapshot
@@ -481,8 +482,17 @@ export default function InsightsView() {
   }, [])
 
   useEffect(() => {
+    exportAbortRef.current?.abort()
+    exportAbortRef.current = null
     setExportState({ status: 'idle', message: '' })
   }, [activeMonth, isSampleMode])
+
+  useEffect(() => (
+    () => {
+      exportAbortRef.current?.abort()
+      exportAbortRef.current = null
+    }
+  ), [])
 
   useEffect(() => {
     setActiveCashMonth(null)
@@ -546,14 +556,20 @@ export default function InsightsView() {
     }
 
     setExportState({ status: 'loading', message: '' })
+    exportAbortRef.current?.abort()
+    const controller = new AbortController()
+    exportAbortRef.current = controller
+    const exportMonth = activeMonth
 
     try {
-      const response = await fetch(`/api/reports/export?month=${encodeURIComponent(activeMonth)}`, {
+      const response = await fetch(`/api/reports/export?month=${encodeURIComponent(exportMonth)}`, {
         cache: 'no-store',
         headers: {
           authorization: `Bearer ${session.accessToken}`,
         },
+        signal: controller.signal,
       })
+      if (controller.signal.aborted) return
 
       if (response.status === 401) {
         logout()
@@ -567,14 +583,16 @@ export default function InsightsView() {
           const body = await response.json()
           if (body?.error) message = body.error
         } catch {}
+        if (controller.signal.aborted) return
         setExportState({ status: 'error', message })
         return
       }
 
       const blob = await response.blob()
+      if (controller.signal.aborted) return
       const filename = getFilenameFromDisposition(
         response.headers.get('content-disposition'),
-        `budgetbuddy-${activeMonth.slice(0, 7)}-report.csv`
+        `budgetbuddy-${exportMonth.slice(0, 7)}-report.csv`
       )
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -585,8 +603,11 @@ export default function InsightsView() {
       link.remove()
       setTimeout(() => window.URL.revokeObjectURL(url), 100)
       setExportState({ status: 'success', message: 'CSV export downloaded.' })
-    } catch {
+    } catch (error) {
+      if (error?.name === 'AbortError') return
       setExportState({ status: 'error', message: 'The monthly CSV export is not available right now.' })
+    } finally {
+      if (exportAbortRef.current === controller) exportAbortRef.current = null
     }
   }
 

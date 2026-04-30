@@ -138,7 +138,7 @@ function compareTransactions(left, right) {
   const dateCompare = normalizeDay(right.date).localeCompare(normalizeDay(left.date))
   if (dateCompare) return dateCompare
 
-  const createdCompare = String(right.created_at || '').localeCompare(String(left.created_at || ''))
+  const createdCompare = normalizeTimestamp(right.created_at).localeCompare(normalizeTimestamp(left.created_at))
   if (createdCompare) return createdCompare
 
   return String(left.type || '').localeCompare(String(right.type || ''))

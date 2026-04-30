@@ -257,6 +257,7 @@ describe('InsightsView CSV export', () => {
         headers: {
           authorization: 'Bearer live-token',
         },
+        signal: expect.any(AbortSignal),
       })
     })
 
@@ -268,5 +269,30 @@ describe('InsightsView CSV export', () => {
       expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
     })
     await waitFor(() => expect(screen.getByText('CSV export downloaded.')).toBeTruthy())
+  })
+
+  it('aborts an in-flight CSV export when switching to sample mode', async () => {
+    let exportSignal
+    global.fetch = jest.fn((url, options) => {
+      exportSignal = options.signal
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      })
+    })
+
+    const { rerender } = render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(exportSignal).toBeTruthy())
+    useDataMode.mockReturnValue({ isSampleMode: true })
+    rerender(React.createElement(InsightsView))
+
+    expect(exportSignal.aborted).toBe(true)
+    await waitFor(() => {
+      expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
+    })
   })
 })
