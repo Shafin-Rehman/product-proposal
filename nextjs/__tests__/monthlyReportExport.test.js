@@ -88,21 +88,21 @@ describe('monthly report CSV helpers', () => {
     expect(csv.split('\r\n')[1]).toBe("summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,'-10.00,50.00,'-10.00,,")
   })
 
-  it('normalizes Date object days and summary months with local date parts', () => {
-    const localMonth = new Date(2026, 2, 1)
-    const localDay = new Date(2026, 2, 10)
-    const expectedMonth = `${localMonth.getFullYear()}-${String(localMonth.getMonth() + 1).padStart(2, '0')}-${String(localMonth.getDate()).padStart(2, '0')}`
-    const expectedDay = `${localDay.getFullYear()}-${String(localDay.getMonth() + 1).padStart(2, '0')}-${String(localDay.getDate()).padStart(2, '0')}`
+  it('normalizes Date object days and summary months with UTC date parts', () => {
+    const utcMonth = new Date('2026-03-01T00:00:00Z')
+    const utcDay = new Date('2026-03-10T00:00:00Z')
+    const expectedMonth = `${utcMonth.getUTCFullYear()}-${String(utcMonth.getUTCMonth() + 1).padStart(2, '0')}-${String(utcMonth.getUTCDate()).padStart(2, '0')}`
+    const expectedDay = `${utcDay.getUTCFullYear()}-${String(utcDay.getUTCMonth() + 1).padStart(2, '0')}-${String(utcDay.getUTCDate()).padStart(2, '0')}`
 
     const csv = buildMonthlyReportCsv({
-      month: localMonth,
+      month: utcMonth,
       summary: { total_income: '100.00', total_expenses: '25.00' },
       transactions: [
         {
           id: 'date-object-row',
-          month: localMonth,
+          month: utcMonth,
           type: 'expense',
-          date: localDay,
+          date: utcDay,
           title: 'Date object row',
           amount: '25.00',
           created_at: '2026-03-10T08:00:00Z',
@@ -148,6 +148,9 @@ describe('monthly report CSV helpers', () => {
 
   it('uses safe report filenames', () => {
     expect(getMonthlyReportFilename('2026-03-01')).toBe('budgetbuddy-2026-03-report.csv')
+    expect(getMonthlyReportFilename(new Date('2026-03-01T00:00:00Z'))).toBe('budgetbuddy-2026-03-report.csv')
+    expect(getMonthlyReportFilename('bad-03')).toBe('budgetbuddy-monthly-report.csv')
+    expect(getMonthlyReportFilename('\r\n2026')).toBe('budgetbuddy-monthly-report.csv')
     expect(getMonthlyReportFilename('bad/month')).toBe('budgetbuddy-monthly-report.csv')
   })
 })
