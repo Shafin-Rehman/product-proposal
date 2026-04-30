@@ -360,12 +360,15 @@ describe('PlannerView', () => {
 
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
 
+    expect(screen.getByRole('button', { name: 'Add goal' }).getAttribute('aria-expanded')).toBe('false')
+
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
       await flushAsyncUpdates()
     })
 
     expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add goal' }).getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
@@ -376,6 +379,7 @@ describe('PlannerView', () => {
     expect(closingShell).toBeTruthy()
     expect(closingShell.getAttribute('data-state')).toBe('closing')
     expect(container.querySelector('.savings-goal-form--closing')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add goal' }).getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       fireEvent.transitionEnd(closingShell, { propertyName: 'grid-template-rows' })
@@ -383,6 +387,7 @@ describe('PlannerView', () => {
     })
 
     expect(screen.queryByRole('heading', { name: 'Add savings goal' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add goal' }).getAttribute('aria-expanded')).toBe('false')
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))

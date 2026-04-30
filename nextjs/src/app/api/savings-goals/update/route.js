@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
 import { buildBudgetSummary, normalizeMonth } from '@/lib/budget'
 import { getCurrentMonthStart } from '@/lib/financeUtils'
-import { buildSavingsGoalsSummary, getSavingsGoalReferenceDate, updateSavingsGoal } from '@/lib/savingsGoals'
+import {
+  buildSavingsGoalsSummary,
+  getSavingsGoalReferenceDate,
+  SavingsGoalValidationError,
+  updateSavingsGoal,
+} from '@/lib/savingsGoals'
 
 function validationError(message) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -43,14 +48,8 @@ export async function POST(request) {
     const budgetSummary = await buildBudgetSummary(user.id, month)
     return NextResponse.json(buildSavingsGoalsSummary([goal], budgetSummary, getSavingsGoalReferenceDate(month)).goals[0])
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to update savings goal'
-    if (
-      message.includes('must be')
-      || message.includes('required')
-      || message.includes('Valid')
-      || message.includes('No fields')
-    ) {
-      return validationError(message)
+    if (err instanceof SavingsGoalValidationError) {
+      return validationError(err.message)
     }
     return NextResponse.json({ error: 'Failed to update savings goal' }, { status: 500 })
   }

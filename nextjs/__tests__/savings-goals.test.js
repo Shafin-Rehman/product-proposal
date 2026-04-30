@@ -137,7 +137,6 @@ describe('GET /api/savings-goals', () => {
     db.query.mockResolvedValueOnce({
       rows: [
         goalRow(),
-        goalRow({ id: '22222222-2222-4222-8222-222222222222', archived: true }),
       ],
     })
 
@@ -149,16 +148,16 @@ describe('GET /api/savings-goals', () => {
         const body = await res.json()
         expect(body.goals).toHaveLength(1)
         expect(body.summary.active_count).toBe(1)
-        expect(body.summary.archived_count).toBe(1)
+        expect(body.summary.archived_count).toBe(0)
       },
     })
 
-    expect(db.query.mock.calls[0][1]).toEqual(['uid', true])
+    expect(db.query.mock.calls[0][1]).toEqual(['uid', false])
     expect(budget.buildBudgetSummary).toHaveBeenCalledWith('uid', '2026-04-01')
   })
 
   it('includes archived goals when requested', async () => {
-    db.query.mockResolvedValueOnce({ rows: [goalRow({ archived: true })] })
+    db.query.mockResolvedValueOnce({ rows: [goalRow(), goalRow({ id: '22222222-2222-4222-8222-222222222222', archived: true })] })
 
     await testApiHandler({
       appHandler: goalsHandler,
@@ -166,6 +165,9 @@ describe('GET /api/savings-goals', () => {
       async test({ fetch }) {
         const res = await fetch()
         expect(res.status).toBe(200)
+        const body = await res.json()
+        expect(body.goals).toHaveLength(2)
+        expect(body.summary.archived_count).toBe(1)
       },
     })
 
@@ -318,7 +320,9 @@ describe('POST /api/savings-goals', () => {
     await testApiHandler({
       appHandler: goalsHandler,
       async test({ fetch }) {
-        expect((await fetch(post({ target_amount: 100, target_date: '2026-12-31' }))).status).toBe(400)
+        const missingName = await fetch(post({ target_amount: 100, target_date: '2026-12-31' }))
+        expect(missingName.status).toBe(400)
+        expect((await missingName.json()).error).toBe('name must be 1-80 characters')
         expect((await fetch(post({ name: 'Goal', target_amount: 0, target_date: '2026-12-31' }))).status).toBe(400)
         expect((await fetch(post({ name: 'Goal', target_amount: 100, current_amount: -1, target_date: '2026-12-31' }))).status).toBe(400)
         expect((await fetch(post({ name: 'Goal', target_amount: 100, target_date: 'bad' }))).status).toBe(400)
@@ -376,6 +380,24 @@ describe('POST /api/savings-goals', () => {
 
     expect(budget.buildBudgetSummary).toHaveBeenCalledWith('uid', '2026-05-01')
   })
+
+  it('returns 500 for unexpected create failures even when the message resembles validation text', async () => {
+    db.query.mockRejectedValueOnce(new Error('target_amount must be a valid positive money amount'))
+
+    await testApiHandler({
+      appHandler: goalsHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          name: 'Emergency cushion',
+          target_amount: 1000,
+          current_amount: 250,
+          target_date: '2026-12-31',
+        }))
+        expect(res.status).toBe(500)
+        expect((await res.json()).error).toBe('Failed to create savings goal')
+      },
+    })
+  })
 })
 
 describe('POST /api/savings-goals/update', () => {
@@ -413,7 +435,9 @@ describe('POST /api/savings-goals/update', () => {
     await testApiHandler({
       appHandler: updateHandler,
       async test({ fetch }) {
-        expect((await fetch(post({ goal_id: GOAL_ID }))).status).toBe(400)
+        const res = await fetch(post({ goal_id: GOAL_ID }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('No fields provided to update')
       },
     })
 
@@ -452,6 +476,19 @@ describe('POST /api/savings-goals/update', () => {
 
     expect(db.query.mock.calls[0][0]).toContain('AND archived = false')
     expect(budget.buildBudgetSummary).toHaveBeenCalledWith('uid', '2026-05-01')
+  })
+
+  it('returns 500 for unexpected update failures even when the message resembles validation text', async () => {
+    db.query.mockRejectedValueOnce(new Error('No fields provided to update'))
+
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ goal_id: GOAL_ID, name: 'Updated' }))
+        expect(res.status).toBe(500)
+        expect((await res.json()).error).toBe('Failed to update savings goal')
+      },
+    })
   })
 })
 

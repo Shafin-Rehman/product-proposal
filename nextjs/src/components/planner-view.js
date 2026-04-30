@@ -1006,7 +1006,7 @@ export default function PlannerView() {
             ) : null}
           </div>
           <button
-            aria-expanded={goalFormInteractive}
+            aria-expanded={goalFormRendered}
             className="button-primary savings-goals__cta"
             disabled={isSampleMode}
             onClick={openCreateGoalForm}

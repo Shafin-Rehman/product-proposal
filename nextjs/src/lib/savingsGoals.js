@@ -7,6 +7,17 @@ const MAX_MONEY_VALUE = 99999999.99
 const MONEY_EPSILON = 1e-9
 const MAX_GOAL_ICON_LENGTH = 8
 
+export class SavingsGoalValidationError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'SavingsGoalValidationError'
+  }
+}
+
+function savingsGoalValidationError(message) {
+  return new SavingsGoalValidationError(message)
+}
+
 function toMoneyNumber(value) {
   const amount = Number(value ?? 0)
   return Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0
@@ -177,12 +188,12 @@ export async function createSavingsGoal(userId, payload = {}) {
   const targetDate = normalizeGoalTargetDate(payload.target_date)
   const currentAmount = payload.current_amount === undefined ? 0 : payload.current_amount
 
-  if (!name) throw new Error('name must be 1-80 characters')
-  if (!isPositiveMoneyValue(payload.target_amount)) throw new Error('target_amount must be a valid positive money amount')
-  if (!isNonNegativeMoneyValue(currentAmount)) throw new Error('current_amount must be a valid non-negative money amount')
-  if (!targetDate) throw new Error('Valid target_date is required')
+  if (!name) throw savingsGoalValidationError('name must be 1-80 characters')
+  if (!isPositiveMoneyValue(payload.target_amount)) throw savingsGoalValidationError('target_amount must be a valid positive money amount')
+  if (!isNonNegativeMoneyValue(currentAmount)) throw savingsGoalValidationError('current_amount must be a valid non-negative money amount')
+  if (!targetDate) throw savingsGoalValidationError('Valid target_date is required')
 
-  if (payload.icon !== undefined && payload.icon !== null && String(payload.icon).trim() && !icon) throw new Error('icon must be a short text value')
+  if (payload.icon !== undefined && payload.icon !== null && String(payload.icon).trim() && !icon) throw savingsGoalValidationError('icon must be a short text value')
 
   const { rows } = await db.query(
     `INSERT INTO public.savings_goals (user_id, name, icon, target_amount, current_amount, target_date)
@@ -195,34 +206,34 @@ export async function createSavingsGoal(userId, payload = {}) {
 }
 
 export async function updateSavingsGoal(userId, goalId, payload = {}) {
-  if (!isValidGoalId(goalId)) throw new Error('goal_id must be a valid UUID')
+  if (!isValidGoalId(goalId)) throw savingsGoalValidationError('goal_id must be a valid UUID')
 
   const entries = []
   if (payload.name !== undefined) {
     const name = normalizeGoalName(payload.name)
-    if (!name) throw new Error('name must be 1-80 characters')
+    if (!name) throw savingsGoalValidationError('name must be 1-80 characters')
     entries.push(['name', name])
   }
   if (payload.icon !== undefined) {
     const icon = normalizeGoalIcon(payload.icon)
-    if (payload.icon !== null && String(payload.icon).trim() && !icon) throw new Error('icon must be a short text value')
+    if (payload.icon !== null && String(payload.icon).trim() && !icon) throw savingsGoalValidationError('icon must be a short text value')
     entries.push(['icon', icon])
   }
   if (payload.target_amount !== undefined) {
-    if (!isPositiveMoneyValue(payload.target_amount)) throw new Error('target_amount must be a valid positive money amount')
+    if (!isPositiveMoneyValue(payload.target_amount)) throw savingsGoalValidationError('target_amount must be a valid positive money amount')
     entries.push(['target_amount', payload.target_amount])
   }
   if (payload.current_amount !== undefined) {
-    if (!isNonNegativeMoneyValue(payload.current_amount)) throw new Error('current_amount must be a valid non-negative money amount')
+    if (!isNonNegativeMoneyValue(payload.current_amount)) throw savingsGoalValidationError('current_amount must be a valid non-negative money amount')
     entries.push(['current_amount', payload.current_amount])
   }
   if (payload.target_date !== undefined) {
     const targetDate = normalizeGoalTargetDate(payload.target_date)
-    if (!targetDate) throw new Error('Valid target_date is required')
+    if (!targetDate) throw savingsGoalValidationError('Valid target_date is required')
     entries.push(['target_date', targetDate])
   }
 
-  if (!entries.length) throw new Error('No fields provided to update')
+  if (!entries.length) throw savingsGoalValidationError('No fields provided to update')
 
   const fields = entries.map(([key], index) => `${key} = $${index + 1}`)
   const values = entries.map(([, value]) => value)

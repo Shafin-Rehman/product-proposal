@@ -6,6 +6,7 @@ import {
   createSavingsGoal,
   getSavingsGoalReferenceDate,
   listSavingsGoals,
+  SavingsGoalValidationError,
 } from '@/lib/savingsGoals'
 import { getCurrentMonthStart } from '@/lib/financeUtils'
 
@@ -40,15 +41,12 @@ export async function GET(request) {
 
   try {
     const [goals, budgetSummary] = await Promise.all([
-      listSavingsGoals(user.id, { includeArchived: true }),
+      listSavingsGoals(user.id, { includeArchived }),
       buildBudgetSummary(user.id, month),
     ])
 
     const payload = buildSavingsGoalsSummary(goals, budgetSummary, getSavingsGoalReferenceDate(month))
-    return NextResponse.json({
-      ...payload,
-      goals: includeArchived ? payload.goals : payload.goals.filter((goal) => !goal.archived),
-    })
+    return NextResponse.json(payload)
   } catch {
     return NextResponse.json({ error: 'Failed to fetch savings goals' }, { status: 500 })
   }
@@ -70,13 +68,8 @@ export async function POST(request) {
     const budgetSummary = await buildBudgetSummary(user.id, month)
     return NextResponse.json(buildSavingsGoalsSummary([goal], budgetSummary, getSavingsGoalReferenceDate(month)).goals[0])
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to create savings goal'
-    if (
-      message.includes('must be')
-      || message.includes('required')
-      || message.includes('Valid')
-    ) {
-      return validationError(message)
+    if (err instanceof SavingsGoalValidationError) {
+      return validationError(err.message)
     }
     return NextResponse.json({ error: 'Failed to create savings goal' }, { status: 500 })
   }
