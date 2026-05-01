@@ -1,8 +1,8 @@
 name: Deploy to Vercel
 
-on:
+"on":
   push:
-     branches: [main, cloud-deployment]
+    branches: [main, cloud-deployment]
     paths:
       - 'nextjs/**'
       - '.github/workflows/deploy.yml'
