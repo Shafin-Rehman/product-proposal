@@ -149,6 +149,7 @@ describe('GET /api/savings-goals', () => {
 
     await testApiHandler({
       appHandler: goalsHandler,
+      url: 'http://localhost/api/savings-goals?month=2026-04',
       async test({ fetch }) {
         const res = await fetch()
         expect(res.status).toBe(200)
