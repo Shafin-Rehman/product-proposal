@@ -12,6 +12,7 @@ import {
   demoBudgetTrend,
   demoCategoryBudgets,
   demoInsightsSnapshot,
+  demoSavingsGoals,
 } from '@/lib/demoData'
 import { getCategoryPresentation, getEntryVisual, getInitialsLabel } from '@/lib/financeVisuals'
 import {
@@ -32,6 +33,12 @@ import {
   buildOverallBudgetHealth as buildSharedOverallBudgetHealth,
   getMonthProgressState as getSharedMonthProgressState,
 } from '@/lib/budgetHealth'
+import {
+  getSavingsGoalAvatar,
+  getSavingsGoalStatusLabel,
+  getSavingsGoalStatusReason,
+  getSavingsGoalStatusTone,
+} from '@/lib/savingsGoalStatus'
 import AllocationBar from '@/components/ui/AllocationBar'
 import BudgetHudMetrics from '@/components/ui/BudgetHudMetrics'
 import CashFlowSnapshot from '@/components/ui/CashFlowSnapshot'
@@ -317,6 +324,7 @@ export default function DashboardView() {
     summary: null,
     expenses: [],
     income: [],
+    savingsGoals: null,
   })
   const [isBudgetSheetOpen, setIsBudgetSheetOpen] = useState(false)
   const [budgetDraft, setBudgetDraft] = useState({ monthly_limit: '' })
@@ -351,6 +359,10 @@ export default function DashboardView() {
           accessToken: session.accessToken,
           signal: controller.signal,
         }),
+        apiGet('/api/savings-goals', {
+          accessToken: session.accessToken,
+          signal: controller.signal,
+        }),
       ])
 
       if (controller.signal.aborted) return
@@ -368,6 +380,7 @@ export default function DashboardView() {
       const summaryResult = results[0]
       const expensesResult = results[1]
       const incomeResult = results[2]
+      const savingsGoalsResult = results[3]
       const failedCount = results.filter((result) => result.status === 'rejected').length
 
       setLiveState({
@@ -380,6 +393,7 @@ export default function DashboardView() {
         summary: summaryResult.status === 'fulfilled' ? summaryResult.value : null,
         expenses: expensesResult.status === 'fulfilled' ? expensesResult.value : [],
         income: incomeResult.status === 'fulfilled' ? incomeResult.value : [],
+        savingsGoals: savingsGoalsResult.status === 'fulfilled' ? savingsGoalsResult.value : null,
       })
     }
 
@@ -398,6 +412,7 @@ export default function DashboardView() {
         summary: null,
         expenses: [],
         income: [],
+        savingsGoals: null,
       })
     })
 
@@ -518,6 +533,18 @@ export default function DashboardView() {
     summary,
     availability: summaryAvailability,
   })
+  const savingsGoals = isSampleMode ? demoSavingsGoals : liveState.savingsGoals
+  const topSavingsGoal = [...(savingsGoals?.goals ?? [])]
+    .filter((goal) => !goal.archived)
+    .sort((left, right) => {
+      const leftComplete = left.budget_context?.status === 'complete'
+      const rightComplete = right.budget_context?.status === 'complete'
+      if (leftComplete !== rightComplete) return leftComplete ? 1 : -1
+      const severity = { over_budget: 5, overdue: 5, tight: 4, no_budget: 3, ready: 2, complete: 1 }
+      const severityDifference = (severity[right.budget_context?.status] ?? 0) - (severity[left.budget_context?.status] ?? 0)
+      if (severityDifference) return severityDifference
+      return String(left.target_date).localeCompare(String(right.target_date))
+    })[0] ?? null
   const recentCashFlow = isSampleMode
     ? (() => {
       const monthlyIncome = getSafeMoneyNumber(demoBudgetSummary?.total_income)
@@ -629,6 +656,45 @@ export default function DashboardView() {
           income={hudState.income}
           expenses={hudState.spent}
         />
+      </section>
+
+      <section className="section-block savings-goals savings-goals--dashboard">
+        <div className="section-headline">
+          <h2>Savings goals</h2>
+          <Link className="section-link" href="/planner">
+            Manage
+          </Link>
+        </div>
+        {topSavingsGoal ? (
+          <article className={`savings-goal savings-goal--${getSavingsGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
+            <div className="savings-goal__top">
+              <div className="savings-goal__identity">
+                <div className="savings-goal__avatar" aria-hidden="true">{getSavingsGoalAvatar(topSavingsGoal)}</div>
+                <div>
+                  <strong>{topSavingsGoal.name}</strong>
+                  <span>{Math.round(topSavingsGoal.progress_percentage ?? 0)}% saved toward {formatCurrency(topSavingsGoal.target_amount)}</span>
+                  <small>{getSavingsGoalStatusReason(topSavingsGoal)}</small>
+                </div>
+              </div>
+              <span className={`planner-status planner-status--${getSavingsGoalStatusTone(topSavingsGoal.budget_context?.status)}`}>
+                {getSavingsGoalStatusLabel(topSavingsGoal.budget_context?.status)}
+              </span>
+            </div>
+            <div className="savings-goal__progress" role="progressbar" aria-label={`${topSavingsGoal.name} savings progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(topSavingsGoal.progress_percentage ?? 0)}>
+              <span style={{ width: `${Math.min(Number(topSavingsGoal.progress_percentage ?? 0), 100)}%` }} />
+            </div>
+            <div className="savings-goal__metrics">
+              <div><span>Saved</span><strong>{formatCurrency(topSavingsGoal.current_amount)}</strong></div>
+              <div><span>Monthly</span><strong>{formatCurrency(topSavingsGoal.monthly_required)}</strong></div>
+              <div><span>After goals</span><strong>{savingsGoals?.summary?.available_after_goal_contributions == null ? 'No budget' : formatCurrency(savingsGoals.summary.available_after_goal_contributions)}</strong></div>
+            </div>
+          </article>
+        ) : (
+          <div className="blank-state blank-state--compact">
+            <strong>No savings goals yet</strong>
+            <span>Add goals in the planner to connect targets with monthly budget room.</span>
+          </div>
+        )}
       </section>
 
       <section className="section-block">

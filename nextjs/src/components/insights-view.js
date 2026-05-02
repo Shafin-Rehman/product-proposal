@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode } from '@/components/providers'
 import { ApiError, apiGet } from '@/lib/apiClient'
-import { DEMO_MONTH, demoInsightsSnapshot } from '@/lib/demoData'
+import { DEMO_MONTH, demoInsightsSnapshot, demoSavingsGoals } from '@/lib/demoData'
 import {
   formatCurrency,
   formatLongDate,
@@ -532,6 +532,7 @@ export default function InsightsView() {
   const donutSegments = buildDonutSegments(activeItems)
   const comparisonMetrics = snapshot?.comparisonMetrics ?? []
   const budgetHealth = snapshot?.budgetHealth ?? { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] }
+  const savingsGoals = isSampleMode ? demoSavingsGoals : snapshot?.savingsGoals
   const categoryMovers = snapshot?.categoryMovers ?? []
   const dailySpend = snapshot?.dailySpend ?? { series: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, peakDay: null, activeDays: 0 }
   const previousDailySpend = snapshot?.previousDailySpend ?? { series: [], totalAmount: 0 }
@@ -1075,6 +1076,40 @@ export default function InsightsView() {
                 )}
               </section>
             </div>
+          </article>
+
+          <article className="insights-v57__card savings-goals savings-goals--insights">
+            <div className="insights-v57__card-header insights-v57__card-header--tight">
+              <h2 className="insights-v57__title">Goals</h2>
+              <span className="insights-v57__range-chip">{savingsGoals?.summary?.active_count ?? 0} active</span>
+            </div>
+            {savingsGoals?.summary?.active_count ? (
+              <>
+                <div className="savings-goals__summary savings-goals__summary--insights">
+                  <article><span>Saved</span><strong>{formatCurrency(savingsGoals.summary.current_total)}</strong></article>
+                  <article><span>Remaining</span><strong>{formatCurrency(savingsGoals.summary.remaining_total)}</strong></article>
+                  <article><span>Monthly</span><strong>{formatCurrency(savingsGoals.summary.monthly_required_total)}</strong></article>
+                </div>
+                <div className="savings-goals__list savings-goals__list--compact">
+                  {(savingsGoals.goals ?? []).slice(0, 2).map((goal) => (
+                    <div className="savings-goal savings-goal--compact" key={goal.id}>
+                      <div className="savings-goal__top">
+                        <div><strong>{goal.name}</strong><span>{Math.round(goal.progress_percentage ?? 0)}% saved</span></div>
+                        <span className="planner-status">{formatCurrency(goal.monthly_required)}/mo</span>
+                      </div>
+                      <div className="savings-goal__progress" role="progressbar" aria-label={`${goal.name} savings progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(goal.progress_percentage ?? 0)}>
+                        <span style={{ width: `${Math.min(Number(goal.progress_percentage ?? 0), 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="blank-state blank-state--compact">
+                <strong>No savings goals yet</strong>
+                <span>Goals will show how future targets affect monthly budget room.</span>
+              </div>
+            )}
           </article>
 
           <article className="insights-v57__card insights-v57__rhythm-card">

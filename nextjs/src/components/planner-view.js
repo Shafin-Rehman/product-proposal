@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataChanged, useDataMode } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
-import { DEMO_MONTH, demoBudgetSummary, demoCategoryBudgets } from '@/lib/demoData'
+import { DEMO_MONTH, demoBudgetSummary, demoCategoryBudgets, demoSavingsGoals } from '@/lib/demoData'
 import { getCategoryPresentation } from '@/lib/financeVisuals'
 import {
   formatCurrency,
@@ -28,6 +28,12 @@ import {
   mergePlannerDrafts,
   normalizeMoneyDraftForSave,
 } from '@/lib/planner'
+import {
+  getSavingsGoalAvatar,
+  getSavingsGoalStatusLabel,
+  getSavingsGoalStatusReason,
+  getSavingsGoalStatusTone,
+} from '@/lib/savingsGoalStatus'
 
 function areDraftMapsEqual(left = {}, right = {}) {
   const leftEntries = Object.entries(left)
@@ -92,6 +98,58 @@ function PlannerFeedback({ feedback }) {
   )
 }
 
+const GOAL_ICON_OPTIONS = [
+  { icon: '\u{1F6E1}\uFE0F', label: 'Emergency' },
+  { icon: '\u2708\uFE0F', label: 'Travel' },
+  { icon: '\u{1F3E0}', label: 'Home' },
+  { icon: '\u{1F697}', label: 'Car' },
+  { icon: '\u{1F381}', label: 'Gift' },
+  { icon: '\u{1F393}', label: 'Education' },
+  { icon: '\u{1FA7A}', label: 'Medical' },
+  { icon: '\u{1F48D}', label: 'Wedding' },
+  { icon: '\u{1F4BB}', label: 'Laptop' },
+  { icon: '\u{1F43E}', label: 'Pet' },
+  { icon: '\u{1F4E6}', label: 'Moving' },
+  { icon: '\u{1F3D6}\uFE0F', label: 'Vacation' },
+  { icon: '\u{1F527}', label: 'Repair' },
+  { icon: '\u{1F37C}', label: 'Family' },
+  { icon: '\u{1F4B5}', label: 'Savings' },
+  { icon: '\u{1F9F0}', label: 'Tools' },
+  { icon: '\u{1F6B2}', label: 'Bike' },
+  { icon: '\u{1F4F7}', label: 'Camera' },
+  { icon: '\u{1F3B5}', label: 'Concert' },
+  { icon: '\u{1FA91}', label: 'Furniture' },
+  { icon: '\u{1F476}', label: 'Baby' },
+  { icon: '\u{1F384}', label: 'Holiday' },
+  { icon: '\u{1F9FE}', label: 'Taxes' },
+  { icon: '\u{1F4AA}', label: 'Fitness' },
+]
+
+const GOAL_FORM_CLOSE_MS = 230
+const GOAL_ICON_PICKER_CLOSE_MS = 140
+
+function getMotionSafeDuration(duration) {
+  if (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    return 0
+  }
+
+  return duration
+}
+
+function getGoalFormDefaults(goal = null) {
+  return {
+    name: goal?.name ?? '',
+    icon: goal?.icon ?? '',
+    target_amount: goal?.target_amount ?? '',
+    current_amount: goal?.current_amount ?? '0.00',
+    target_date: goal?.target_date ?? '',
+  }
+}
+
 export default function PlannerView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
@@ -106,6 +164,7 @@ export default function PlannerView() {
     categories: [],
     config: null,
     summary: null,
+    savingsGoals: null,
     previousConfig: undefined,
     previousConfigStatus: 'loading',
   })
@@ -113,14 +172,68 @@ export default function PlannerView() {
   const [overallDraft, setOverallDraft] = useState('')
   const [savingTarget, setSavingTarget] = useState('')
   const [copyingMonth, setCopyingMonth] = useState(false)
+  const [goalFormMode, setGoalFormMode] = useState('closed')
+  const [isGoalFormClosing, setIsGoalFormClosing] = useState(false)
+  const [editingGoal, setEditingGoal] = useState(null)
+  const [goalDraft, setGoalDraft] = useState(getGoalFormDefaults)
+  const [isGoalIconPickerOpen, setIsGoalIconPickerOpen] = useState(false)
+  const [isGoalIconPickerClosing, setIsGoalIconPickerClosing] = useState(false)
+  const [savingGoal, setSavingGoal] = useState(false)
+  const [archivingGoalId, setArchivingGoalId] = useState('')
+  const [goalFormError, setGoalFormError] = useState('')
   const [feedback, setFeedback] = useState(null)
   const hydratedMonthRef = useRef(null)
   const dirtyRowIdsRef = useRef(new Set())
   const isOverallDirtyRef = useRef(false)
   const rowDraftsRef = useRef({})
   const overallDraftRef = useRef('')
+  const goalIconPickerRef = useRef(null)
+  const goalIconButtonRef = useRef(null)
+  const goalCtaRef = useRef(null)
+  const goalFormCloseTimerRef = useRef(null)
+  const goalIconPickerCloseTimerRef = useRef(null)
+  const isGoalFormClosingRef = useRef(false)
+  const isGoalIconPickerClosingRef = useRef(false)
+  const shouldFocusGoalCtaAfterCloseRef = useRef(false)
 
   const activeMonth = isSampleMode ? DEMO_MONTH : selectedMonth
+
+  const finishGoalIconPickerClose = () => {
+    if (!isGoalIconPickerClosingRef.current) return
+    window.clearTimeout(goalIconPickerCloseTimerRef.current)
+    isGoalIconPickerClosingRef.current = false
+    setIsGoalIconPickerClosing(false)
+  }
+
+  const openGoalIconPicker = () => {
+    window.clearTimeout(goalIconPickerCloseTimerRef.current)
+    isGoalIconPickerClosingRef.current = false
+    setIsGoalIconPickerClosing(false)
+    setIsGoalIconPickerOpen(true)
+  }
+
+  const closeGoalIconPicker = ({ focusButton = false } = {}) => {
+    if (!isGoalIconPickerOpen && !isGoalIconPickerClosingRef.current) return
+    if (focusButton) goalIconButtonRef.current?.focus()
+
+    window.clearTimeout(goalIconPickerCloseTimerRef.current)
+    setIsGoalIconPickerOpen(false)
+    isGoalIconPickerClosingRef.current = true
+    setIsGoalIconPickerClosing(true)
+    goalIconPickerCloseTimerRef.current = window.setTimeout(
+      finishGoalIconPickerClose,
+      getMotionSafeDuration(GOAL_ICON_PICKER_CLOSE_MS)
+    )
+  }
+
+  const toggleGoalIconPicker = () => {
+    if (isGoalIconPickerOpen) {
+      closeGoalIconPicker({ focusButton: true })
+      return
+    }
+
+    openGoalIconPicker()
+  }
 
   useEffect(() => {
     setFeedback(null)
@@ -143,6 +256,7 @@ export default function PlannerView() {
           categories: isSameMonthReload ? current.categories : [],
           config: isSameMonthReload ? current.config : null,
           summary: isSameMonthReload ? current.summary : null,
+          savingsGoals: isSameMonthReload ? current.savingsGoals : null,
           previousConfig: undefined,
           previousConfigStatus: 'loading',
         }
@@ -162,6 +276,10 @@ export default function PlannerView() {
           signal: controller.signal,
         }),
         apiGet(`/api/budget?month=${encodeURIComponent(previousMonth)}`, {
+          accessToken: session.accessToken,
+          signal: controller.signal,
+        }),
+        apiGet(`/api/savings-goals?month=${encodeURIComponent(selectedMonth)}`, {
           accessToken: session.accessToken,
           signal: controller.signal,
         }),
@@ -193,6 +311,7 @@ export default function PlannerView() {
         summary: results[2].status === 'fulfilled' ? results[2].value : null,
         previousConfig: results[3].status === 'fulfilled' ? results[3].value : null,
         previousConfigStatus: results[3].status === 'fulfilled' ? 'ready' : 'unavailable',
+        savingsGoals: results[4].status === 'fulfilled' ? results[4].value : null,
       })
     }
 
@@ -212,6 +331,7 @@ export default function PlannerView() {
         categories: [],
         config: null,
         summary: null,
+        savingsGoals: null,
         previousConfig: null,
         previousConfigStatus: 'unavailable',
       })
@@ -220,10 +340,33 @@ export default function PlannerView() {
     return () => controller.abort()
   }, [isReady, isSampleMode, logout, reloadToken, router, selectedMonth, session?.accessToken])
 
+  useEffect(() => {
+    if (!isGoalIconPickerOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      if (!goalIconPickerRef.current?.contains(event.target)) {
+        closeGoalIconPicker()
+      }
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeGoalIconPicker({ focusButton: true })
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isGoalIconPickerOpen])
+
   const isLiveMonthCurrent = isSampleMode || liveState.month === selectedMonth
   const activeCategories = isSampleMode ? buildSampleCategories() : (isLiveMonthCurrent ? liveState.categories : [])
   const activeConfig = isSampleMode ? buildSampleConfig() : (isLiveMonthCurrent ? liveState.config : null)
   const activeSummary = isSampleMode ? demoBudgetSummary : (isLiveMonthCurrent ? liveState.summary : null)
+  const activeSavingsGoals = isSampleMode ? demoSavingsGoals : (isLiveMonthCurrent ? liveState.savingsGoals : null)
   const previousConfig = isSampleMode ? null : (isLiveMonthCurrent ? liveState.previousConfig : undefined)
 
   const plannerRows = useMemo(() => buildPlannerRows({
@@ -250,6 +393,19 @@ export default function PlannerView() {
   useEffect(() => {
     overallDraftRef.current = overallDraft
   }, [overallDraft])
+
+  useEffect(() => {
+    isGoalFormClosingRef.current = isGoalFormClosing
+  }, [isGoalFormClosing])
+
+  useEffect(() => {
+    isGoalIconPickerClosingRef.current = isGoalIconPickerClosing
+  }, [isGoalIconPickerClosing])
+
+  useEffect(() => () => {
+    window.clearTimeout(goalFormCloseTimerRef.current)
+    window.clearTimeout(goalIconPickerCloseTimerRef.current)
+  }, [])
 
   useEffect(() => {
     if (hydratedMonthRef.current !== activeMonth) {
@@ -365,6 +521,29 @@ export default function PlannerView() {
     summary: activeSummary,
     availability: summaryAvailability,
   })
+  const goalRows = activeSavingsGoals?.goals ?? []
+  const goalSummary = activeSavingsGoals?.summary ?? {
+    active_count: 0,
+    target_total: '0.00',
+    current_total: '0.00',
+    remaining_total: '0.00',
+    monthly_required_total: '0.00',
+    available_after_goal_contributions: null,
+    pressure_level: 'none',
+  }
+  const goalsAvailability = isSampleMode || activeSavingsGoals
+    ? 'ready'
+    : !isLiveMonthCurrent || liveState.status === 'loading'
+      ? 'loading'
+      : 'unavailable'
+  const goalFormOpen = goalFormMode !== 'closed'
+  const goalFormRendered = goalFormOpen || isGoalFormClosing
+  const goalFormInteractive = goalFormOpen && !isGoalFormClosing
+  const goalIconPickerRendered = isGoalIconPickerOpen || isGoalIconPickerClosing
+  const isGoalDraftValid = goalDraft.name.trim()
+    && Number(goalDraft.target_amount) > 0
+    && Number(goalDraft.current_amount) >= 0
+    && goalDraft.target_date
 
   const handleRetry = () => setReloadToken((value) => value + 1)
 
@@ -554,6 +733,133 @@ export default function PlannerView() {
     }
   }
 
+  const finishGoalFormClose = () => {
+    if (!isGoalFormClosingRef.current) return
+
+    window.clearTimeout(goalFormCloseTimerRef.current)
+    isGoalFormClosingRef.current = false
+    setIsGoalFormClosing(false)
+    setGoalFormMode('closed')
+    setEditingGoal(null)
+    setGoalDraft(getGoalFormDefaults())
+    setGoalFormError('')
+    window.clearTimeout(goalIconPickerCloseTimerRef.current)
+    isGoalIconPickerClosingRef.current = false
+    setIsGoalIconPickerOpen(false)
+    setIsGoalIconPickerClosing(false)
+
+    if (shouldFocusGoalCtaAfterCloseRef.current) {
+      shouldFocusGoalCtaAfterCloseRef.current = false
+      goalCtaRef.current?.focus()
+    }
+  }
+
+  const closeGoalForm = ({ focusCta = true } = {}) => {
+    if (!goalFormOpen || isGoalFormClosingRef.current) return
+
+    window.clearTimeout(goalFormCloseTimerRef.current)
+    shouldFocusGoalCtaAfterCloseRef.current = focusCta
+    closeGoalIconPicker()
+    isGoalFormClosingRef.current = true
+    setIsGoalFormClosing(true)
+    goalFormCloseTimerRef.current = window.setTimeout(
+      finishGoalFormClose,
+      getMotionSafeDuration(GOAL_FORM_CLOSE_MS)
+    )
+  }
+
+  const openCreateGoalForm = () => {
+    if (goalFormOpen && !isGoalFormClosingRef.current) {
+      closeGoalForm()
+      return
+    }
+
+    window.clearTimeout(goalFormCloseTimerRef.current)
+    isGoalFormClosingRef.current = false
+    shouldFocusGoalCtaAfterCloseRef.current = false
+    setIsGoalFormClosing(false)
+    setEditingGoal(null)
+    setGoalDraft(getGoalFormDefaults())
+    setGoalFormError('')
+    closeGoalIconPicker()
+    setGoalFormMode('create')
+  }
+
+  const openEditGoalForm = (goal) => {
+    window.clearTimeout(goalFormCloseTimerRef.current)
+    isGoalFormClosingRef.current = false
+    shouldFocusGoalCtaAfterCloseRef.current = false
+    setIsGoalFormClosing(false)
+    setEditingGoal(goal)
+    setGoalDraft(getGoalFormDefaults(goal))
+    setGoalFormError('')
+    closeGoalIconPicker()
+    setGoalFormMode('edit')
+  }
+
+  const handleSaveGoal = async (event) => {
+    event.preventDefault()
+    if (isSampleMode || savingGoal || !isGoalDraftValid || !goalFormInteractive) return
+
+    setSavingGoal(true)
+    setGoalFormError('')
+    try {
+      const payload = {
+        name: goalDraft.name,
+        target_amount: Number(goalDraft.target_amount),
+        current_amount: Number(goalDraft.current_amount || 0),
+        target_date: goalDraft.target_date,
+        icon: goalDraft.icon || null,
+      }
+      await apiPost(
+        goalFormMode === 'edit' ? '/api/savings-goals/update' : '/api/savings-goals',
+        goalFormMode === 'edit' ? { goal_id: editingGoal.id, month: selectedMonth, ...payload } : { month: selectedMonth, ...payload },
+        { accessToken: session.accessToken }
+      )
+      notifyDataChanged()
+      setFeedback({
+        tone: 'success',
+        message: goalFormMode === 'edit' ? 'Savings goal updated.' : 'Savings goal created.',
+      })
+      closeGoalForm()
+      handleRetry()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthError()
+        return
+      }
+      setFeedback({
+        tone: 'warning',
+        message: error instanceof ApiError ? error.message : 'The savings goal could not be saved.',
+      })
+      setGoalFormError(error instanceof ApiError ? error.message : 'The savings goal could not be saved. Check the fields and try again.')
+    } finally {
+      setSavingGoal(false)
+    }
+  }
+
+  const handleArchiveGoal = async (goal) => {
+    if (isSampleMode || archivingGoalId) return
+    setArchivingGoalId(goal.id)
+    try {
+      await apiPost('/api/savings-goals/archive', { goal_id: goal.id }, { accessToken: session.accessToken })
+      notifyDataChanged()
+      setFeedback({ tone: 'success', message: `${goal.name} archived.` })
+      handleRetry()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthError()
+        return
+      }
+      setFeedback({
+        tone: 'warning',
+        message: error instanceof ApiError ? error.message : 'The savings goal could not be archived.',
+      })
+    } finally {
+      setArchivingGoalId('')
+    }
+  }
+
   return (
     <section className="app-screen planner-screen">
       <div className="planner-screen__masthead">
@@ -690,6 +996,254 @@ export default function PlannerView() {
           </button>
         </form>
       </article>
+
+      <section className="section-block savings-goals">
+        <div className="section-headline savings-goals__headline">
+          <div>
+            <h2>Savings goals</h2>
+            {isSampleMode ? (
+              <span className="planner-section__caption">Sample goals show how target dates affect monthly room.</span>
+            ) : null}
+          </div>
+          <button
+            aria-expanded={goalFormRendered}
+            className="button-primary savings-goals__cta"
+            disabled={isSampleMode}
+            onClick={openCreateGoalForm}
+            ref={goalCtaRef}
+            type="button"
+          >
+            <span aria-hidden="true">+</span>
+            Add goal
+          </button>
+        </div>
+
+        <div className={`savings-goals__summary savings-goals__summary--${getSavingsGoalStatusTone(goalSummary.pressure_level)}`}>
+          <article>
+            <span>Active goals</span>
+            <strong>{goalSummary.active_count ?? 0}</strong>
+          </article>
+          <article>
+            <span>Total saved</span>
+            <strong>{formatCurrency(goalSummary.current_total)}</strong>
+          </article>
+          <article>
+            <span>Remaining</span>
+            <strong>{formatCurrency(goalSummary.remaining_total)}</strong>
+          </article>
+          <article>
+            <span>Monthly needed</span>
+            <strong>{formatCurrency(goalSummary.monthly_required_total)}</strong>
+          </article>
+          <article>
+            <span>After goals</span>
+            <strong>{goalSummary.available_after_goal_contributions == null ? 'No budget' : formatCurrency(goalSummary.available_after_goal_contributions)}</strong>
+          </article>
+        </div>
+
+        {goalFormRendered ? (
+          <div
+            className={`savings-goal-form-shell${isGoalFormClosing ? ' savings-goal-form-shell--closing' : ''}`}
+            data-state={isGoalFormClosing ? 'closing' : 'open'}
+            onTransitionEnd={(event) => {
+              if (
+                event.currentTarget === event.target
+                && (!event.propertyName || event.propertyName === 'grid-template-rows')
+              ) {
+                finishGoalFormClose()
+              }
+            }}
+          >
+            <form
+              className={`savings-goal-form${isGoalFormClosing ? ' savings-goal-form--closing' : ''}`}
+              onSubmit={handleSaveGoal}
+            >
+              <div className="savings-goal-form__header">
+                <div className="savings-goal-form__icon" ref={goalIconPickerRef}>
+                  <button
+                    aria-expanded={isGoalIconPickerOpen && !isGoalIconPickerClosing}
+                    aria-label="Choose goal icon"
+                    className="savings-goal__avatar savings-goal__avatar--form savings-goal__avatar--button"
+                    onClick={toggleGoalIconPicker}
+                    ref={goalIconButtonRef}
+                    type="button"
+                  >
+                    {getSavingsGoalAvatar({ name: goalDraft.name || 'Savings goal', icon: goalDraft.icon }, { semanticFallbacks: true })}
+                  </button>
+                  {goalIconPickerRendered ? (
+                    <div
+                      aria-hidden={isGoalIconPickerClosing ? 'true' : undefined}
+                      aria-label="Goal icons"
+                      className={`savings-goal-icon-picker${isGoalIconPickerClosing ? ' savings-goal-icon-picker--closing' : ''}`}
+                      data-state={isGoalIconPickerClosing ? 'closing' : 'open'}
+                      onAnimationEnd={(event) => {
+                        if (event.currentTarget === event.target) finishGoalIconPickerClose()
+                      }}
+                      role="group"
+                    >
+                      {GOAL_ICON_OPTIONS.map((option) => (
+                        <button
+                          aria-label={`Use ${option.label} icon`}
+                          aria-pressed={goalDraft.icon === option.icon}
+                          className={goalDraft.icon === option.icon ? 'is-selected' : ''}
+                          key={option.icon}
+                          onClick={() => {
+                            setGoalDraft((current) => ({ ...current, icon: option.icon }))
+                            closeGoalIconPicker({ focusButton: true })
+                          }}
+                          title={option.label}
+                          type="button"
+                        >
+                          <span className="savings-goal-icon-picker__glyph" aria-hidden="true">{option.icon}</span>
+                        </button>
+                      ))}
+                      <button
+                        aria-label="Use initials icon"
+                        aria-pressed={!goalDraft.icon}
+                        className={!goalDraft.icon ? 'is-selected' : ''}
+                        onClick={() => {
+                          setGoalDraft((current) => ({ ...current, icon: '' }))
+                          closeGoalIconPicker({ focusButton: true })
+                        }}
+                        title="Initials"
+                        type="button"
+                      >
+                        <span className="savings-goal-icon-picker__glyph" aria-hidden="true">Aa</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <div>
+                  <span className="period-chip__label">{formatMonthPeriod(activeMonth)}</span>
+                  <h3>{goalFormMode === 'edit' ? 'Edit savings goal' : 'Add savings goal'}</h3>
+                  <p>Set the target, what you have saved, and when you want to get there.</p>
+                </div>
+              </div>
+
+              {goalFormError ? (
+                <div className="inline-error" role="alert">{goalFormError}</div>
+              ) : null}
+
+              <div className="savings-goal-form__grid">
+                <label className="entry-sheet__field">
+                  <span>Goal name</span>
+                  <input
+                    className="input-field"
+                    maxLength={80}
+                    onChange={(event) => setGoalDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Emergency cushion"
+                    type="text"
+                    value={goalDraft.name}
+                  />
+                </label>
+                <label className="entry-sheet__field">
+                  <span>Target amount ($)</span>
+                  <input
+                    className="input-field"
+                    inputMode="decimal"
+                    min="0.01"
+                    onChange={(event) => setGoalDraft((current) => ({ ...current, target_amount: event.target.value }))}
+                    step="0.01"
+                    type="number"
+                    value={goalDraft.target_amount}
+                  />
+                </label>
+                <label className="entry-sheet__field">
+                  <span>Current saved ($)</span>
+                  <input
+                    className="input-field"
+                    inputMode="decimal"
+                    min="0"
+                    onChange={(event) => setGoalDraft((current) => ({ ...current, current_amount: event.target.value }))}
+                    step="0.01"
+                    type="number"
+                    value={goalDraft.current_amount}
+                  />
+                </label>
+                <label className="entry-sheet__field">
+                  <span>Target date</span>
+                  <input
+                    className="input-field"
+                    onChange={(event) => setGoalDraft((current) => ({ ...current, target_date: event.target.value }))}
+                    type="date"
+                    value={goalDraft.target_date}
+                  />
+                </label>
+              </div>
+
+              <div className="savings-goal-form__footer">
+                <span>Monthly need is calculated against the selected month&apos;s budget context after saving.</span>
+                <div className="savings-goal-form__actions">
+                  <button className="button-secondary" disabled={savingGoal} onClick={() => closeGoalForm()} type="button">
+                    Cancel
+                  </button>
+                  <button className="button-primary" disabled={savingGoal || !isGoalDraftValid || !goalFormInteractive} type="submit">
+                    {savingGoal ? 'Saving...' : goalFormMode === 'edit' ? 'Save goal' : 'Create goal'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
+        {goalsAvailability === 'loading' ? (
+          <div className="blank-state blank-state--compact">
+            <strong>Loading savings goals</strong>
+            <span>Goal progress will appear with this month&apos;s budget context.</span>
+          </div>
+        ) : goalRows.length ? (
+          <div className="savings-goals__list">
+            {goalRows.map((goal) => {
+              const status = goal.budget_context?.status ?? 'ready'
+              const tone = getSavingsGoalStatusTone(status)
+              return (
+                <article className={`savings-goal savings-goal--${tone}`} key={goal.id}>
+                  <div className="savings-goal__top">
+                    <div className="savings-goal__identity">
+                      <div className="savings-goal__avatar" aria-hidden="true">{getSavingsGoalAvatar(goal, { semanticFallbacks: true })}</div>
+                      <div>
+                        <strong>{goal.name}</strong>
+                        <span>Target {formatMonthPeriod(goal.target_date)}</span>
+                        <small>{getSavingsGoalStatusReason(goal)}</small>
+                      </div>
+                    </div>
+                    <span className={`planner-status planner-status--${tone} savings-goal__status`}>{getSavingsGoalStatusLabel(status)}</span>
+                  </div>
+                  <div
+                    aria-label={`${goal.name} savings progress`}
+                    aria-valuemax={100}
+                    aria-valuemin={0}
+                    aria-valuenow={Math.round(goal.progress_percentage ?? 0)}
+                    aria-valuetext={`${Math.round(goal.progress_percentage ?? 0)}% saved`}
+                    className="savings-goal__progress"
+                    role="progressbar"
+                  >
+                    <span style={{ width: `${Math.min(Number(goal.progress_percentage ?? 0), 100)}%` }} />
+                  </div>
+                  <div className="savings-goal__metrics">
+                    <div><span>Saved</span><strong>{formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}</strong></div>
+                    <div><span>Monthly</span><strong>{formatCurrency(goal.monthly_required)}</strong></div>
+                    <div><span>Left</span><strong>{formatCurrency(goal.remaining_amount)}</strong></div>
+                  </div>
+                  <div className="savings-goal__actions">
+                    <button className="button-secondary" disabled={isSampleMode} onClick={() => openEditGoalForm(goal)} type="button">
+                      Edit
+                    </button>
+                    <button className="button-secondary" disabled={isSampleMode || archivingGoalId === goal.id} onClick={() => handleArchiveGoal(goal)} type="button">
+                      {archivingGoalId === goal.id ? 'Archiving...' : 'Archive'}
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="blank-state">
+            <strong>No savings goals yet</strong>
+            <span>Add a goal to see how target dates and monthly contributions fit with this month&apos;s budget.</span>
+          </div>
+        )}
+      </section>
 
       <section className="section-block planner-section">
         <div className="section-headline">

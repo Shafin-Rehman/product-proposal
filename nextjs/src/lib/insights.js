@@ -1,6 +1,7 @@
 import db from './db'
 import { buildBudgetSummary } from './budget'
 import { getCategoryPresentation } from './financeVisuals'
+import { buildSavingsGoalsSummary, getSavingsGoalReferenceDate, listSavingsGoals } from './savingsGoals'
 
 const HISTORY_MONTH_COUNT = 6
 const BREAKDOWN_LIMIT = 5
@@ -611,6 +612,7 @@ export async function buildInsightsSnapshot(userId, month) {
     topExpenses,
     previousDailyExpenseTotals,
     previousDailyExpenseEntries,
+    savingsGoalRows,
   ] = await Promise.all([
     buildBudgetSummary(userId, month),
     previousMonth ? buildBudgetSummary(userId, previousMonth) : Promise.resolve(null),
@@ -623,6 +625,7 @@ export async function buildInsightsSnapshot(userId, month) {
     getTopExpenses(userId, month),
     previousMonth ? getDailyExpenseTotals(userId, previousMonth) : Promise.resolve([]),
     previousMonth ? getDailyExpenseEntries(userId, previousMonth) : Promise.resolve([]),
+    listSavingsGoals(userId),
   ])
 
   const cashFlow = buildCashFlowSeries(monthWindow, monthlyExpenseTotals, monthlyIncomeTotals)
@@ -638,6 +641,7 @@ export async function buildInsightsSnapshot(userId, month) {
     : { series: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, peakDay: null, activeDays: 0, details: [] }
   const categoryMovers = buildCategoryMovers(summary?.category_statuses, previousSummary?.category_statuses)
   const budgetHealth = buildBudgetHealth(summary)
+  const savingsGoals = buildSavingsGoalsSummary(savingsGoalRows, summary, getSavingsGoalReferenceDate(month))
 
   return {
     month,
@@ -651,6 +655,7 @@ export async function buildInsightsSnapshot(userId, month) {
     cashFlowSummary: cashFlow.summary,
     categoryMovers,
     budgetHealth,
+    savingsGoals,
     dailySpend,
     previousDailySpend,
     topExpenses,
