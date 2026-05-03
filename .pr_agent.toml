@@ -1,0 +1,57 @@
+# PR-Agent: Copilot-style defaults for your repo. Docs:
+# https://qodo-merge-docs.qodo.ai/usage-guide/automations_and_usage/
+
+[config]
+temperature = 0.2
+duplicate_prompt_examples = true
+custom_model_max_tokens = 256000
+max_model_tokens = 128000
+
+# Official DeepSeek via LiteLLM's native DeepSeek provider.
+[litellm]
+drop_params = true
+
+# Lightweight "what this PR does" overview (posted as a comment so your title/body are not replaced).
+[pr_description]
+publish_description_as_comment = true
+add_original_user_description = false
+final_update_message = false
+use_bullet_points = true
+enable_pr_type = false
+enable_pr_diagram = false
+include_generated_by_header = false
+collapsible_file_list = true
+collapsible_file_list_threshold = 1
+inline_file_summary = "table"
+extra_instructions = """
+Write a lightweight pull request overview, not a code review. Start with the heading
+"## Pull request overview". Use one short paragraph, then a "**Changes:**" list with 3 to 6
+bullets depending on PR size, then a compact changed-files table and brief reviewer focus areas
+based only on the PR diff, changed file list, and PR body. Avoid verdict language about issue
+absence. Do not perform deep correctness or security review. Include a testing note only when it is
+obvious from touched test files, workflow files, package files, or the PR body.
+"""
+
+[pr_reviewer]
+num_max_findings = 12
+require_security_review = true
+require_tests_review = true
+extra_instructions = """
+Review like a staff engineer: product context, correctness, edge cases, security, tests, and
+maintainability. Prefer concise, actionable inline feedback where GitHub allows it; use the
+summary for themes and risk.
+"""
+
+[pr_code_suggestions]
+# Committable, Copilot-style suggestion blocks in the diff when the provider supports it.
+commitable_code_suggestions = true
+num_code_suggestions_per_chunk = 4
+suggestions_score_threshold = 0
+focus_only_on_problems = true
+extra_instructions = """
+Review like GitHub Copilot code review. Focus on real correctness bugs, edge cases, missing data
+flow, test gaps, security-sensitive changes, and quick safe fixes. Skip style churn, subjective UI
+nits, and broad refactors. Generate apply-ready committable suggestions only when the fix is small,
+obvious, and low-risk. For larger or less obvious issues, leave a brief explanatory inline comment
+instead of inventing a patch. Do not force a suggestion for every comment.
+"""

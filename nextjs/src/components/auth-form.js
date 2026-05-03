@@ -201,6 +201,12 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
           {copy.secondaryCta}
         </Link>
       </p>
+
+      <p className="auth-card__switch">
+        <Link className="text-link" href="/forgot-password">
+          Can&apos;t remember your password?
+        </Link>
+      </p>
     </section>
   )
 }

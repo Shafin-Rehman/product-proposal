@@ -270,6 +270,27 @@ describe('POST /api/expenses/update', () => {
     })
   })
 
+  it('200 - persists category_id null when the client explicitly clears the category on edit', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, category_id: null }] })
+    evaluateThresholdForMonth
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, category_id: null }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('UPDATE public.expenses SET'),
+          [null, 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('400 - missing expense_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,

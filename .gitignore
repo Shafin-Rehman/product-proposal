@@ -10,3 +10,4 @@ nextjs/test-results/
 .env.*
 .DS_Store
 supabase/.temp
+nextjs/.vercel/
