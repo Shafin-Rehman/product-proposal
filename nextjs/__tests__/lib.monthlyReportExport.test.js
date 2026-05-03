@@ -73,7 +73,7 @@ describe('monthly report CSV helpers', () => {
     expect(transactions.map((row) => row.id)).toEqual(['inc-1', 'exp-1'])
   })
 
-  it('neutralizes formula-like values in numeric CSV columns', () => {
+  it('leaves normalized numeric CSV columns numeric while protecting text cells', () => {
     const csv = buildMonthlyReportCsv({
       month: '2026-03-01',
       summary: {
@@ -85,7 +85,7 @@ describe('monthly report CSV helpers', () => {
       transactions: [],
     })
 
-    expect(csv.split('\r\n')[1]).toBe("summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,'-10.00,50.00,'-10.00,,")
+    expect(csv.split('\r\n')[1]).toBe('summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,-10.00,50.00,-10.00,,')
   })
 
   it('normalizes decimal string money values without floating-point rounding surprises', () => {

@@ -267,7 +267,7 @@ describe('InsightsView CSV export', () => {
     expect(window.URL.createObjectURL).toHaveBeenCalled()
     await waitFor(() => {
       expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
-    })
+    }, { timeout: 3000 })
     await waitFor(() => expect(screen.getByText('CSV export downloaded.')).toBeTruthy())
   })
 
@@ -368,7 +368,7 @@ describe('InsightsView CSV export', () => {
     })
     await waitFor(() => {
       expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
-    })
+    }, { timeout: 3000 })
     expect(screen.queryByText('CSV export downloaded.')).toBeNull()
     expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
   })

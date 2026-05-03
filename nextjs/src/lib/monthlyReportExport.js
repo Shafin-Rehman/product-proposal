@@ -20,6 +20,14 @@ export const MONTHLY_REPORT_COLUMNS = [
 ]
 
 const FORMULA_PREFIX_PATTERN = /^\s*[=+\-@]/
+const NUMERIC_CSV_COLUMNS = new Set([
+  'amount',
+  'total_income',
+  'total_expenses',
+  'net_cash_flow',
+  'total_budget',
+  'remaining_budget',
+])
 
 function nextMonth(month) {
   const date = new Date(`${month}T00:00:00Z`)
@@ -101,7 +109,7 @@ export function escapeCsvCell(value, { text = true } = {}) {
 
 function buildCsvLine(row) {
   return MONTHLY_REPORT_COLUMNS.map((column) => {
-    return escapeCsvCell(row[column], { text: true })
+    return escapeCsvCell(row[column], { text: !NUMERIC_CSV_COLUMNS.has(column) })
   }).join(',')
 }
 

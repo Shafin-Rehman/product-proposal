@@ -639,7 +639,7 @@ export default function InsightsView() {
         setExportState({ status: 'success', message: 'CSV export downloaded.' })
       } finally {
         link?.remove()
-        setTimeout(() => window.URL.revokeObjectURL(url), 100)
+        setTimeout(() => window.URL.revokeObjectURL(url), 2000)
       }
     } catch (error) {
       if (error?.name === 'AbortError') return
