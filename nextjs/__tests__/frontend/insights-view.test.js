@@ -130,7 +130,7 @@ describe('InsightsView (sample data)', () => {
     useAuth.mockReturnValue({
       isReady: true,
       logout: jest.fn(),
-      session: { accessToken: 'token' },
+      session: { accessToken: 'live-token' },
     })
     useDataMode.mockReturnValue({ isSampleMode: true })
   })
