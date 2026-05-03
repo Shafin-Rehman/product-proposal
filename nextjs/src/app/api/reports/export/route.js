@@ -8,7 +8,9 @@ export async function GET(request) {
   if (error) return error
 
   const month = normalizeMonth(new URL(request.url).searchParams.get('month'))
-  if (!month) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
+  if (!month) {
+    return NextResponse.json({ error: 'Valid month is required in YYYY-MM or YYYY-MM-DD format.' }, { status: 400 })
+  }
 
   try {
     const csv = await buildMonthlyReportExport(user.id, month)

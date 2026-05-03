@@ -50,8 +50,40 @@ function normalizeTimestamp(value) {
 
 function formatMoney(value) {
   if (value == null || value === '') return ''
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : ''
+  const cents = parseMoneyToCents(value)
+  return cents == null ? '' : formatCents(cents)
+}
+
+function parseMoneyToCents(value) {
+  const text = String(value).trim()
+  const match = text.match(/^([+-])?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/)
+  if (!match) {
+    const amount = Number(value)
+    if (!Number.isFinite(amount)) return null
+    return Math.round(amount * 100)
+  }
+
+  const sign = match[1] === '-' ? -1n : 1n
+  const whole = BigInt(match[2] || '0')
+  const fraction = match[3] ?? match[4] ?? ''
+  const paddedFraction = `${fraction}000`
+  let cents = (whole * 100n) + BigInt(paddedFraction.slice(0, 2))
+  if (Number(paddedFraction[2]) >= 5) cents += 1n
+  return sign * cents
+}
+
+function formatCents(cents) {
+  const sign = cents < 0n ? '-' : ''
+  const absoluteCents = cents < 0n ? -cents : cents
+  const whole = absoluteCents / 100n
+  const fraction = String(absoluteCents % 100n).padStart(2, '0')
+  return `${sign}${whole}.${fraction}`
+}
+
+function subtractMoney(left, right) {
+  const leftCents = parseMoneyToCents(left ?? 0) ?? 0n
+  const rightCents = parseMoneyToCents(right ?? 0) ?? 0n
+  return formatCents(leftCents - rightCents)
 }
 
 function safeText(value) {
@@ -73,15 +105,10 @@ function buildCsvLine(row) {
   }).join(',')
 }
 
-function toAmount(value) {
-  const amount = Number(value ?? 0)
-  return Number.isFinite(amount) ? amount : 0
-}
-
 function buildSummaryRow(summary, month) {
   const totalIncome = formatMoney(summary?.total_income ?? 0)
   const totalExpenses = formatMoney(summary?.total_expenses ?? 0)
-  const netCashFlow = (toAmount(summary?.total_income) - toAmount(summary?.total_expenses)).toFixed(2)
+  const netCashFlow = subtractMoney(summary?.total_income, summary?.total_expenses)
 
   return {
     section: 'summary',

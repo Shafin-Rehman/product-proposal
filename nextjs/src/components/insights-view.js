@@ -408,8 +408,37 @@ function LiveNotice({ message, onRetry }) {
 
 function getFilenameFromDisposition(value, fallback) {
   if (!value) return fallback
-  const match = value.match(/filename="?([^";]+)"?/i)
-  return match?.[1] || fallback
+  const filenameStarMatch = value.match(/(?:^|;)\s*filename\*\s*=\s*([^;]+)/i)
+  const filenameMatch = value.match(/(?:^|;)\s*filename\s*=\s*("[^"]*"|[^;]+)/i)
+  const candidate = filenameStarMatch
+    ? decodeDispositionFilename(filenameStarMatch[1])
+    : decodeDispositionFilename(filenameMatch?.[1])
+  return sanitizeDownloadFilename(candidate, fallback)
+}
+
+function decodeDispositionFilename(value) {
+  if (!value) return ''
+  const text = value.trim().replace(/^"|"$/g, '')
+  const encodedMatch = text.match(/^([^']*)'[^']*'(.*)$/)
+  if (!encodedMatch) return text
+
+  try {
+    return decodeURIComponent(encodedMatch[2])
+  } catch {
+    return ''
+  }
+}
+
+function sanitizeDownloadFilename(value, fallback) {
+  const cleaned = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]+/g, '')
+    .replace(/[\\/]+/g, '-')
+    .replace(/[:*?"<>|]+/g, '_')
+    .trim()
+    .slice(0, 120)
+
+  if (!cleaned || cleaned === '.' || cleaned === '..' || !/[A-Za-z0-9]/.test(cleaned)) return fallback
+  return cleaned
 }
 
 export default function InsightsView() {
@@ -590,21 +619,28 @@ export default function InsightsView() {
       }
 
       const blob = await response.blob()
-      if (controller.signal.aborted) return
+      if (!isCurrentExport()) return
       const filename = getFilenameFromDisposition(
         response.headers.get('content-disposition'),
         `budgetbuddy-${exportMonth.slice(0, 7)}-report.csv`
       )
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      setTimeout(() => window.URL.revokeObjectURL(url), 100)
       if (!isCurrentExport()) return
-      setExportState({ status: 'success', message: 'CSV export downloaded.' })
+      const url = window.URL.createObjectURL(blob)
+      let link = null
+      try {
+        if (!isCurrentExport()) return
+        link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        if (!isCurrentExport()) return
+        link.click()
+        if (!isCurrentExport()) return
+        setExportState({ status: 'success', message: 'CSV export downloaded.' })
+      } finally {
+        link?.remove()
+        setTimeout(() => window.URL.revokeObjectURL(url), 100)
+      }
     } catch (error) {
       if (error?.name === 'AbortError') return
       if (!isCurrentExport()) return

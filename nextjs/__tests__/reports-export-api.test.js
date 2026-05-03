@@ -55,7 +55,7 @@ describe('GET /api/reports/export', () => {
         const response = await fetch()
 
         expect(response.status).toBe(400)
-        expect(await response.json()).toEqual({ error: 'Valid month is required' })
+        expect(await response.json()).toEqual({ error: 'Valid month is required in YYYY-MM or YYYY-MM-DD format.' })
       },
     })
 

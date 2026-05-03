@@ -88,6 +88,43 @@ describe('monthly report CSV helpers', () => {
     expect(csv.split('\r\n')[1]).toBe("summary,2026-03-01,monthly_summary,,,,,,10.00,20.00,'-10.00,50.00,'-10.00,,")
   })
 
+  it('normalizes decimal string money values without floating-point rounding surprises', () => {
+    const csv = buildMonthlyReportCsv({
+      month: '2026-03-01',
+      summary: {
+        total_income: '1.005',
+        total_expenses: '0.335',
+        total_budget: '80',
+        remaining_budget: '.5',
+      },
+      transactions: [
+        {
+          id: 'decimal-string',
+          month: '2026-03-01',
+          type: 'expense',
+          date: '2026-03-05',
+          title: 'Decimal string',
+          amount: '12.3',
+          created_at: '2026-03-05T10:00:00Z',
+        },
+        {
+          id: 'rounded-string',
+          month: '2026-03-01',
+          type: 'expense',
+          date: '2026-03-04',
+          title: 'Rounded string',
+          amount: '12.345',
+          created_at: '2026-03-04T10:00:00Z',
+        },
+      ],
+    })
+
+    const lines = csv.split('\r\n')
+    expect(lines[1]).toBe('summary,2026-03-01,monthly_summary,,,,,,1.01,0.34,0.67,80.00,0.50,,')
+    expect(lines[2]).toContain('Decimal string,Uncategorized,,12.30')
+    expect(lines[3]).toContain('Rounded string,Uncategorized,,12.35')
+  })
+
   it('normalizes Date object days and summary months with UTC date parts', () => {
     const utcMonth = new Date('2026-03-01T00:00:00Z')
     const utcDay = new Date('2026-03-10T00:00:00Z')
