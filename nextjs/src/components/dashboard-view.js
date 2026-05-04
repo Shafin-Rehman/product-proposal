@@ -466,7 +466,7 @@ export default function DashboardView() {
     }
   }
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 
@@ -556,7 +556,7 @@ export default function DashboardView() {
       ]
     })()
     : buildRecentCashFlow(liveState.expenses, liveState.income, chartMonth, 3)
-  const firstName = getFirstName(session?.user?.email)
+  const firstName = isSampleMode ? 'Explorer' : getFirstName(session?.user?.email)
   const periodLabel = formatMonthPeriod(chartMonth)
   const previewCategories = [...categoryCards]
     .sort((left, right) => {

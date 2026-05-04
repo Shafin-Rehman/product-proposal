@@ -92,16 +92,14 @@ function AuthProvider({ children }) {
 }
 
 function DataModeProvider({ children }) {
-  const [mode, setModeState] = useState('live')
-
-  useEffect(() => {
-    setModeState(readStoredDataMode())
-  }, [])
+  const [mode, setModeState] = useState(() => {
+    if (typeof window === 'undefined') return 'live'
+    return readStoredDataMode()
+  })
 
   const setMode = (nextMode) => {
     const safeMode = nextMode === 'sample' ? 'sample' : 'live'
     setModeState(safeMode)
-
     try {
       window.localStorage.setItem(DATA_MODE_STORAGE_KEY, safeMode)
     } catch {}

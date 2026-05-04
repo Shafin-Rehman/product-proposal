@@ -442,7 +442,7 @@ export default function PlannerView() {
     }
   }, [activeMonth, serverDraftSnapshot])
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 

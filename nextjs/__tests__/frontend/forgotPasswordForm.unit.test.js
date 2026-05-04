@@ -35,6 +35,12 @@ describe('ForgotPasswordForm — idle state', () => {
     const link = screen.getByRole('link', { name: /log in/i })
     expect(link.getAttribute('href')).toBe('/login')
   })
+
+  it('renders an explore-demo link pointing to /demo', async () => {
+    await act(async () => { render(React.createElement(ForgotPasswordForm)) })
+    const link = screen.getByRole('link', { name: /explore a demo first/i })
+    expect(link.getAttribute('href')).toBe('/demo')
+  })
 })
 
 describe('ForgotPasswordForm — form submission', () => {

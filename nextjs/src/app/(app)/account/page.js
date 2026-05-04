@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useTheme } from '@/components/providers'
@@ -41,6 +42,87 @@ export default function AccountPage() {
     setIsLoggingOut(true)
     logout()
     router.replace('/login')
+  }
+
+  if (isSampleMode && !user?.email) {
+    return (
+      <section className="app-screen account-screen">
+        <article className="account-hero">
+          <div className="account-hero__avatar">BB</div>
+          <div className="account-hero__copy">
+            <span className="account-hero__eyebrow">Exploring sample data</span>
+            <h1>Demo mode</h1>
+            <p>You&apos;re browsing BudgetBuddy with sample data — none of this is real.</p>
+          </div>
+        </article>
+
+        <div className="account-layout">
+          <section className="account-group">
+            <span className="account-group__label">Preferences</span>
+            <div className="settings-panel">
+              <div className="settings-item">
+                <div aria-hidden="true" className="settings-item__icon">{'\u25D0'}</div>
+                <div className="settings-item__copy">
+                  <strong>Appearance</strong>
+                  <span>{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+                </div>
+                <div className="segment-control segment-control--mini" role="group" aria-label="Theme">
+                  <button
+                    className={`segment-control__button${theme === 'light' ? ' segment-control__button--active' : ''}`}
+                    onClick={() => setTheme('light')}
+                    type="button"
+                  >
+                    Light
+                  </button>
+                  <button
+                    className={`segment-control__button${theme === 'dark' ? ' segment-control__button--active' : ''}`}
+                    onClick={() => setTheme('dark')}
+                    type="button"
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="account-group">
+          <span className="account-group__label">Ready to use BudgetBuddy for real?</span>
+          <div className="settings-panel">
+            <div className="settings-item settings-item--static">
+              <div aria-hidden="true" className="settings-item__icon">{'\u2726'}</div>
+              <div className="settings-item__copy">
+                <strong>Create a free account</strong>
+                <span>Track your real finances with your own data. Takes under a minute.</span>
+              </div>
+            </div>
+          </div>
+          <div className="demo-account-actions">
+            <Link className="button-primary demo-account-actions__cta" href="/signup">
+              Sign up free
+            </Link>
+            <Link className="button-secondary demo-account-actions__cta" href="/login">
+              Log in instead
+            </Link>
+          </div>
+        </section>
+
+        <section className="account-group">
+          <span className="account-group__label">Actions</span>
+          <button
+            className="logout-action"
+            onClick={() => { setMode('live'); router.push('/login') }}
+            type="button"
+          >
+            <span aria-hidden="true" className="logout-action__icon">{'\u21A9'}</span>
+            <span>Exit demo</span>
+          </button>
+        </section>
+
+        <div className="account-footer">BudgetBuddy v1.0</div>
+      </section>
+    )
   }
 
   return (

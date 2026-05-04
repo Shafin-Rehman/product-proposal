@@ -362,7 +362,7 @@ export default function TransactionsView() {
     apiGet('/api/income/categories', { accessToken: token }).then(setIncomeCategories).catch(() => {})
   }, [isReady, isSampleMode, session?.accessToken])
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 

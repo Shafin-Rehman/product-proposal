@@ -2,7 +2,7 @@
 // Source: src/app/(app)/account/page.js
 
 jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(() => ({ replace: jest.fn() })),
+  useRouter: jest.fn(() => ({ replace: jest.fn(), push: jest.fn() })),
 }))
 
 jest.mock('@/components/providers', () => ({
@@ -26,7 +26,7 @@ const AccountPage = require('@/app/(app)/account/page').default
 
 function setup({ email = 'john.doe@example.com', theme = 'light', mode = 'live' } = {}) {
   const mockReplace = jest.fn()
-  useRouter.mockReturnValue({ replace: mockReplace })
+  useRouter.mockReturnValue({ replace: mockReplace, push: jest.fn() })
   useAuth.mockReturnValue({ user: email ? { email } : {}, logout: jest.fn() })
   useDataMode.mockReturnValue({ mode, isSampleMode: mode === 'sample', setMode: jest.fn() })
   useTheme.mockReturnValue({ theme, setTheme: jest.fn() })
@@ -51,7 +51,6 @@ describe('AccountPage — display name and initials', () => {
     await act(async () => { render(React.createElement(AccountPage)) })
     expect(screen.getByText('test@example.com')).toBeTruthy()
   })
-
 })
 
 describe('AccountPage — theme controls', () => {
@@ -63,7 +62,7 @@ describe('AccountPage — theme controls', () => {
 
   it('calls setTheme("dark") when Dark button is clicked', async () => {
     const setTheme = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme })
@@ -74,7 +73,7 @@ describe('AccountPage — theme controls', () => {
 
   it('calls setTheme("light") when Light button is clicked', async () => {
     const setTheme = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'dark', setTheme })
@@ -93,7 +92,7 @@ describe('AccountPage — data mode controls', () => {
 
   it('calls setMode("sample") when Sample button is clicked', async () => {
     const setMode = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
@@ -104,7 +103,7 @@ describe('AccountPage — data mode controls', () => {
 
   it('calls setMode("live") when Live button is clicked', async () => {
     const setMode = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'sample', isSampleMode: true, setMode })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
@@ -118,7 +117,7 @@ describe('AccountPage — logout', () => {
   it('logout button calls logout and router.replace("/login")', async () => {
     const logout = jest.fn()
     const mockReplace = jest.fn()
-    useRouter.mockReturnValue({ replace: mockReplace })
+    useRouter.mockReturnValue({ replace: mockReplace, push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
@@ -130,7 +129,7 @@ describe('AccountPage — logout', () => {
 
   it('logout button shows "Signing you out..." and becomes disabled when clicked', async () => {
     const logout = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
@@ -139,3 +138,4 @@ describe('AccountPage — logout', () => {
     expect(screen.getByRole('button', { name: /signing you out/i }).disabled).toBe(true)
   })
 })
+

@@ -526,7 +526,7 @@ export default function InsightsView() {
     setIsMonthViewOpen(true)
   }
 
-  if (!isReady || !session?.accessToken) return null
+  if (!isSampleMode && (!isReady || !session?.accessToken)) return null
 
   const activeItems = getActiveBreakdownItems(snapshot, viewMode)
   const donutSegments = buildDonutSegments(activeItems)
