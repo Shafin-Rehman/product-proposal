@@ -114,9 +114,10 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen, fireEvent } = require('@testing-library/react')
+const { render, screen, fireEvent, waitFor, act } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode } = require('@/components/providers')
+const { apiGet } = require('@/lib/apiClient')
 const { getActiveBreakdownItems, default: InsightsView } = require('@/components/insights-view')
 
 describe('getActiveBreakdownItems', () => {
@@ -145,11 +146,12 @@ describe('getActiveBreakdownItems', () => {
 
 describe('InsightsView (sample data)', () => {
   beforeEach(() => {
+    jest.clearAllMocks()
     useRouter.mockReturnValue({ replace: jest.fn() })
     useAuth.mockReturnValue({
       isReady: true,
       logout: jest.fn(),
-      session: { accessToken: 'token' },
+      session: { accessToken: 'live-token' },
     })
     useDataMode.mockReturnValue({ isSampleMode: true })
   })
@@ -209,5 +211,214 @@ describe('InsightsView (sample data)', () => {
     const hero = dialog.querySelector('.entry-avatar--large')
     expect(hero).toBeTruthy()
     expect(hero.textContent).toContain('🧪')
+  })
+
+  it('disables CSV export in sample mode', () => {
+    render(React.createElement(InsightsView))
+
+    const button = screen.getByRole('button', { name: 'Live export only' })
+    expect(button.disabled).toBe(true)
+  })
+})
+
+describe('InsightsView CSV export', () => {
+  const snapshot = {
+    comparisonMetrics: [],
+    expenseBreakdown: [],
+    incomeBreakdown: [],
+    cashFlowSeries: [],
+    cashFlowSummary: { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 },
+    budgetHealth: { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] },
+    categoryMovers: [],
+    dailySpend: { series: [], details: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, activeDays: 0, peakDay: null },
+    previousDailySpend: { series: [], details: [], totalAmount: 0 },
+    topExpenses: [],
+    earliestMonth: '2026-01-01',
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({
+      isReady: true,
+      logout: jest.fn(),
+      session: { accessToken: 'live-token' },
+    })
+    useDataMode.mockReturnValue({ isSampleMode: false })
+    apiGet.mockResolvedValue(snapshot)
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: jest.fn((name) => (
+          name.toLowerCase() === 'content-disposition'
+            ? 'attachment; filename="budgetbuddy-2026-03-report.csv"'
+            : null
+        )),
+      },
+      blob: jest.fn().mockResolvedValue(new Blob(['csv'], { type: 'text/csv' })),
+    })
+    window.URL.createObjectURL = jest.fn(() => 'blob:csv')
+    window.URL.revokeObjectURL = jest.fn()
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    HTMLAnchorElement.prototype.click.mockRestore()
+  })
+
+  it('downloads the selected-month CSV with bearer auth', async () => {
+    render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/reports/export?month=2026-03-01', {
+        cache: 'no-store',
+        headers: {
+          authorization: 'Bearer live-token',
+        },
+        signal: expect.any(AbortSignal),
+      })
+    })
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
+    })
+    expect(window.URL.createObjectURL).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+    }, { timeout: 3000 })
+    await waitFor(() => expect(screen.getByText('CSV export downloaded.')).toBeTruthy())
+  })
+
+  it('uses sanitized filenames from Content-Disposition before downloading', async () => {
+    let downloadedFilename = ''
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: jest.fn((name) => (
+          name.toLowerCase() === 'content-disposition'
+            ? "attachment; filename*=UTF-8''reports%2Fbudget%0D%0A2026.csv"
+            : null
+        )),
+      },
+      blob: jest.fn().mockResolvedValue(new Blob(['csv'], { type: 'text/csv' })),
+    })
+    HTMLAnchorElement.prototype.click.mockImplementationOnce(function handleClick() {
+      downloadedFilename = this.download
+    })
+
+    render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
+    })
+    expect(downloadedFilename).toBe('reports-budget2026.csv')
+  })
+
+  it('falls back when Content-Disposition resolves to an unsafe filename', async () => {
+    let downloadedFilename = ''
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: jest.fn((name) => (
+          name.toLowerCase() === 'content-disposition'
+            ? 'attachment; filename="\\/\r\n"'
+            : null
+        )),
+      },
+      blob: jest.fn().mockResolvedValue(new Blob(['csv'], { type: 'text/csv' })),
+    })
+    HTMLAnchorElement.prototype.click.mockImplementationOnce(function handleClick() {
+      downloadedFilename = this.download
+    })
+
+    render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
+    })
+    expect(downloadedFilename).toBe('budgetbuddy-2026-03-report.csv')
+  })
+
+  it('aborts an in-flight CSV export when switching to sample mode', async () => {
+    let exportSignal
+    global.fetch = jest.fn((url, options) => {
+      exportSignal = options.signal
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      })
+    })
+
+    const { rerender } = render(React.createElement(InsightsView))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(exportSignal).toBeTruthy())
+    useDataMode.mockReturnValue({ isSampleMode: true })
+    rerender(React.createElement(InsightsView))
+
+    expect(exportSignal.aborted).toBe(true)
+    await waitFor(() => {
+      expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
+    })
+  })
+
+  it('does not show stale export success after the export is superseded during download', async () => {
+    let rerenderView
+    HTMLAnchorElement.prototype.click.mockImplementationOnce(() => {
+      useDataMode.mockReturnValue({ isSampleMode: true })
+      rerenderView(React.createElement(InsightsView))
+    })
+    const { rerender } = render(React.createElement(InsightsView))
+    rerenderView = rerender
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+    }, { timeout: 3000 })
+    expect(screen.queryByText('CSV export downloaded.')).toBeNull()
+    expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
+  })
+
+  it('does not create an object URL when the export is superseded after the blob is read', async () => {
+    let rerenderView
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: jest.fn(() => 'attachment; filename="budgetbuddy-2026-03-report.csv"'),
+      },
+      blob: jest.fn(() => Promise.resolve(new Blob(['csv'], { type: 'text/csv' })).then((blob) => {
+        act(() => {
+          useDataMode.mockReturnValue({ isSampleMode: true })
+          rerenderView(React.createElement(InsightsView))
+        })
+        return blob
+      })),
+    })
+    const { rerender } = render(React.createElement(InsightsView))
+    rerenderView = rerender
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Live export only' })).toBeTruthy())
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled()
+    expect(window.URL.createObjectURL).not.toHaveBeenCalled()
+    expect(screen.queryByText('CSV export downloaded.')).toBeNull()
+    expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
   })
 })

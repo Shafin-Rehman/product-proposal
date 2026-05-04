@@ -406,6 +406,41 @@ function LiveNotice({ message, onRetry }) {
   )
 }
 
+function getFilenameFromDisposition(value, fallback) {
+  if (!value) return fallback
+  const filenameStarMatch = value.match(/(?:^|;)\s*filename\*\s*=\s*([^;]+)/i)
+  const filenameMatch = value.match(/(?:^|;)\s*filename\s*=\s*("[^"]*"|[^;]+)/i)
+  const candidate = filenameStarMatch
+    ? decodeDispositionFilename(filenameStarMatch[1])
+    : decodeDispositionFilename(filenameMatch?.[1])
+  return sanitizeDownloadFilename(candidate, fallback)
+}
+
+function decodeDispositionFilename(value) {
+  if (!value) return ''
+  const text = value.trim().replace(/^"|"$/g, '')
+  const encodedMatch = text.match(/^([^']*)'[^']*'(.*)$/)
+  if (!encodedMatch) return text
+
+  try {
+    return decodeURIComponent(encodedMatch[2])
+  } catch {
+    return ''
+  }
+}
+
+function sanitizeDownloadFilename(value, fallback) {
+  const cleaned = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]+/g, '')
+    .replace(/[\\/]+/g, '-')
+    .replace(/[:*?"<>|]+/g, '_')
+    .trim()
+    .slice(0, 120)
+
+  if (!cleaned || cleaned === '.' || cleaned === '..' || !/[A-Za-z0-9]/.test(cleaned)) return fallback
+  return cleaned
+}
+
 export default function InsightsView() {
   const router = useRouter()
   const { isReady, logout, session } = useAuth()
@@ -424,6 +459,8 @@ export default function InsightsView() {
   const [drillDown, setDrillDown] = useState(null)
   const [topExpenseDetail, setTopExpenseDetail] = useState(null)
   const [liveState, setLiveState] = useState({ status: 'loading', message: '', snapshot: null })
+  const [exportState, setExportState] = useState({ status: 'idle', message: '' })
+  const exportAbortRef = useRef(null)
 
   const activeMonth = isSampleMode ? DEMO_MONTH : selectedMonth
   const snapshot = isSampleMode ? demoInsightsSnapshot : liveState.snapshot
@@ -472,6 +509,19 @@ export default function InsightsView() {
   useEffect(() => {
     if (typeof document !== 'undefined') setPortalRoot(document.body)
   }, [])
+
+  useEffect(() => {
+    exportAbortRef.current?.abort()
+    exportAbortRef.current = null
+    setExportState({ status: 'idle', message: '' })
+  }, [activeMonth, isSampleMode])
+
+  useEffect(() => (
+    () => {
+      exportAbortRef.current?.abort()
+      exportAbortRef.current = null
+    }
+  ), [])
 
   useEffect(() => {
     setActiveCashMonth(null)
@@ -524,6 +574,80 @@ export default function InsightsView() {
     event?.stopPropagation?.()
     setSelectedDayKey((current) => current ?? getDefaultSelectedDay(snapshot?.dailySpend))
     setIsMonthViewOpen(true)
+  }
+
+  async function handleExportCsv() {
+    if (isSampleMode || exportState.status === 'loading') return
+    if (!session?.accessToken) {
+      logout()
+      router.replace('/login')
+      return
+    }
+
+    setExportState({ status: 'loading', message: '' })
+    exportAbortRef.current?.abort()
+    const controller = new AbortController()
+    exportAbortRef.current = controller
+    const exportMonth = activeMonth
+    const isCurrentExport = () => exportAbortRef.current === controller && !controller.signal.aborted
+
+    try {
+      const response = await fetch(`/api/reports/export?month=${encodeURIComponent(exportMonth)}`, {
+        cache: 'no-store',
+        headers: {
+          authorization: `Bearer ${session.accessToken}`,
+        },
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
+
+      if (response.status === 401) {
+        logout()
+        router.replace('/login')
+        return
+      }
+
+      if (!response.ok) {
+        let message = 'The monthly CSV export is not available right now.'
+        try {
+          const body = await response.json()
+          if (body?.error) message = body.error
+        } catch {}
+        if (!isCurrentExport()) return
+        setExportState({ status: 'error', message })
+        return
+      }
+
+      const blob = await response.blob()
+      if (!isCurrentExport()) return
+      const filename = getFilenameFromDisposition(
+        response.headers.get('content-disposition'),
+        `budgetbuddy-${exportMonth.slice(0, 7)}-report.csv`
+      )
+      if (!isCurrentExport()) return
+      const url = window.URL.createObjectURL(blob)
+      let link = null
+      try {
+        if (!isCurrentExport()) return
+        link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        if (!isCurrentExport()) return
+        link.click()
+        if (!isCurrentExport()) return
+        setExportState({ status: 'success', message: 'CSV export downloaded.' })
+      } finally {
+        link?.remove()
+        setTimeout(() => window.URL.revokeObjectURL(url), 2000)
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return
+      if (!isCurrentExport()) return
+      setExportState({ status: 'error', message: 'The monthly CSV export is not available right now.' })
+    } finally {
+      if (exportAbortRef.current === controller) exportAbortRef.current = null
+    }
   }
 
   if (!isSampleMode && (!isReady || !session?.accessToken)) return null
@@ -718,10 +842,27 @@ export default function InsightsView() {
               <span aria-hidden="true">{'\u2192'}</span>
             </button>
           </div>
+          <button
+            className="button-secondary"
+            disabled={isSampleMode || exportState.status === 'loading'}
+            onClick={handleExportCsv}
+            title={isSampleMode ? 'CSV export is available in live mode' : `Export ${activeMonthLabel} report as CSV`}
+            type="button"
+          >
+            {exportState.status === 'loading' ? 'Exporting...' : isSampleMode ? 'Live export only' : 'Export CSV'}
+          </button>
         </div>
       </div>
 
       <LiveNotice message={liveState.message} onRetry={() => setReloadToken((value) => value + 1)} />
+      {exportState.message ? (
+        <div className="inline-status inline-status--compact" role="status">
+          <div>
+            <strong>{exportState.status === 'error' ? 'Export failed' : 'Export ready'}</strong>
+            <span>{exportState.message}</span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="insights-v57">
         <div className="insights-v57__metric-strip">
