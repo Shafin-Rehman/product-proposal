@@ -150,6 +150,68 @@ describe('GET /api/income', () => {
     })
   })
 
+  it('keeps the unfiltered list behavior when no query params are provided', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE i.user_id = $1'),
+          ['uid']
+        )
+        expect(db.query.mock.calls[0][0]).not.toContain('LIMIT')
+      }
+    })
+  })
+
+  it('can narrow income entries to a requested month', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      url: 'http://localhost/api/income?month=2026-03',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE i.user_id = $1 AND i.date >= $2 AND i.date < $3'),
+          ['uid', '2026-03-01', '2026-04-01']
+        )
+      }
+    })
+  })
+
+  it('can narrow income entries by date range and limit', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      url: 'http://localhost/api/income?from=2026-02-01&to=2026-02-28&limit=5',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE i.user_id = $1 AND i.date >= $2 AND i.date <= $3'),
+          ['uid', '2026-02-01', '2026-02-28']
+        )
+        expect(db.query.mock.calls[0][0]).toContain('LIMIT 5')
+      }
+    })
+  })
+
+  it('rejects invalid limits before querying', async () => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      url: 'http://localhost/api/income?limit=ten',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid limit is required')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
   it('returns 500 on db failure', async () => {
     db.query.mockRejectedValueOnce(new Error())
     await testApiHandler({

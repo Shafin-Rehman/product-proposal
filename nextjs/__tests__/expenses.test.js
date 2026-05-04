@@ -168,6 +168,68 @@ describe('GET /api/expenses', () => {
       }
     })
   })
+
+  it('keeps the unfiltered list behavior when no query params are provided', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1'),
+          ['uid']
+        )
+        expect(db.query.mock.calls[0][0]).not.toContain('LIMIT')
+      }
+    })
+  })
+
+  it('can narrow expenses to a requested month', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?month=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3'),
+          ['uid', '2026-03-01', '2026-04-01']
+        )
+      }
+    })
+  })
+
+  it('can narrow expenses by date range and limit', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?from=2026-02-01&to=2026-02-28&limit=10',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date <= $3'),
+          ['uid', '2026-02-01', '2026-02-28']
+        )
+        expect(db.query.mock.calls[0][0]).toContain('LIMIT 10')
+      }
+    })
+  })
+
+  it('rejects ambiguous or invalid filters before querying', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?month=2026-03-01&from=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Use either month or from/to, not both')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
 })
 
 describe('POST /api/expenses/get', () => {
