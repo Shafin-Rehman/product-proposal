@@ -2,16 +2,16 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDataMode } from '@/components/providers'
 
 export default function DemoPage() {
   const router = useRouter()
+  const { setMode } = useDataMode()
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('budgetbuddy.data-mode', 'sample')
-    } catch {}
+    setMode('sample')
     router.replace('/dashboard')
-  }, [router])
+  }, [router, setMode])
 
   return null
 }

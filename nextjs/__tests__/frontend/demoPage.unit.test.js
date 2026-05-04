@@ -1,41 +1,45 @@
 /** @jest-environment jsdom */
-// Source: src/app/demo/page.js
-//
-// DemoPage sets budgetbuddy.data-mode=sample in localStorage then redirects
-// to /dashboard — no UI is rendered.
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }))
 
+jest.mock('@/components/providers', () => ({
+  useDataMode: jest.fn(),
+}))
+
 const React = require('react')
 const { render, act } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
+const { useDataMode } = require('@/components/providers')
 const DemoPage = require('@/app/demo/page').default
 
 let mockReplace
+let mockSetMode
 
 beforeEach(() => {
   mockReplace = jest.fn()
+  mockSetMode = jest.fn()
   useRouter.mockReturnValue({ replace: mockReplace })
-  window.localStorage.clear()
+  useDataMode.mockReturnValue({ setMode: mockSetMode })
 })
 
 afterEach(() => {
   jest.clearAllMocks()
 })
 
-describe('DemoPage — localStorage', () => {
-  it('writes budgetbuddy.data-mode=sample to localStorage on mount', async () => {
+describe('DemoPage — setMode', () => {
+  it('calls setMode("sample") on mount', async () => {
     await act(async () => { render(React.createElement(DemoPage)) })
-    expect(window.localStorage.getItem('budgetbuddy.data-mode')).toBe('sample')
+    expect(mockSetMode).toHaveBeenCalledWith('sample')
   })
 
-  it('still redirects when localStorage.setItem throws', async () => {
-    const spy = jest.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => { throw new Error('quota') })
+  it('calls setMode before redirecting', async () => {
+    const callOrder = []
+    mockSetMode.mockImplementation(() => callOrder.push('setMode'))
+    mockReplace.mockImplementation(() => callOrder.push('replace'))
     await act(async () => { render(React.createElement(DemoPage)) })
-    expect(mockReplace).toHaveBeenCalledWith('/dashboard')
-    spy.mockRestore()
+    expect(callOrder).toEqual(['setMode', 'replace'])
   })
 })
 

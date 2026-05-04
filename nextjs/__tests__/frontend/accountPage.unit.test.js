@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-// Source: src/app/(app)/account/page.js
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(() => ({ replace: jest.fn(), push: jest.fn() })),

@@ -1,10 +1,4 @@
 /** @jest-environment jsdom */
-// Source: src/app/(app)/layout.js
-//
-// Tests focus on the three guard behaviours:
-//   1. Show loading shell when not ready and not authenticated (live mode)
-//   2. Redirect to /login when ready but unauthenticated (live mode)
-//   3. Skip the guard entirely in demo/sample mode — render children immediately
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
@@ -16,7 +10,6 @@ jest.mock('@/components/providers', () => ({
   useDataMode: jest.fn(),
 }))
 
-// Stub next/link so it renders a plain <a> — keeps the DOM simple
 jest.mock('next/link', () => {
   const React = require('react')
   return function MockLink({ href, children, ...rest }) {
@@ -46,9 +39,6 @@ function child() {
   return React.createElement('div', null, 'page content')
 }
 
-// ---------------------------------------------------------------------------
-// Loading shell — live mode, auth not ready
-// ---------------------------------------------------------------------------
 describe('AppLayout — loading shell (live mode)', () => {
   it('shows the loading shell when not ready and not authenticated', async () => {
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false })
@@ -67,9 +57,6 @@ describe('AppLayout — loading shell (live mode)', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Redirect — live mode, unauthenticated after ready
-// ---------------------------------------------------------------------------
 describe('AppLayout — redirect to /login (live mode)', () => {
   it('redirects to /login when ready and not authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: false })
@@ -86,9 +73,6 @@ describe('AppLayout — redirect to /login (live mode)', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Authenticated — renders children and nav
-// ---------------------------------------------------------------------------
 describe('AppLayout — authenticated (live mode)', () => {
   it('renders children when authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true })
@@ -111,9 +95,6 @@ describe('AppLayout — authenticated (live mode)', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Demo / sample mode — guard skipped entirely
-// ---------------------------------------------------------------------------
 describe('AppLayout — demo / sample mode', () => {
   it('renders children immediately without a session in sample mode', async () => {
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false })
