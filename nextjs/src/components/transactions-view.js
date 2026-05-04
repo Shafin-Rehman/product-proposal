@@ -857,7 +857,7 @@ export default function TransactionsView() {
                       !entryDraft.occurredOn || 
                       !entryDraft.category ||
                       !entryCategories.some(
-                        (category) => category.id === entryDraft.category || category.name === entryDraft.category
+                         (category) => category.name === entryDraft.category
                       )
                     }
                     type="submit"
