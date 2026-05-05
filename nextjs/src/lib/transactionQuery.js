@@ -10,7 +10,8 @@ function shiftMonth(month, offset = 1) {
 }
 
 function parseLimit(value) {
-  if (value == null || value === '') return null
+  if (value == null) return null
+  if (value === '') return undefined
   if (!/^\d+$/.test(String(value))) return undefined
 
   const limit = Number(value)
@@ -22,6 +23,7 @@ export function buildTransactionListQuery(searchParams, { dateColumn, firstParam
   const hasMonth = searchParams.has('month')
   const hasFrom = searchParams.has('from')
   const hasTo = searchParams.has('to')
+  const hasLimit = searchParams.has('limit')
   const monthValue = searchParams.get('month')
   const fromValue = searchParams.get('from')
   const toValue = searchParams.get('to')
@@ -69,7 +71,7 @@ export function buildTransactionListQuery(searchParams, { dateColumn, firstParam
     }
   }
 
-  const limit = parseLimit(limitValue)
+  const limit = hasLimit ? parseLimit(limitValue) : null
   if (limit === undefined) return { error: 'Valid limit is required' }
 
   return {

@@ -199,10 +199,13 @@ describe('GET /api/income', () => {
     })
   })
 
-  it('rejects invalid limits before querying', async () => {
+  it.each([
+    ['an empty limit', 'http://localhost/api/income?limit='],
+    ['a non-numeric limit', 'http://localhost/api/income?limit=ten'],
+  ])('rejects %s before querying', async (_label, url) => {
     await testApiHandler({
       appHandler: incomeHandler,
-      url: 'http://localhost/api/income?limit=ten',
+      url,
       async test({ fetch }) {
         const res = await fetch()
         expect(res.status).toBe(400)

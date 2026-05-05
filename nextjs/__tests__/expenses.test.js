@@ -231,6 +231,19 @@ describe('GET /api/expenses', () => {
     })
   })
 
+  it('rejects an empty limit before querying', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?limit=',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid limit is required')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
   it.each([
     ['an empty month', 'http://localhost/api/expenses?month=', 'Valid month is required'],
     ['an invalid month', 'http://localhost/api/expenses?month=2026-13', 'Valid month is required'],

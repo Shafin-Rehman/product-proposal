@@ -321,7 +321,7 @@ export function mergeRowsById(...groups) {
   groups.flat().forEach((row, index) => {
     if (!row) return
     const key = row.id == null ? `fallback-${index}` : String(row.id)
-    if (!merged.has(key)) merged.set(key, row)
+    merged.set(key, row)
   })
 
   return Array.from(merged.values())
