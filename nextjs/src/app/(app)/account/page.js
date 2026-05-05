@@ -33,7 +33,7 @@ function getInitials(email) {
 export default function AccountPage() {
   const router = useRouter()
   const { user, logout } = useAuth()
-  const { mode, isSampleMode, setMode } = useDataMode()
+  const { isSampleMode, setMode } = useDataMode()
   const { theme, setTheme } = useTheme()
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -99,10 +99,10 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="demo-account-actions">
-            <Link className="button-primary demo-account-actions__cta" href="/signup">
+            <Link className="button-primary demo-account-actions__cta" href="/signup" onClick={() => setMode('live')}>
               Sign up free
             </Link>
-            <Link className="button-secondary demo-account-actions__cta" href="/login">
+            <Link className="button-secondary demo-account-actions__cta" href="/login" onClick={() => setMode('live')}>
               Log in instead
             </Link>
           </div>
@@ -166,29 +166,7 @@ export default function AccountPage() {
               </div>
             </div>
 
-            <div className="settings-item">
-              <div aria-hidden="true" className="settings-item__icon">{isSampleMode ? '\u2726' : '\u25CF'}</div>
-              <div className="settings-item__copy">
-                <strong>Data mode</strong>
-                <span>{isSampleMode ? 'Sample data — exploring with demo content' : 'Live data — your real transactions'}</span>
-              </div>
-              <div className="segment-control segment-control--mini" role="group" aria-label="Data mode">
-                <button
-                  className={`segment-control__button${mode === 'live' ? ' segment-control__button--active' : ''}`}
-                  onClick={() => setMode('live')}
-                  type="button"
-                >
-                  Live
-                </button>
-                <button
-                  className={`segment-control__button${mode === 'sample' ? ' segment-control__button--active' : ''}`}
-                  onClick={() => setMode('sample')}
-                  type="button"
-                >
-                  Sample
-                </button>
-              </div>
-            </div>
+
           </div>
         </section>
 
@@ -199,7 +177,7 @@ export default function AccountPage() {
               <div aria-hidden="true" className="settings-item__icon">{'\u{1F4B3}'}</div>
               <div className="settings-item__copy">
                 <strong>Linked accounts</strong>
-                <span>{isSampleMode ? 'Connections stay on this device while you explore sample data.' : 'Linked accounts are available to view here.'}</span>
+                <span>Linked accounts are available to view here.</span>
               </div>
             </div>
 

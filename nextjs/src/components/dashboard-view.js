@@ -267,10 +267,6 @@ export default function DashboardView() {
     }
   }
 
-  if (!isSampleMode && (!isReady || !session?.accessToken)) {
-    return null
-  }
-
   const summary = isSampleMode ? demoBudgetSummary : liveState.summary
   const summaryAvailability = isSampleMode
     ? 'ready'
@@ -348,7 +344,7 @@ export default function DashboardView() {
     : null
   const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0) : '--'
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 

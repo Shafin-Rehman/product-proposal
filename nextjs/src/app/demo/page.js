@@ -6,12 +6,15 @@ import { useDataMode } from '@/components/providers'
 
 export default function DemoPage() {
   const router = useRouter()
-  const { setMode } = useDataMode()
+  const { isSampleMode, setMode } = useDataMode()
 
   useEffect(() => {
     setMode('sample')
-    router.replace('/dashboard')
-  }, [router, setMode])
+  }, [setMode])
+
+  useEffect(() => {
+    if (isSampleMode) router.replace('/dashboard')
+  }, [isSampleMode, router])
 
   return null
 }

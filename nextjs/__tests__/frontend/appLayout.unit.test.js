@@ -42,7 +42,7 @@ function child() {
 describe('AppLayout — loading shell (live mode)', () => {
   it('shows the loading shell when not ready and not authenticated', async () => {
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(screen.getByText(/loading your budget space/i)).toBeTruthy()
     expect(screen.queryByText('page content')).toBeNull()
@@ -50,7 +50,7 @@ describe('AppLayout — loading shell (live mode)', () => {
 
   it('shows the loading shell when ready but not yet authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(screen.getByText(/loading your budget space/i)).toBeTruthy()
     expect(screen.queryByText('page content')).toBeNull()
@@ -60,14 +60,21 @@ describe('AppLayout — loading shell (live mode)', () => {
 describe('AppLayout — redirect to /login (live mode)', () => {
   it('redirects to /login when ready and not authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(mockReplace).toHaveBeenCalledWith('/login')
   })
 
   it('does NOT redirect when authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
+    await act(async () => { render(React.createElement(AppLayout, null, child())) })
+    expect(mockReplace).not.toHaveBeenCalled()
+  })
+
+  it('does NOT redirect when data mode is not yet ready', async () => {
+    useAuth.mockReturnValue({ isReady: true, isAuthenticated: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: false })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(mockReplace).not.toHaveBeenCalled()
   })
@@ -76,14 +83,14 @@ describe('AppLayout — redirect to /login (live mode)', () => {
 describe('AppLayout — authenticated (live mode)', () => {
   it('renders children when authenticated', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(screen.getByText('page content')).toBeTruthy()
   })
 
   it('renders all 5 nav tab links', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true })
-    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     const navLinks = screen.getAllByRole('link')
     const labels = navLinks.map((l) => l.textContent)
@@ -98,7 +105,7 @@ describe('AppLayout — authenticated (live mode)', () => {
 describe('AppLayout — demo / sample mode', () => {
   it('renders children immediately without a session in sample mode', async () => {
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: true })
+    useDataMode.mockReturnValue({ isSampleMode: true, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(screen.getByText('page content')).toBeTruthy()
     expect(screen.queryByText(/loading your budget space/i)).toBeNull()
@@ -106,7 +113,7 @@ describe('AppLayout — demo / sample mode', () => {
 
   it('does NOT redirect to /login in sample mode', async () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: true })
+    useDataMode.mockReturnValue({ isSampleMode: true, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(mockReplace).not.toHaveBeenCalled()
   })
@@ -114,7 +121,7 @@ describe('AppLayout — demo / sample mode', () => {
   it('marks the active tab correctly in sample mode', async () => {
     usePathname.mockReturnValue('/dashboard')
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false })
-    useDataMode.mockReturnValue({ isSampleMode: true })
+    useDataMode.mockReturnValue({ isSampleMode: true, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     const activeLink = screen.getByRole('link', { name: /dashboard/i })
     expect(activeLink.getAttribute('aria-current')).toBe('page')

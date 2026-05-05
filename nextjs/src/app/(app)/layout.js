@@ -80,13 +80,14 @@ export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
   const { isReady, isAuthenticated } = useAuth()
-  const { isSampleMode } = useDataMode()
+  const { isSampleMode, isDataModeReady } = useDataMode()
 
   useEffect(() => {
+    if (!isDataModeReady) return
     if (isSampleMode) return
     if (!isReady || isAuthenticated) return
     router.replace('/login')
-  }, [isAuthenticated, isReady, isSampleMode, router])
+  }, [isAuthenticated, isDataModeReady, isReady, isSampleMode, router])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />

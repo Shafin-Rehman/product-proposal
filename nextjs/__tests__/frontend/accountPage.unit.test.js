@@ -82,36 +82,6 @@ describe('AccountPage — theme controls', () => {
   })
 })
 
-describe('AccountPage — data mode controls', () => {
-  it('shows "Sample data" copy when mode is sample', async () => {
-    setup({ mode: 'sample' })
-    await act(async () => { render(React.createElement(AccountPage)) })
-    expect(screen.getByText(/sample data — exploring/i)).toBeTruthy()
-  })
-
-  it('calls setMode("sample") when Sample button is clicked', async () => {
-    const setMode = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
-    useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
-    useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode })
-    useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
-    await act(async () => { render(React.createElement(AccountPage)) })
-    fireEvent.click(screen.getByRole('button', { name: /^sample$/i }))
-    expect(setMode).toHaveBeenCalledWith('sample')
-  })
-
-  it('calls setMode("live") when Live button is clicked', async () => {
-    const setMode = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
-    useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
-    useDataMode.mockReturnValue({ mode: 'sample', isSampleMode: true, setMode })
-    useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
-    await act(async () => { render(React.createElement(AccountPage)) })
-    fireEvent.click(screen.getByRole('button', { name: /^live$/i }))
-    expect(setMode).toHaveBeenCalledWith('live')
-  })
-})
-
 describe('AccountPage — logout', () => {
   it('logout button calls logout and router.replace("/login")', async () => {
     const logout = jest.fn()

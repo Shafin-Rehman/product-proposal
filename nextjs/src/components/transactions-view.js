@@ -178,8 +178,7 @@ function createEditDraft(entry) {
   }
   return {
     ...base,
-    counterparty: entry.raw?.notes || '',
-    note: entry.raw?.notes || '',
+    counterparty: '',
   }
 }
 
@@ -320,6 +319,17 @@ export default function TransactionsView() {
   }, [deleteConfirm, isEntrySheetOpen, selectedEntry])
 
   useEffect(() => {
+    if (!isEntrySheetOpen || editingEntry) return
+    if (entryDraft.category) return
+    const firstCategory = entryDraft.kind === 'expense'
+      ? expenseCategories[0]?.name
+      : incomeCategories[0]?.name
+    if (firstCategory) {
+     setEntryDraft((current) => ({ ...current, category: firstCategory }))
+    }
+  }, [isEntrySheetOpen, editingEntry, entryDraft.category, entryDraft.kind, expenseCategories, incomeCategories])
+
+  useEffect(() => {
     let hideTimeoutId
     let intervalId
 
@@ -397,8 +407,7 @@ export default function TransactionsView() {
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
-  const hideFab = Boolean(selectedEntry) || isEntrySheetOpen
-
+  const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen
   const updateDraft = (field, value) => {
     setEntryDraft((current) => ({
       ...current,
@@ -409,7 +418,11 @@ export default function TransactionsView() {
   const openEntrySheet = (entryToEdit = null) => {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
-    setEntryDraft(entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft())
+    const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
+    if (!entryToEdit) {
+      draft.category = (draft.kind === 'expense' ? expenseCategories[0]?.name : incomeCategories[0]?.name) || ''
+    }
+    setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
   }
@@ -421,6 +434,7 @@ export default function TransactionsView() {
   }
 
   const handleSaveEntry = async () => {
+    if (isSampleMode || !session?.accessToken) return
     if (isSaving) return
     setIsSaving(true)
     setSaveError('')
@@ -476,6 +490,7 @@ export default function TransactionsView() {
   }
 
   const handleDeleteEntry = async () => {
+    if (isSampleMode || !session?.accessToken) return
     if (isDeleting || !selectedEntry) return
     setIsDeleting(true)
     try {
@@ -782,8 +797,9 @@ export default function TransactionsView() {
                   <span>{categoryFieldLabel}</span>
                   <select
                     className="input-field"
+                    disabled={entryCategories.length === 0}
                     onChange={(event) => updateDraft('category', event.target.value)}
-                    value={entryDraft.category}
+                    value={entryCategories.length === 0 ? '' : entryDraft.category}
                   >
                     <option value="">
                       {entryDraft.kind === 'income' ? 'Select source' : 'Select category'}
@@ -792,8 +808,8 @@ export default function TransactionsView() {
                       <option key={option.name} value={option.name}>
                         {option.icon ? `${option.icon} ${option.name}` : option.name}
                       </option>
-                    ))}
-                  </select>
+                 ))}
+                </select>
                 </label>
 
                 <label className="entry-sheet__field">
@@ -836,7 +852,17 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
+                    disabled={
+                      isSaving || 
+                      isSampleMode || 
+                      !entryDraft.amount || 
+                      !entryDraft.occurredOn || 
+                      (!editingEntry && (!entryDraft.category ||
+                        !entryCategories.some(
+                           (category) => category.name === entryDraft.category
+                        ))
+                      )
+                    }
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
