@@ -63,7 +63,7 @@ import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ACTIVITY_PREVIEW_LIMIT = 6
 const BUDGET_DRAFT_VALIDATION_MESSAGE = 'Monthly limit must be a positive dollar amount with up to 2 decimal places.'
-const BUDGET_DRAFT_PATTERN = /^\d+(?:\.\d*)?$/
+const BUDGET_DRAFT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
 
 export {
   buildDerivedCategoryCards,
@@ -81,14 +81,13 @@ function getErrorMessage(error) {
   return 'Something went wrong while loading the live snapshot.'
 }
 
-function getBudgetDraftValidationMessage(value) {
+export function getBudgetDraftValidationMessage(value) {
   const rawValue = String(value ?? '').trim()
   if (!rawValue) return BUDGET_DRAFT_VALIDATION_MESSAGE
   if (!BUDGET_DRAFT_PATTERN.test(rawValue)) return BUDGET_DRAFT_VALIDATION_MESSAGE
 
-  const [, cents = ''] = rawValue.split('.')
   const amount = Number(rawValue)
-  if (cents.length > 2 || !Number.isFinite(amount) || amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     return BUDGET_DRAFT_VALIDATION_MESSAGE
   }
 

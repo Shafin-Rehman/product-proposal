@@ -150,6 +150,7 @@ const {
   default: DashboardView,
   buildDerivedCategoryCards,
   getBudgetCtaLabel,
+  getBudgetDraftValidationMessage,
   getBudgetHintText,
   getBudgetHudModel,
   getBudgetPressureHighlight,
@@ -286,6 +287,23 @@ describe('getBudgetHintText', () => {
       monthly_limit: '125.00',
       total_budget: '125.00',
     })).toBe('Current limit: $125.00. Changes take effect immediately.')
+  })
+})
+
+describe('getBudgetDraftValidationMessage', () => {
+  it('accepts Dashboard monthly budget money drafts with up to two decimals', () => {
+    expect(getBudgetDraftValidationMessage('49')).toBe('')
+    expect(getBudgetDraftValidationMessage('49.23')).toBe('')
+    expect(getBudgetDraftValidationMessage('.25')).toBe('')
+  })
+
+  it('rejects invalid Dashboard monthly budget money drafts', () => {
+    expect(getBudgetDraftValidationMessage('1.')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('49.234')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('0')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('-1')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('abc')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
   })
 })
 
