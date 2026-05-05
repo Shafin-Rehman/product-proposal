@@ -664,9 +664,10 @@ export default function DashboardView() {
                 <input
                   className="input-field"
                   inputMode="decimal"
-                  min="1"
+                  min="0.01"
                   onChange={(event) => setBudgetDraft({ monthly_limit: event.target.value })}
                   placeholder="e.g. 2000"
+                  step="0.01"
                   type="number"
                   value={budgetDraft.monthly_limit}
                 />

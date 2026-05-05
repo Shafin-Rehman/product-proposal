@@ -972,12 +972,12 @@ describe('DashboardView', () => {
         summary: { active_count: 0, available_after_goal_contributions: null },
       })
       .mockResolvedValueOnce(createLiveSummary({
-        monthly_limit: '3000.00',
-        total_budget: '3000.00',
+        monthly_limit: '49.23',
+        total_budget: '49.23',
         total_expenses: '400.00',
         total_income: '1500.00',
-        remaining_budget: '2600.00',
-        threshold_exceeded: false,
+        remaining_budget: '-350.77',
+        threshold_exceeded: true,
         category_statuses: [],
       }))
       .mockResolvedValueOnce([])
@@ -998,9 +998,11 @@ describe('DashboardView', () => {
     })
     expect(screen.getByText(/Monthly spending limit for/i)).toBeTruthy()
     expect(screen.getAllByText(TEST_CURRENT_MONTH).length).toBeGreaterThan(0)
+    expect(screen.getByRole('spinbutton').getAttribute('min')).toBe('0.01')
+    expect(screen.getByRole('spinbutton').getAttribute('step')).toBe('0.01')
 
     await act(async () => {
-      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3000' } })
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '49.23' } })
       await flushAsyncUpdates()
     })
 
@@ -1011,7 +1013,7 @@ describe('DashboardView', () => {
 
     expect(apiPost).toHaveBeenCalledWith(
       '/api/budget',
-      { month: TEST_CURRENT_MONTH, monthly_limit: 3000 },
+      { month: TEST_CURRENT_MONTH, monthly_limit: 49.23 },
       { accessToken: 'test-token' }
     )
     await waitFor(() => {
