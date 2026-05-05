@@ -327,6 +327,20 @@ export function mergeRowsById(...groups) {
   return Array.from(merged.values())
 }
 
+export function sortRowsByDateDesc(rows = []) {
+  return [...rows]
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.row?.date ?? left.row?.created_at ?? '')
+      const rightTime = Date.parse(right.row?.date ?? right.row?.created_at ?? '')
+      const leftSortable = Number.isNaN(leftTime) ? Number.NEGATIVE_INFINITY : leftTime
+      const rightSortable = Number.isNaN(rightTime) ? Number.NEGATIVE_INFINITY : rightTime
+      const dateDifference = rightSortable - leftSortable
+      return dateDifference || left.index - right.index
+    })
+    .map(({ row }) => row)
+}
+
 export function buildDashboardLivePaths(month, { activityLimit = DEFAULT_RECENT_ACTIVITY_LIMIT } = {}) {
   const cashFlowStart = shiftMonth(month, -2) || month
   const encodedMonth = encodeURIComponent(month)

@@ -781,6 +781,41 @@ describe('DashboardView', () => {
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
   })
 
+  it('passes merged live transaction rows to activity helpers in date-descending order', async () => {
+    const olderExpense = { id: 'expense-old', date: '2026-03-02', category_name: 'Food', amount: '12.00' }
+    const newerExpense = { id: 'expense-new', date: '2026-03-14', category_name: 'Travel', amount: '30.00' }
+    const olderIncome = { id: 'income-old', date: '2026-03-01', source: 'Bonus', amount: '200.00' }
+    const newerIncome = { id: 'income-new', date: '2026-03-18', source: 'Salary', amount: '2200.00' }
+
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '42.00',
+        total_income: '2400.00',
+        remaining_budget: '958.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([olderExpense])
+      .mockResolvedValueOnce([newerExpense])
+      .mockResolvedValueOnce([olderIncome])
+      .mockResolvedValueOnce([newerIncome])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await waitFor(() => {
+      expect(financeUtils.buildActivityFeed).toHaveBeenCalledWith(
+        [newerExpense, olderExpense],
+        [newerIncome, olderIncome]
+      )
+    })
+  })
+
   it('shows a clear over-budget savings goal reason without remaining budget', async () => {
     apiGet
       .mockResolvedValueOnce(createLiveSummary({

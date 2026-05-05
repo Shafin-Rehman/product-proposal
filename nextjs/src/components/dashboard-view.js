@@ -41,6 +41,7 @@ import {
   hasCategoryBudgets,
   hasOverallMonthlyLimit,
   mergeRowsById,
+  sortRowsByDateDesc,
 } from '@/lib/dashboardModels'
 import {
   buildFinancialHealth,
@@ -185,14 +186,14 @@ export default function DashboardView() {
             : 'Some live sections are missing for the moment, but the rest of the month is still visible.'
           : '',
         summary: summaryResult.status === 'fulfilled' ? summaryResult.value : null,
-        expenses: mergeRowsById(
+        expenses: sortRowsByDateDesc(mergeRowsById(
           cashFlowExpensesResult.status === 'fulfilled' ? cashFlowExpensesResult.value : [],
           recentExpensesResult.status === 'fulfilled' ? recentExpensesResult.value : []
-        ),
-        income: mergeRowsById(
+        )),
+        income: sortRowsByDateDesc(mergeRowsById(
           cashFlowIncomeResult.status === 'fulfilled' ? cashFlowIncomeResult.value : [],
           recentIncomeResult.status === 'fulfilled' ? recentIncomeResult.value : []
-        ),
+        )),
         savingsGoals: savingsGoalsResult.status === 'fulfilled' ? savingsGoalsResult.value : null,
       })
     }
