@@ -8,7 +8,7 @@ jest.mock('../src/lib/db', () => ({
   },
 }))
 
-describe('Transaction category flow (unit)', () => {
+describe('Transaction category flow', () => {
   const userId = 1
   const month = '2026-03-01'
 
