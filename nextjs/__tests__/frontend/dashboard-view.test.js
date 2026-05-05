@@ -1021,4 +1021,49 @@ describe('DashboardView', () => {
     })
     expect(screen.queryByText(/Current limit:/)).toBeNull()
   })
+
+  it('shows app validation instead of saving budget drafts with more than two decimals', async () => {
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '400.00',
+        total_income: '1500.00',
+        remaining_budget: '600.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit budget' }))
+      await flushAsyncUpdates()
+    })
+
+    const budgetInput = screen.getByRole('spinbutton')
+    expect(budgetInput.form.noValidate).toBe(true)
+
+    await act(async () => {
+      fireEvent.change(budgetInput, { target: { value: '3.235' } })
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Update budget' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(apiGet).toHaveBeenCalledTimes(6)
+  })
 })

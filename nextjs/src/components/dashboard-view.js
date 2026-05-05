@@ -62,6 +62,8 @@ import MonthPacingChart from '@/components/ui/MonthPacingChart'
 import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ACTIVITY_PREVIEW_LIMIT = 6
+const BUDGET_DRAFT_VALIDATION_MESSAGE = 'Monthly limit must be a positive dollar amount with up to 2 decimal places.'
+const BUDGET_DRAFT_PATTERN = /^\d+(?:\.\d*)?$/
 
 export {
   buildDerivedCategoryCards,
@@ -77,6 +79,20 @@ function getErrorMessage(error) {
   if (error instanceof ApiError) return error.message
   if (error instanceof Error && error.message) return error.message
   return 'Something went wrong while loading the live snapshot.'
+}
+
+function getBudgetDraftValidationMessage(value) {
+  const rawValue = String(value ?? '').trim()
+  if (!rawValue) return BUDGET_DRAFT_VALIDATION_MESSAGE
+  if (!BUDGET_DRAFT_PATTERN.test(rawValue)) return BUDGET_DRAFT_VALIDATION_MESSAGE
+
+  const [, cents = ''] = rawValue.split('.')
+  const amount = Number(rawValue)
+  if (cents.length > 2 || !Number.isFinite(amount) || amount <= 0) {
+    return BUDGET_DRAFT_VALIDATION_MESSAGE
+  }
+
+  return ''
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -245,6 +261,12 @@ export default function DashboardView() {
 
   const handleSaveBudget = async () => {
     if (isBudgetSaving) return
+    const validationMessage = getBudgetDraftValidationMessage(budgetDraft.monthly_limit)
+    if (validationMessage) {
+      setBudgetSaveError(validationMessage)
+      return
+    }
+
     setIsBudgetSaving(true)
     setBudgetSaveError('')
     try {
@@ -657,6 +679,7 @@ export default function DashboardView() {
 
             <form
               className="entry-sheet__form"
+              noValidate
               onSubmit={(event) => { event.preventDefault(); handleSaveBudget() }}
             >
               <label className="entry-sheet__field">
@@ -665,7 +688,10 @@ export default function DashboardView() {
                   className="input-field"
                   inputMode="decimal"
                   min="0.01"
-                  onChange={(event) => setBudgetDraft({ monthly_limit: event.target.value })}
+                  onChange={(event) => {
+                    setBudgetDraft({ monthly_limit: event.target.value })
+                    if (budgetSaveError) setBudgetSaveError('')
+                  }}
                   placeholder="e.g. 2000"
                   step="0.01"
                   type="number"
