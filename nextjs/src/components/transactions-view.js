@@ -178,7 +178,7 @@ function createEditDraft(entry) {
   }
   return {
     ...base,
-    counterparty: '',
+    counterparty: entry.raw?.notes || '',
   }
 }
 
@@ -320,14 +320,13 @@ export default function TransactionsView() {
 
   useEffect(() => {
     if (!isEntrySheetOpen || editingEntry) return
-    if (entryDraft.category) return
     const firstCategory = entryDraft.kind === 'expense'
       ? expenseCategories[0]?.name
       : incomeCategories[0]?.name
     if (firstCategory) {
-     setEntryDraft((current) => ({ ...current, category: firstCategory }))
+      setEntryDraft((current) => ({ ...current, category: firstCategory }))
     }
-  }, [isEntrySheetOpen, editingEntry, entryDraft.category, entryDraft.kind, expenseCategories, incomeCategories])
+  }, [isEntrySheetOpen, editingEntry, entryDraft.kind, expenseCategories, incomeCategories])
 
   useEffect(() => {
     let hideTimeoutId

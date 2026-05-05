@@ -112,7 +112,7 @@ export default function AccountPage() {
           <span className="account-group__label">Actions</span>
           <button
             className="logout-action"
-            onClick={() => { setMode('live'); router.push('/login') }}
+            onClick={() => { setMode('live'); router.replace('/login') }}
             type="button"
           >
             <span aria-hidden="true" className="logout-action__icon">{'\u21A9'}</span>
