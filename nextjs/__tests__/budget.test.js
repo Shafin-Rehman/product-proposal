@@ -196,6 +196,36 @@ describe('POST /api/budget', () => {
     })
   })
 
+  it('accepts a two-decimal overall monthly budget', async () => {
+    budget.upsertMonthlyBudget.mockResolvedValueOnce({ month: '2026-03-01', monthly_limit: '49.23', notified: false })
+    budget.evaluateThresholdForMonth.mockResolvedValueOnce({
+      notified: false,
+      budget_alert: null,
+    })
+    budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
+      month: '2026-03-01',
+      monthly_limit: '49.23',
+      notified: false,
+      category_budgets: [],
+    })
+
+    await testApiHandler({
+      appHandler: budgetHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ month: '2026-03-01', monthly_limit: 49.23 }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({
+          month: '2026-03-01',
+          monthly_limit: '49.23',
+          notified: false,
+          budget_alert: null,
+          category_budgets: [],
+        })
+        expect(budget.upsertMonthlyBudget).toHaveBeenCalledWith('uid', '2026-03-01', 49.23)
+      }
+    })
+  })
+
   it('upserts category budgets without requiring an overall monthly limit', async () => {
     budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID, name: 'Food', icon: '🍔' }])
     budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01', monthly_limit: '40.00' }])
@@ -308,6 +338,18 @@ describe('POST /api/budget', () => {
         const res = await fetch(post({ month: '2026-03-01', monthly_limit: 'abc' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
+      }
+    })
+  })
+
+  it('returns 400 when monthly_limit has more than two decimal places', async () => {
+    await testApiHandler({
+      appHandler: budgetHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ month: '2026-03-01', monthly_limit: '1.999' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
+        expect(budget.upsertMonthlyBudget).not.toHaveBeenCalled()
       }
     })
   })
