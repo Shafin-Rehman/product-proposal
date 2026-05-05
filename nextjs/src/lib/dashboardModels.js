@@ -341,16 +341,32 @@ export function sortRowsByDateDesc(rows = []) {
     .map(({ row }) => row)
 }
 
+function getMonthEndDate(month) {
+  const nextMonth = shiftMonth(month, 1)
+  if (!nextMonth) return null
+
+  const [year, monthNumber] = nextMonth.split('-').map(Number)
+  const endDate = new Date(Date.UTC(year, monthNumber - 1, 0, 12))
+
+  return [
+    endDate.getUTCFullYear(),
+    String(endDate.getUTCMonth() + 1).padStart(2, '0'),
+    String(endDate.getUTCDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 export function buildDashboardLivePaths(month, { activityLimit = DEFAULT_RECENT_ACTIVITY_LIMIT } = {}) {
   const cashFlowStart = shiftMonth(month, -2) || month
+  const cashFlowEnd = getMonthEndDate(month) || month
   const encodedMonth = encodeURIComponent(month)
   const encodedCashFlowStart = encodeURIComponent(cashFlowStart)
+  const encodedCashFlowEnd = encodeURIComponent(cashFlowEnd)
 
   return {
     summary: `/api/budget/summary?month=${encodedMonth}`,
-    cashFlowExpenses: `/api/expenses?from=${encodedCashFlowStart}`,
+    cashFlowExpenses: `/api/expenses?from=${encodedCashFlowStart}&to=${encodedCashFlowEnd}`,
     recentExpenses: `/api/expenses?limit=${activityLimit}`,
-    cashFlowIncome: `/api/income?from=${encodedCashFlowStart}`,
+    cashFlowIncome: `/api/income?from=${encodedCashFlowStart}&to=${encodedCashFlowEnd}`,
     recentIncome: `/api/income?limit=${activityLimit}`,
     savingsGoals: `/api/savings-goals?month=${encodedMonth}`,
   }

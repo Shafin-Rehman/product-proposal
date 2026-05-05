@@ -1,4 +1,4 @@
-const { mergeRowsById, sortRowsByDateDesc } = require('@/lib/dashboardModels')
+const { buildDashboardLivePaths, mergeRowsById, sortRowsByDateDesc } = require('@/lib/dashboardModels')
 
 describe('mergeRowsById', () => {
   it('prefers later rows when duplicate ids are merged', () => {
@@ -27,5 +27,27 @@ describe('sortRowsByDateDesc', () => {
     const dated = { id: 'tx-3', created_at: '2026-03-08T10:00:00Z' }
 
     expect(sortRowsByDateDesc([first, dated, second])).toEqual([dated, first, second])
+  })
+})
+
+describe('buildDashboardLivePaths', () => {
+  it('bounds cash-flow transaction fetches to the displayed three-month window', () => {
+    expect(buildDashboardLivePaths('2026-03-01')).toEqual({
+      summary: '/api/budget/summary?month=2026-03-01',
+      cashFlowExpenses: '/api/expenses?from=2026-01-01&to=2026-03-31',
+      recentExpenses: '/api/expenses?limit=6',
+      cashFlowIncome: '/api/income?from=2026-01-01&to=2026-03-31',
+      recentIncome: '/api/income?limit=6',
+      savingsGoals: '/api/savings-goals?month=2026-03-01',
+    })
+  })
+
+  it('keeps recent activity limit-only while handling leap-year month ends', () => {
+    const paths = buildDashboardLivePaths('2024-02-01', { activityLimit: 4 })
+
+    expect(paths.cashFlowExpenses).toBe('/api/expenses?from=2023-12-01&to=2024-02-29')
+    expect(paths.cashFlowIncome).toBe('/api/income?from=2023-12-01&to=2024-02-29')
+    expect(paths.recentExpenses).toBe('/api/expenses?limit=4')
+    expect(paths.recentIncome).toBe('/api/income?limit=4')
   })
 })

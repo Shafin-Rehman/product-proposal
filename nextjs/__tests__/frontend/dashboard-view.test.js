@@ -750,7 +750,7 @@ describe('DashboardView', () => {
     )
     expect(apiGet).toHaveBeenNthCalledWith(
       2,
-      '/api/expenses?from=2026-01-01',
+      '/api/expenses?from=2026-01-01&to=2026-03-31',
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
     expect(apiGet).toHaveBeenNthCalledWith(
@@ -760,7 +760,7 @@ describe('DashboardView', () => {
     )
     expect(apiGet).toHaveBeenNthCalledWith(
       4,
-      '/api/income?from=2026-01-01',
+      '/api/income?from=2026-01-01&to=2026-03-31',
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
     expect(apiGet).toHaveBeenNthCalledWith(
