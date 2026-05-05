@@ -2,18 +2,27 @@ import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
+import { buildTransactionListQuery } from '@/lib/transactionQuery'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
   if (error) return error
+  const query = buildTransactionListQuery(new URL(request.url).searchParams, {
+    dateColumn: 'e.date',
+    firstParameterIndex: 2,
+  })
+  if (query.error) return NextResponse.json({ error: query.error }, { status: 400 })
+
   try {
+    const whereClause = ['e.user_id = $1', ...query.clauses].join(' AND ')
     const { rows } = await db.query(
       `SELECT e.*, c.name AS category_name, c.icon AS category_icon
        FROM public.expenses e
        LEFT JOIN public.categories c ON e.category_id = c.id
-       WHERE e.user_id = $1
-       ORDER BY e.date DESC, e.created_at DESC`,
-      [user.id]
+       WHERE ${whereClause}
+       ORDER BY e.date DESC, e.created_at DESC
+       ${query.limitClause}`,
+      [user.id, ...query.values]
     )
     return NextResponse.json(rows.map(({ user_id, ...e }) => e))
   } catch {
