@@ -2,18 +2,27 @@ import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
+import { buildTransactionListQuery } from '@/lib/transactionQuery'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
   if (error) return error
+  const query = buildTransactionListQuery(new URL(request.url).searchParams, {
+    dateColumn: 'i.date',
+    firstParameterIndex: 2,
+  })
+  if (query.error) return NextResponse.json({ error: query.error }, { status: 400 })
+
   try {
+    const whereClause = ['i.user_id = $1', ...query.clauses].join(' AND ')
     const { rows } = await db.query(
       `SELECT i.*, s.name AS source_name, s.icon AS source_icon
        FROM public.income i
        LEFT JOIN public.income_sources s ON i.source_id = s.id
-       WHERE i.user_id = $1
-       ORDER BY i.date DESC, i.created_at DESC`,
-      [user.id]
+       WHERE ${whereClause}
+       ORDER BY i.date DESC, i.created_at DESC
+       ${query.limitClause}`,
+      [user.id, ...query.values]
     )
     return NextResponse.json(rows.map(({ user_id, ...i }) => i))
   } catch {

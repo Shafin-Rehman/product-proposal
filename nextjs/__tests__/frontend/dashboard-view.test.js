@@ -133,6 +133,11 @@ jest.mock('@/lib/financeUtils', () => ({
   formatShortDate: jest.fn((value) => value),
   getCurrentMonthStart: jest.fn((date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`),
   isInMonth: jest.fn(),
+  shiftMonth: jest.fn((value, offset) => {
+    const date = new Date(`${value}T12:00:00Z`)
+    date.setUTCMonth(date.getUTCMonth() + offset)
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
+  }),
 }))
 
 const React = require('react')
@@ -718,9 +723,11 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
@@ -734,11 +741,36 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(6)
     })
     expect(apiGet).toHaveBeenNthCalledWith(
       1,
       `/api/budget/summary?month=${TEST_CURRENT_MONTH}`,
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      2,
+      '/api/expenses?from=2026-01-01&to=2026-03-31',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      3,
+      '/api/expenses?limit=6',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      4,
+      '/api/income?from=2026-01-01&to=2026-03-31',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      5,
+      '/api/income?limit=6',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      6,
+      `/api/savings-goals?month=${TEST_CURRENT_MONTH}`,
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
     expect(screen.getByText('Live')).toBeTruthy()
@@ -747,6 +779,41 @@ describe('DashboardView', () => {
     expect(screen.getByText('Positive cash flow')).toBeTruthy()
     expect(screen.getByText('Grocer')).toBeTruthy()
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
+  })
+
+  it('passes merged live transaction rows to activity helpers in date-descending order', async () => {
+    const olderExpense = { id: 'expense-old', date: '2026-03-02', category_name: 'Food', amount: '12.00' }
+    const newerExpense = { id: 'expense-new', date: '2026-03-14', category_name: 'Travel', amount: '30.00' }
+    const olderIncome = { id: 'income-old', date: '2026-03-01', source: 'Bonus', amount: '200.00' }
+    const newerIncome = { id: 'income-new', date: '2026-03-18', source: 'Salary', amount: '2200.00' }
+
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '42.00',
+        total_income: '2400.00',
+        remaining_budget: '958.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([olderExpense])
+      .mockResolvedValueOnce([newerExpense])
+      .mockResolvedValueOnce([olderIncome])
+      .mockResolvedValueOnce([newerIncome])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await waitFor(() => {
+      expect(financeUtils.buildActivityFeed).toHaveBeenCalledWith(
+        [newerExpense, olderExpense],
+        [newerIncome, olderIncome]
+      )
+    })
   })
 
   it('shows a clear over-budget savings goal reason without remaining budget', async () => {
@@ -760,6 +827,8 @@ describe('DashboardView', () => {
         threshold_exceeded: false,
         category_statuses: [],
       }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
@@ -783,7 +852,7 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(6)
     })
 
     expect(screen.getByText('Over budget')).toBeTruthy()
@@ -796,9 +865,11 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
@@ -826,6 +897,8 @@ describe('DashboardView', () => {
         category_statuses: [],
       }))
       .mockRejectedValueOnce(new Error('expenses unavailable'))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
@@ -867,6 +940,8 @@ describe('DashboardView', () => {
       .mockRejectedValueOnce(new ApiError('Expired session', 401))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({ goals: [], summary: { active_count: 0 } })
 
     await renderDashboard()
@@ -890,6 +965,8 @@ describe('DashboardView', () => {
       }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
@@ -903,6 +980,8 @@ describe('DashboardView', () => {
         threshold_exceeded: false,
         category_statuses: [],
       }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
@@ -936,7 +1015,7 @@ describe('DashboardView', () => {
       { accessToken: 'test-token' }
     )
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(8)
+      expect(apiGet).toHaveBeenCalledTimes(12)
     })
     expect(screen.queryByText(/Current limit:/)).toBeNull()
   })
