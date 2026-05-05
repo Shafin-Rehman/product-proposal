@@ -215,6 +215,40 @@ describe('GET /api/income', () => {
     })
   })
 
+  it('rejects ambiguous month and range filters before querying', async () => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      url: 'http://localhost/api/income?month=2026-03-01&from=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Use either month or from/to, not both')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
+  it.each([
+    ['an empty month', 'http://localhost/api/income?month=', 'Valid month is required'],
+    ['an invalid month', 'http://localhost/api/income?month=2026-13', 'Valid month is required'],
+    ['an empty from date', 'http://localhost/api/income?from=', 'Valid from date is required'],
+    ['an invalid from date', 'http://localhost/api/income?from=not-a-date', 'Valid from date is required'],
+    ['an empty to date', 'http://localhost/api/income?to=', 'Valid to date is required'],
+    ['an invalid to date', 'http://localhost/api/income?to=not-a-date', 'Valid to date is required'],
+    ['a from date after the to date', 'http://localhost/api/income?from=2026-03-15&to=2026-03-01', 'from date must be on or before to date'],
+  ])('rejects %s before querying', async (_label, url, expectedError) => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      url,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(expectedError)
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
   it('returns 500 on db failure', async () => {
     db.query.mockRejectedValueOnce(new Error())
     await testApiHandler({
