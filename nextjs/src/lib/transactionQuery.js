@@ -19,12 +19,15 @@ function parseLimit(value) {
 }
 
 export function buildTransactionListQuery(searchParams, { dateColumn, firstParameterIndex = 1 } = {}) {
+  const hasMonth = searchParams.has('month')
+  const hasFrom = searchParams.has('from')
+  const hasTo = searchParams.has('to')
   const monthValue = searchParams.get('month')
   const fromValue = searchParams.get('from')
   const toValue = searchParams.get('to')
   const limitValue = searchParams.get('limit')
 
-  if (monthValue && (fromValue || toValue)) {
+  if (hasMonth && (hasFrom || hasTo)) {
     return { error: 'Use either month or from/to, not both' }
   }
 
@@ -32,7 +35,7 @@ export function buildTransactionListQuery(searchParams, { dateColumn, firstParam
   const values = []
   let nextIndex = firstParameterIndex
 
-  if (monthValue) {
+  if (hasMonth) {
     const month = normalizeMonth(monthValue)
     const endMonth = month ? shiftMonth(month, 1) : null
     if (!month || !endMonth) return { error: 'Valid month is required' }
@@ -44,18 +47,20 @@ export function buildTransactionListQuery(searchParams, { dateColumn, firstParam
     values.push(endMonth)
     nextIndex += 1
   } else {
-    if (fromValue) {
-      const from = normalizeDate(fromValue)
+    let from = null
+
+    if (hasFrom) {
+      from = normalizeDate(fromValue)
       if (!from) return { error: 'Valid from date is required' }
       clauses.push(`${dateColumn} >= $${nextIndex}`)
       values.push(from)
       nextIndex += 1
     }
 
-    if (toValue) {
+    if (hasTo) {
       const to = normalizeDate(toValue)
       if (!to) return { error: 'Valid to date is required' }
-      if (values.length && fromValue && values[0] > to) {
+      if (from && from > to) {
         return { error: 'from date must be on or before to date' }
       }
       clauses.push(`${dateColumn} <= $${nextIndex}`)

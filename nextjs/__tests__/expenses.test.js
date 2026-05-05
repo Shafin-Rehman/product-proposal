@@ -230,6 +230,27 @@ describe('GET /api/expenses', () => {
       }
     })
   })
+
+  it.each([
+    ['an empty month', 'http://localhost/api/expenses?month=', 'Valid month is required'],
+    ['an invalid month', 'http://localhost/api/expenses?month=2026-13', 'Valid month is required'],
+    ['an empty from date', 'http://localhost/api/expenses?from=', 'Valid from date is required'],
+    ['an invalid from date', 'http://localhost/api/expenses?from=not-a-date', 'Valid from date is required'],
+    ['an empty to date', 'http://localhost/api/expenses?to=', 'Valid to date is required'],
+    ['an invalid to date', 'http://localhost/api/expenses?to=not-a-date', 'Valid to date is required'],
+    ['a from date after the to date', 'http://localhost/api/expenses?from=2026-03-15&to=2026-03-01', 'from date must be on or before to date'],
+  ])('rejects %s before querying', async (_label, url, expectedError) => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(expectedError)
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
 })
 
 describe('POST /api/expenses/get', () => {
