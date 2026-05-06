@@ -99,7 +99,7 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="demo-account-actions">
-            <Link className="button-primary demo-account-actions__cta" href="/signup" onClick={() => setMode('live')}>
+            <Link className="button-primary demo-account-actions__cta" href="/signup">
               Sign up free
             </Link>
             <Link className="button-secondary demo-account-actions__cta" href="/login" onClick={() => setMode('live')}>

@@ -320,12 +320,15 @@ export default function TransactionsView() {
 
   useEffect(() => {
     if (!isEntrySheetOpen || editingEntry) return
-    const firstCategory = entryDraft.kind === 'expense'
-      ? expenseCategories[0]?.name
-      : incomeCategories[0]?.name
-    if (firstCategory) {
-      setEntryDraft((current) => ({ ...current, category: firstCategory }))
-    }
+    const options = entryDraft.kind === 'expense' ? expenseCategories : incomeCategories
+    const firstCategory = options[0]?.name
+    if (!firstCategory) return
+    setEntryDraft((current) => {
+      const currentOptions = current.kind === 'expense' ? expenseCategories : incomeCategories
+      const isValid = currentOptions.some((o) => o.name === current.category)
+      if (current.category && isValid) return current
+      return { ...current, category: firstCategory }
+    })
   }, [isEntrySheetOpen, editingEntry, entryDraft.kind, expenseCategories, incomeCategories])
 
   useEffect(() => {
@@ -857,7 +860,7 @@ export default function TransactionsView() {
                       !entryDraft.amount || 
                       !entryDraft.occurredOn || 
                       (!editingEntry && (!entryDraft.category ||
-                        !entryCategories.some(
+                        !(entryDraft.kind === 'expense' ? expenseCategories : incomeCategories).some(
                            (category) => category.name === entryDraft.category
                         ))
                       )
