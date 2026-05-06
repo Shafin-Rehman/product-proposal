@@ -133,6 +133,11 @@ jest.mock('@/lib/financeUtils', () => ({
   formatShortDate: jest.fn((value) => value),
   getCurrentMonthStart: jest.fn((date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`),
   isInMonth: jest.fn(),
+  shiftMonth: jest.fn((value, offset) => {
+    const date = new Date(`${value}T12:00:00Z`)
+    date.setUTCMonth(date.getUTCMonth() + offset)
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
+  }),
 }))
 
 const React = require('react')
@@ -145,6 +150,7 @@ const {
   default: DashboardView,
   buildDerivedCategoryCards,
   getBudgetCtaLabel,
+  getBudgetDraftValidationMessage,
   getBudgetHintText,
   getBudgetHudModel,
   getBudgetPressureHighlight,
@@ -281,6 +287,23 @@ describe('getBudgetHintText', () => {
       monthly_limit: '125.00',
       total_budget: '125.00',
     })).toBe('Current limit: $125.00. Changes take effect immediately.')
+  })
+})
+
+describe('getBudgetDraftValidationMessage', () => {
+  it('accepts Dashboard monthly budget money drafts with up to two decimals', () => {
+    expect(getBudgetDraftValidationMessage('49')).toBe('')
+    expect(getBudgetDraftValidationMessage('49.23')).toBe('')
+    expect(getBudgetDraftValidationMessage('.25')).toBe('')
+  })
+
+  it('rejects invalid Dashboard monthly budget money drafts', () => {
+    expect(getBudgetDraftValidationMessage('1.')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('49.234')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('0')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('-1')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(getBudgetDraftValidationMessage('abc')).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
   })
 })
 
@@ -718,9 +741,11 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
@@ -734,11 +759,36 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(6)
     })
     expect(apiGet).toHaveBeenNthCalledWith(
       1,
       `/api/budget/summary?month=${TEST_CURRENT_MONTH}`,
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      2,
+      '/api/expenses?from=2026-01-01&to=2026-03-31',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      3,
+      '/api/expenses?limit=6',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      4,
+      '/api/income?from=2026-01-01&to=2026-03-31',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      5,
+      '/api/income?limit=6',
+      expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
+    )
+    expect(apiGet).toHaveBeenNthCalledWith(
+      6,
+      `/api/savings-goals?month=${TEST_CURRENT_MONTH}`,
       expect.objectContaining({ accessToken: 'test-token', signal: expect.any(AbortSignal) })
     )
     expect(screen.getByText('Live')).toBeTruthy()
@@ -747,6 +797,41 @@ describe('DashboardView', () => {
     expect(screen.getByText('Positive cash flow')).toBeTruthy()
     expect(screen.getByText('Grocer')).toBeTruthy()
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
+  })
+
+  it('passes merged live transaction rows to activity helpers in date-descending order', async () => {
+    const olderExpense = { id: 'expense-old', date: '2026-03-02', category_name: 'Food', amount: '12.00' }
+    const newerExpense = { id: 'expense-new', date: '2026-03-14', category_name: 'Travel', amount: '30.00' }
+    const olderIncome = { id: 'income-old', date: '2026-03-01', source: 'Bonus', amount: '200.00' }
+    const newerIncome = { id: 'income-new', date: '2026-03-18', source: 'Salary', amount: '2200.00' }
+
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '42.00',
+        total_income: '2400.00',
+        remaining_budget: '958.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([olderExpense])
+      .mockResolvedValueOnce([newerExpense])
+      .mockResolvedValueOnce([olderIncome])
+      .mockResolvedValueOnce([newerIncome])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await waitFor(() => {
+      expect(financeUtils.buildActivityFeed).toHaveBeenCalledWith(
+        [newerExpense, olderExpense],
+        [newerIncome, olderIncome]
+      )
+    })
   })
 
   it('shows a clear over-budget savings goal reason without remaining budget', async () => {
@@ -760,6 +845,8 @@ describe('DashboardView', () => {
         threshold_exceeded: false,
         category_statuses: [],
       }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
@@ -783,7 +870,7 @@ describe('DashboardView', () => {
     await renderDashboard()
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(4)
+      expect(apiGet).toHaveBeenCalledTimes(6)
     })
 
     expect(screen.getByText('Over budget')).toBeTruthy()
@@ -796,9 +883,11 @@ describe('DashboardView', () => {
       .mockResolvedValueOnce([
         { id: 'expense-1', date: '2026-03-11', category_name: 'Food', amount: '285.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: 'income-1', date: '2026-03-02', source: 'Salary', amount: '2200.00' },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
@@ -826,6 +915,8 @@ describe('DashboardView', () => {
         category_statuses: [],
       }))
       .mockRejectedValueOnce(new Error('expenses unavailable'))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
@@ -867,6 +958,8 @@ describe('DashboardView', () => {
       .mockRejectedValueOnce(new ApiError('Expired session', 401))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({ goals: [], summary: { active_count: 0 } })
 
     await renderDashboard()
@@ -890,19 +983,23 @@ describe('DashboardView', () => {
       }))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
         goals: [],
         summary: { active_count: 0, available_after_goal_contributions: null },
       })
       .mockResolvedValueOnce(createLiveSummary({
-        monthly_limit: '3000.00',
-        total_budget: '3000.00',
+        monthly_limit: '49.23',
+        total_budget: '49.23',
         total_expenses: '400.00',
         total_income: '1500.00',
-        remaining_budget: '2600.00',
-        threshold_exceeded: false,
+        remaining_budget: '-350.77',
+        threshold_exceeded: true,
         category_statuses: [],
       }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce({
@@ -919,9 +1016,11 @@ describe('DashboardView', () => {
     })
     expect(screen.getByText(/Monthly spending limit for/i)).toBeTruthy()
     expect(screen.getAllByText(TEST_CURRENT_MONTH).length).toBeGreaterThan(0)
+    expect(screen.getByRole('spinbutton').getAttribute('min')).toBe('0.01')
+    expect(screen.getByRole('spinbutton').getAttribute('step')).toBe('0.01')
 
     await act(async () => {
-      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3000' } })
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '49.23' } })
       await flushAsyncUpdates()
     })
 
@@ -932,12 +1031,57 @@ describe('DashboardView', () => {
 
     expect(apiPost).toHaveBeenCalledWith(
       '/api/budget',
-      { month: TEST_CURRENT_MONTH, monthly_limit: 3000 },
+      { month: TEST_CURRENT_MONTH, monthly_limit: 49.23 },
       { accessToken: 'test-token' }
     )
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(8)
+      expect(apiGet).toHaveBeenCalledTimes(12)
     })
     expect(screen.queryByText(/Current limit:/)).toBeNull()
+  })
+
+  it('shows app validation instead of saving budget drafts with more than two decimals', async () => {
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '400.00',
+        total_income: '1500.00',
+        remaining_budget: '600.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+
+    await renderDashboard()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit budget' }))
+      await flushAsyncUpdates()
+    })
+
+    const budgetInput = screen.getByRole('spinbutton')
+    expect(budgetInput.form.noValidate).toBe(true)
+
+    await act(async () => {
+      fireEvent.change(budgetInput, { target: { value: '3.235' } })
+      await flushAsyncUpdates()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Update budget' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe('Monthly limit must be a positive dollar amount with up to 2 decimal places.')
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(apiGet).toHaveBeenCalledTimes(6)
   })
 })
