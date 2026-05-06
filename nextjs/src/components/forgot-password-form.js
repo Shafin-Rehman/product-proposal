@@ -129,6 +129,12 @@ export default function ForgotPasswordForm() {
           Back to log in
         </Link>
       </p>
+
+      <p className="auth-card__switch">
+        <Link className="text-link" href="/demo">
+          Explore a demo first &rarr;
+        </Link>
+      </p>
     </section>
   )
 }

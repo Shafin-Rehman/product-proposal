@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth } from '@/components/providers'
+import { useAuth, useDataMode } from '@/components/providers'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -80,13 +80,16 @@ export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
   const { isReady, isAuthenticated } = useAuth()
+  const { isSampleMode, isDataModeReady } = useDataMode()
 
   useEffect(() => {
+    if (!isDataModeReady) return
+    if (isSampleMode) return
     if (!isReady || isAuthenticated) return
     router.replace('/login')
-  }, [isAuthenticated, isReady, router])
+  }, [isAuthenticated, isDataModeReady, isReady, isSampleMode, router])
 
-  if (!isReady || !isAuthenticated) {
+  if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />
   }
 

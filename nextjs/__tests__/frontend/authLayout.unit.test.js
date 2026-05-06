@@ -7,12 +7,13 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/components/providers', () => ({
   useAuth: jest.fn(),
+  useDataMode: jest.fn(),
 }))
 
 const React = require('react')
 const { render, screen, act } = require('@testing-library/react')
 const { useRouter, usePathname } = require('next/navigation')
-const { useAuth } = require('@/components/providers')
+const { useAuth, useDataMode } = require('@/components/providers')
 const AuthLayout = require('@/app/(auth)/layout').default
 
 const mockReplace = jest.fn()
@@ -29,6 +30,7 @@ beforeEach(() => {
   useRouter.mockReturnValue({ replace: mockReplace })
   usePathname.mockReturnValue('/login')
   setLocation('/login', '')
+  useDataMode.mockReturnValue({ setMode: jest.fn() })
 })
 
 afterEach(() => {

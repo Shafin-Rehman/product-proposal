@@ -11663,3 +11663,22 @@ html[data-theme='dark'] .category-modal__row {
   color: var(--text-secondary);
   line-height: 1.5;
 }
+
+/* ─── Demo account page actions ────────────────────────────────── */
+
+.demo-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 1rem;
+  margin-top: 0.75rem;
+}
+
+.demo-account-actions__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem;
+  font-size: 0.95rem;
+  text-align: center;
+}
