@@ -67,7 +67,7 @@ describe('TransactionDetailSheet', () => {
       },
     }))
 
-    expect(screen.getByText('Cafe on Main')).toBeTruthy()
+    expect(screen.getAllByText('Cafe on Main')).toHaveLength(2)
   })
 
   it('labels the chip as Category for an expense entry', () => {
@@ -161,7 +161,7 @@ describe('TransactionDetailSheet', () => {
     expect(document.querySelector('.detail-sheet__subtitle').textContent).toBe('Long date 2026-04-15')
   })
 
-  it('displays a distinct body note for expenses when the note is not the category chip', () => {
+  it('displays merchant text for expenses instead of an unsupported note field', () => {
     render(React.createElement(TransactionDetailSheet, {
       onClose: jest.fn(),
       entry: {
@@ -175,11 +175,30 @@ describe('TransactionDetailSheet', () => {
       },
     }))
 
-    const noteCell = screen.getByText('Note').parentElement
-    expect(noteCell.querySelector('strong').textContent).toBe('Gift card for Alex')
+    const merchantCell = screen.getByText('Merchant').parentElement
+    expect(merchantCell.querySelector('strong').textContent).toBe('Store')
+    expect(screen.queryByText('Gift card for Alex')).toBeNull()
   })
 
-  it('shows a neutral income note and plus formatting for income', () => {
+  it('does not use the compact expense title fallback as the merchant value', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'expense',
+        title: 'Dining',
+        merchant: '',
+        occurredOn: '2026-01-20',
+        amount: 19.99,
+        chip: 'Dining',
+        note: '',
+      },
+    }))
+
+    const merchantCell = screen.getByText('Merchant').parentElement
+    expect(merchantCell.querySelector('strong').textContent).toBe('No merchant added')
+  })
+
+  it('shows the saved income note even when it matches the source chip', () => {
     render(React.createElement(TransactionDetailSheet, {
       onClose: jest.fn(),
       entry: {
@@ -193,8 +212,29 @@ describe('TransactionDetailSheet', () => {
       },
     }))
 
-    expect(screen.getByText('No note added').closest('strong')).toBeTruthy()
+    const noteCell = screen.getByText('Note').parentElement
+    expect(noteCell.querySelector('strong').textContent).toBe('Salary')
     expect(screen.getByText(/\+.*2500/)).toBeTruthy()
+  })
+
+  it('shows full long income notes in the wide detail field', () => {
+    const longNote = 'N'.repeat(240)
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Freelance',
+        merchant: 'Freelance',
+        occurredOn: '2026-03-01',
+        amount: 250,
+        chip: 'Freelance',
+        note: longNote,
+      },
+    }))
+
+    const noteCell = screen.getByText('Note').parentElement
+    expect(noteCell.className).toContain('detail-grid__item--wide')
+    expect(noteCell.querySelector('strong').textContent).toBe(longNote)
   })
 
   it('passes through extra detail content in children', () => {

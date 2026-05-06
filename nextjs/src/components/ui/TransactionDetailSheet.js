@@ -8,14 +8,15 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
 
   const visual = getEntryVisual(entry)
   const displayTitle = entry.title || visual.label || (entry.kind === 'income' ? 'Income' : 'Expense')
-  const selectedNote = entry.note && entry.note !== entry.chip
-    ? entry.note
-    : 'No note added'
+  const detailTextLabel = entry.kind === 'income' ? 'Note' : 'Merchant'
+  const detailTextValue = entry.kind === 'income'
+    ? entry.note?.trim() || 'No note added'
+    : entry.merchant?.trim() || 'No merchant added'
 
-  const selectedSubtitle = entry.merchant && entry.merchant !== displayTitle
-    ? entry.merchant
-    : entry.note && entry.note !== entry.chip
-      ? entry.note
+  const selectedSubtitle = entry.kind === 'income' && entry.note?.trim()
+    ? entry.note.trim()
+    : entry.merchant && entry.merchant !== displayTitle
+      ? entry.merchant
       : formatLongDate(entry.occurredOn)
   const categoryOrSourceLabel = entry.kind === 'income' ? 'Source' : 'Category'
 
@@ -69,9 +70,9 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
             <span>Type</span>
             <strong>{entry.kind === 'income' ? 'Income' : 'Expense'}</strong>
           </div>
-          <div>
-            <span>Note</span>
-            <strong>{selectedNote}</strong>
+          <div className="detail-grid__item--wide">
+            <span>{detailTextLabel}</span>
+            <strong>{detailTextValue}</strong>
           </div>
         </div>
 

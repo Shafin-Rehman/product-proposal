@@ -20,6 +20,10 @@ const expensesHandler = require('@/app/api/expenses/route')
 const getHandler = require('@/app/api/expenses/get/route')
 const updateHandler = require('@/app/api/expenses/update/route')
 const deleteHandler = require('@/app/api/expenses/delete/route')
+const {
+  EXPENSE_DESCRIPTION_LENGTH_MESSAGE,
+  EXPENSE_DESCRIPTION_MAX_LENGTH,
+} = require('@/lib/transactionText')
 
 const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
 
@@ -61,6 +65,22 @@ describe('POST /api/expenses', () => {
         const res = await fetch(post({ amount: 25, date: '2026-03-01', category_id: 3 }))
         expect(res.status).toBe(201)
         expect((await res.json()).category_id).toBe(3)
+      }
+    })
+  })
+
+  it('201 - accepts a description at the merchant length limit', async () => {
+    const description = 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH)
+    db.query.mockResolvedValueOnce({ rows: [{ ...row, description }] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 25, date: '2026-03-01', description }))
+        expect(res.status).toBe(201)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO public.expenses'),
+          ['uid', null, 25, description, '2026-03-01']
+        )
       }
     })
   })
@@ -142,6 +162,22 @@ describe('POST /api/expenses', () => {
         const res = await fetch(post({ amount: 25, date: 'bad-date' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('Valid date is required')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an over-limit description before querying', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          amount: 25,
+          date: '2026-03-01',
+          description: 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH + 1),
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(EXPENSE_DESCRIPTION_LENGTH_MESSAGE)
       }
     })
     expect(db.query).not.toHaveBeenCalled()
@@ -387,6 +423,51 @@ describe('POST /api/expenses/update', () => {
     })
   })
 
+  it('200 - accepts a description at the merchant length limit during update', async () => {
+    const description = 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH)
+    db.query
+      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, description }] })
+    evaluateThresholdForMonth
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, description }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('UPDATE public.expenses SET'),
+          [description, 1, 'uid']
+        )
+      }
+    })
+  })
+
+  it('200 - persists description null when the client clears the merchant on edit', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, description: null }] })
+    evaluateThresholdForMonth
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, description: null }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('UPDATE public.expenses SET'),
+          [null, 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('400 - missing expense_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,
@@ -430,6 +511,21 @@ describe('POST /api/expenses/update', () => {
         const res = await fetch(post({ expense_id: 1, date: 'bad-date' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('Valid date is required')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('400 - rejects an over-limit update description before querying', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          expense_id: 1,
+          description: 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH + 1),
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(EXPENSE_DESCRIPTION_LENGTH_MESSAGE)
       }
     })
     expect(db.query).not.toHaveBeenCalled()
