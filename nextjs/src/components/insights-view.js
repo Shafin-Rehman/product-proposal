@@ -280,7 +280,6 @@ export default function InsightsView() {
       if (exportAbortRef.current === controller) exportAbortRef.current = null
     }
   }
-
   const activeItems = useMemo(() => (
     getActiveBreakdownItems(snapshot, viewMode)
   ), [snapshot, viewMode])
@@ -358,7 +357,7 @@ export default function InsightsView() {
   const isViewingCurrentMonth = activeMonth === currentLiveMonth
   const todayDay = isViewingCurrentMonth ? new Date().getDate() : null
 
-  if (!isReady || !session?.accessToken) return null
+  if (!isSampleMode && (!isReady || !session?.accessToken)) return null
 
   const monthModal = isMonthViewOpen && portalRoot
     ? createPortal(
