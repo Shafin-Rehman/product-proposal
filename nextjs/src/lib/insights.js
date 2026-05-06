@@ -1,6 +1,7 @@
 import db from './db'
 import { buildBudgetSummary } from './budget'
-import { getCategoryVisual } from './financeVisuals'
+import { getCategoryPresentation } from './financeVisuals'
+import { buildSavingsGoalsSummary, getSavingsGoalReferenceDate, listSavingsGoals } from './savingsGoals'
 
 const HISTORY_MONTH_COUNT = 6
 const BREAKDOWN_LIMIT = 5
@@ -115,21 +116,26 @@ export function buildDailySpendDetails(rows = []) {
   const grouped = new Map()
   const fallbackOrdinalByKey = new Map()
 
-  rows.forEach((row, index) => {
+  rows.forEach((row) => {
     const key = formatDayKey(row.occurred_on)
     if (!key) return
 
-    const visual = getCategoryVisual(row.category_name || row.title || `Expense ${index + 1}`)
+    const presentation = getCategoryPresentation({
+      name: row.category_name,
+      icon: row.category_icon,
+      kind: 'expense',
+    })
     const nextEntry = {
       id: buildDailyExpenseEntryId(row, key, fallbackOrdinalByKey),
       key,
       amount: toAmount(row.amount),
       title: row.title,
-      categoryName: visual.label,
+      categoryName: presentation.label,
+      categoryIcon: row.category_icon ?? null,
       occurredOn: key,
-      color: visual.color,
-      soft: visual.soft,
-      symbol: row.category_icon || visual.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
+      symbol: presentation.symbol,
     }
 
     if (!grouped.has(key)) grouped.set(key, [])
@@ -157,15 +163,19 @@ function buildExpenseBreakdown(summary) {
       const remaining = item.remaining_budget == null ? null : toAmount(item.remaining_budget)
       const progress = limit == null ? 0 : Math.min(Number(item.progress_percentage ?? 0), 100)
       const tone = getBudgetTone({ limit, remaining, progress })
-      const visual = getCategoryVisual(item.category_name || 'Uncategorized')
+      const presentation = getCategoryPresentation({
+        name: item.category_name,
+        icon: item.category_icon,
+        kind: 'expense',
+      })
 
       return {
-        id: item.category_id ?? item.category_name ?? `expense-${visual.label}`,
-        name: visual.label,
+        id: item.category_id ?? item.category_name ?? `expense-${presentation.label}`,
+        name: presentation.label,
         amount,
-        color: visual.color,
-        soft: visual.soft,
-        symbol: item.category_icon || visual.symbol,
+        color: presentation.color,
+        soft: presentation.soft,
+        symbol: presentation.symbol,
         progressValue: limit == null ? 0 : progress,
         progressLabel: limit == null ? 'Spend share' : `${Math.round(progress)}% used`,
         supportingText: limit == null
@@ -195,14 +205,14 @@ async function getIncomeBreakdown(userId, month) {
   const endMonth = nextMonth(month)
   const { rows } = await db.query(
     `SELECT
-       COALESCE(s.name, 'Income') AS source_name,
+       COALESCE(NULLIF(BTRIM(s.name), ''), '') AS source_name,
        s.icon AS source_icon,
        COUNT(*)::INT AS entry_count,
        COALESCE(SUM(i.amount), 0.00)::TEXT AS amount
      FROM public.income i
      LEFT JOIN public.income_sources s ON i.source_id = s.id
      WHERE i.user_id = $1 AND i.date >= $2 AND i.date < $3
-     GROUP BY COALESCE(s.name, 'Income'), s.icon
+     GROUP BY COALESCE(NULLIF(BTRIM(s.name), ''), ''), s.icon
      ORDER BY amount DESC, source_name ASC`,
     [userId, month, endMonth]
   )
@@ -212,14 +222,18 @@ async function getIncomeBreakdown(userId, month) {
       const amount = toAmount(row.amount)
       if (amount <= 0) return null
 
-      const visual = getCategoryVisual(row.source_name || 'Income', 'income')
+      const presentation = getCategoryPresentation({
+        name: row.source_name,
+        icon: row.source_icon,
+        kind: 'income',
+      })
       return {
-        id: `income-${row.source_name || 'Income'}-${index}`,
-        name: visual.label,
+        id: `income-${String(row.source_name ?? '').trim() || 'no-source'}-${index}`,
+        name: presentation.label,
         amount,
-        color: visual.color,
-        soft: visual.soft,
-        symbol: row.source_icon || visual.symbol,
+        color: presentation.color,
+        soft: presentation.soft,
+        symbol: presentation.symbol,
         entryCount: Number(row.entry_count ?? 0),
         tone: 'positive',
         statusLabel: 'Income share',
@@ -312,7 +326,11 @@ export function buildCategoryMovers(currentStatuses = [], previousStatuses = [])
       const currentAmount = toAmount(current?.spent)
       const previousAmount = toAmount(previous?.spent)
       const deltaAmount = Number((currentAmount - previousAmount).toFixed(2))
-      const visual = getCategoryVisual(current?.category_name || previous?.category_name || 'Uncategorized')
+      const presentation = getCategoryPresentation({
+        name: current?.category_name || previous?.category_name,
+        icon: current?.category_icon || previous?.category_icon,
+        kind: 'expense',
+      })
       const currentLimit = current?.monthly_limit == null ? null : toAmount(current.monthly_limit)
       const currentRemaining = current?.remaining_budget == null ? null : toAmount(current.remaining_budget)
       const currentProgress = currentLimit == null ? 0 : Math.min(Number(current?.progress_percentage ?? 0), 100)
@@ -323,17 +341,17 @@ export function buildCategoryMovers(currentStatuses = [], previousStatuses = [])
       })
 
       return {
-        id: current?.category_id ?? previous?.category_id ?? visual.label,
-        name: visual.label,
+        id: current?.category_id ?? previous?.category_id ?? presentation.label,
+        name: presentation.label,
         amount: currentAmount,
         previousAmount,
         deltaAmount,
         deltaPercentage: getDeltaPercentage(currentAmount, previousAmount),
         deltaTone: deltaAmount > 0 ? 'danger' : deltaAmount < 0 ? 'positive' : 'neutral',
         direction: deltaAmount > 0 ? 'up' : deltaAmount < 0 ? 'down' : 'flat',
-        color: visual.color,
-        soft: visual.soft,
-        symbol: current?.category_icon || previous?.category_icon || visual.symbol,
+        color: presentation.color,
+        soft: presentation.soft,
+        symbol: presentation.symbol,
         tone: currentTone,
         progressValue: currentLimit == null ? 0 : currentProgress,
         statusLabel: getBudgetStatusLabel(currentTone, currentLimit != null, 'No budget'),
@@ -510,7 +528,7 @@ async function getDailyExpenseEntries(userId, month) {
        e.id,
        e.amount::TEXT AS amount,
        e.date AS occurred_on,
-       COALESCE(NULLIF(e.description, ''), COALESCE(c.name, 'Expense')) AS title,
+       COALESCE(NULLIF(e.description, ''), COALESCE(c.name, 'Uncategorized')) AS title,
        COALESCE(c.name, 'Uncategorized') AS category_name,
        c.icon AS category_icon
      FROM public.expenses e
@@ -530,7 +548,7 @@ async function getTopExpenses(userId, month) {
        e.id,
        e.amount::TEXT AS amount,
        e.date AS occurred_on,
-       COALESCE(NULLIF(e.description, ''), COALESCE(c.name, 'Expense')) AS title,
+       COALESCE(NULLIF(e.description, ''), COALESCE(c.name, 'Uncategorized')) AS title,
        COALESCE(c.name, 'Uncategorized') AS category_name,
        c.icon AS category_icon
      FROM public.expenses e
@@ -542,16 +560,21 @@ async function getTopExpenses(userId, month) {
   )
 
   return rows.map((row, index) => {
-    const visual = getCategoryVisual(row.category_name || row.title || `Expense ${index + 1}`)
+    const presentation = getCategoryPresentation({
+      name: row.category_name,
+      icon: row.category_icon,
+      kind: 'expense',
+    })
     return {
       id: row.id ?? `expense-${index}`,
       amount: toAmount(row.amount),
       title: row.title,
-      categoryName: visual.label,
+      categoryName: presentation.label,
+      categoryIcon: row.category_icon ?? null,
       occurredOn: formatDayKey(row.occurred_on),
-      color: visual.color,
-      soft: visual.soft,
-      symbol: row.category_icon || visual.symbol,
+      color: presentation.color,
+      soft: presentation.soft,
+      symbol: presentation.symbol,
     }
   })
 }
@@ -589,6 +612,7 @@ export async function buildInsightsSnapshot(userId, month) {
     topExpenses,
     previousDailyExpenseTotals,
     previousDailyExpenseEntries,
+    savingsGoalRows,
   ] = await Promise.all([
     buildBudgetSummary(userId, month),
     previousMonth ? buildBudgetSummary(userId, previousMonth) : Promise.resolve(null),
@@ -601,6 +625,7 @@ export async function buildInsightsSnapshot(userId, month) {
     getTopExpenses(userId, month),
     previousMonth ? getDailyExpenseTotals(userId, previousMonth) : Promise.resolve([]),
     previousMonth ? getDailyExpenseEntries(userId, previousMonth) : Promise.resolve([]),
+    listSavingsGoals(userId),
   ])
 
   const cashFlow = buildCashFlowSeries(monthWindow, monthlyExpenseTotals, monthlyIncomeTotals)
@@ -616,6 +641,7 @@ export async function buildInsightsSnapshot(userId, month) {
     : { series: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, peakDay: null, activeDays: 0, details: [] }
   const categoryMovers = buildCategoryMovers(summary?.category_statuses, previousSummary?.category_statuses)
   const budgetHealth = buildBudgetHealth(summary)
+  const savingsGoals = buildSavingsGoalsSummary(savingsGoalRows, summary, getSavingsGoalReferenceDate(month))
 
   return {
     month,
@@ -629,6 +655,7 @@ export async function buildInsightsSnapshot(userId, month) {
     cashFlowSummary: cashFlow.summary,
     categoryMovers,
     budgetHealth,
+    savingsGoals,
     dailySpend,
     previousDailySpend,
     topExpenses,

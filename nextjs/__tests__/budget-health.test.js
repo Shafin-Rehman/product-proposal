@@ -300,26 +300,26 @@ describe('buildBudgetPressureHighlight', () => {
   it('prioritizes strongest overspend over all other states', () => {
     expect(buildBudgetPressureHighlight({
       categoryStatuses: [
-        { category_name: 'Food', monthly_limit: '100.00', spent: '130.00', progress_percentage: 130 },
-        { category_name: 'Fun', monthly_limit: '100.00', spent: '90.00', progress_percentage: 90 },
+        { category_name: 'Alpha', monthly_limit: '100.00', spent: '130.00', progress_percentage: 130 },
+        { category_name: 'Bravo', monthly_limit: '100.00', spent: '90.00', progress_percentage: 90 },
       ],
     })).toEqual(expect.objectContaining({
       key: 'strongest_overspend',
       tone: 'danger',
-      title: 'Food',
+      title: 'Alpha',
     }))
   })
 
   it('falls back to highest pressure when budgets exist but none are over', () => {
     expect(buildBudgetPressureHighlight({
       categoryStatuses: [
-        { category_name: 'Food', monthly_limit: '100.00', spent: '92.00', progress_percentage: 92 },
-        { category_name: 'Fun', monthly_limit: '100.00', spent: '60.00', progress_percentage: 60 },
+        { category_name: 'Alpha', monthly_limit: '100.00', spent: '92.00', progress_percentage: 92 },
+        { category_name: 'Bravo', monthly_limit: '100.00', spent: '60.00', progress_percentage: 60 },
       ],
     })).toEqual(expect.objectContaining({
       key: 'highest_pressure',
       tone: 'warning',
-      title: 'Food',
+      title: 'Alpha',
       detail: '92% used with $8.00 left.',
     }))
   })

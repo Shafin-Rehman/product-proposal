@@ -168,6 +168,102 @@ describe('GET /api/expenses', () => {
       }
     })
   })
+
+  it('keeps the unfiltered list behavior when no query params are provided', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1'),
+          ['uid']
+        )
+        expect(db.query.mock.calls[0][0]).not.toContain('LIMIT')
+      }
+    })
+  })
+
+  it('can narrow expenses to a requested month', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?month=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3'),
+          ['uid', '2026-03-01', '2026-04-01']
+        )
+      }
+    })
+  })
+
+  it('can narrow expenses by date range and limit', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?from=2026-02-01&to=2026-02-28&limit=10',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date <= $3'),
+          ['uid', '2026-02-01', '2026-02-28']
+        )
+        expect(db.query.mock.calls[0][0]).toContain('LIMIT 10')
+      }
+    })
+  })
+
+  it('rejects ambiguous or invalid filters before querying', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?month=2026-03-01&from=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Use either month or from/to, not both')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
+  it('rejects an empty limit before querying', async () => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url: 'http://localhost/api/expenses?limit=',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid limit is required')
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
+
+  it.each([
+    ['an empty month', 'http://localhost/api/expenses?month=', 'Valid month is required'],
+    ['an invalid month', 'http://localhost/api/expenses?month=2026-13', 'Valid month is required'],
+    ['an empty from date', 'http://localhost/api/expenses?from=', 'Valid from date is required'],
+    ['an invalid from date', 'http://localhost/api/expenses?from=not-a-date', 'Valid from date is required'],
+    ['an empty to date', 'http://localhost/api/expenses?to=', 'Valid to date is required'],
+    ['an invalid to date', 'http://localhost/api/expenses?to=not-a-date', 'Valid to date is required'],
+    ['a from date after the to date', 'http://localhost/api/expenses?from=2026-03-15&to=2026-03-01', 'from date must be on or before to date'],
+  ])('rejects %s before querying', async (_label, url, expectedError) => {
+    await testApiHandler({
+      appHandler: expensesHandler,
+      url,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(expectedError)
+        expect(db.query).not.toHaveBeenCalled()
+      }
+    })
+  })
 })
 
 describe('POST /api/expenses/get', () => {
@@ -265,6 +361,27 @@ describe('POST /api/expenses/update', () => {
           2,
           expect.stringContaining('UPDATE public.expenses SET'),
           ['2026-03-02', 1, 'uid']
+        )
+      }
+    })
+  })
+
+  it('200 - persists category_id null when the client explicitly clears the category on edit', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, category_id: null }] })
+    evaluateThresholdForMonth
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ expense_id: 1, category_id: null }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('UPDATE public.expenses SET'),
+          [null, 1, 'uid']
         )
       }
     })

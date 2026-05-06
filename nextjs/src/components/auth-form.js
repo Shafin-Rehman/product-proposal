@@ -207,6 +207,12 @@ export default function AuthForm({ mode, initialEmail = '', showSignupSuccess = 
           Can&apos;t remember your password?
         </Link>
       </p>
+
+      <p className="auth-card__switch">
+        <Link className="text-link" href="/demo">
+          Explore a demo first &rarr;
+        </Link>
+      </p>
     </section>
   )
 }

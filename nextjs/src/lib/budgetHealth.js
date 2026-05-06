@@ -1,3 +1,4 @@
+import { getCategoryPresentation } from './financeVisuals'
 import { formatCurrency, getCurrentMonthStart } from './financeUtils'
 
 export const BUDGET_NEAR_LIMIT_RATIO = 0.8
@@ -404,17 +405,24 @@ export function buildBudgetPressureHighlight({
   const budgetedStatuses = Array.isArray(categoryStatuses)
     ? categoryStatuses
       .filter((item) => getSafeMoneyNumber(item?.monthly_limit) != null)
-      .map((item) => ({
-        name: item?.category_name || 'Uncategorized',
-        progress: getSafeMoneyNumber(item?.progress_percentage) ?? 0,
-        monthlyLimit: getSafeMoneyNumber(item?.monthly_limit),
-        spent: getSafeMoneyNumber(item?.spent),
-        health: buildCategoryBudgetHealth({
-          monthlyLimit: item?.monthly_limit,
-          spent: item?.spent,
-          actualsAvailable: true,
-        }),
-      }))
+      .map((item) => {
+        const presentation = getCategoryPresentation({
+          name: item?.category_name,
+          icon: item?.category_icon,
+          kind: 'expense',
+        })
+        return {
+          name: presentation.label,
+          progress: getSafeMoneyNumber(item?.progress_percentage) ?? 0,
+          monthlyLimit: getSafeMoneyNumber(item?.monthly_limit),
+          spent: getSafeMoneyNumber(item?.spent),
+          health: buildCategoryBudgetHealth({
+            monthlyLimit: item?.monthly_limit,
+            spent: item?.spent,
+            actualsAvailable: true,
+          }),
+        }
+      })
     : []
 
   const overspentStatus = budgetedStatuses

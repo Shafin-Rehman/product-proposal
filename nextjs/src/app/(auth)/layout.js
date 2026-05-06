@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth } from '@/components/providers'
+import { useAuth, useDataMode } from '@/components/providers'
 
 function AuthRouteLoading() {
   return (
@@ -26,8 +26,13 @@ export default function AuthLayout({ children }) {
   const router = useRouter()
   const pathname = usePathname()
   const { isReady, isAuthenticated } = useAuth()
+  const { setMode } = useDataMode()
 
   const isRecovery = isRecoveryUrl(pathname)
+
+  useEffect(() => {
+    setMode('live')
+  }, [setMode])
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return

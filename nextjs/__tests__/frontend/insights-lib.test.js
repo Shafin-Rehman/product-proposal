@@ -1,12 +1,18 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/budget', () => ({ buildBudgetSummary: jest.fn() }))
 jest.mock('@/lib/financeVisuals', () => ({
-  getCategoryVisual: jest.fn((value) => ({
-    label: value || 'Uncategorized',
-    color: `#${String(value || 'uncat').length}23456`,
-    soft: 'rgba(120, 140, 160, 0.18)',
-    symbol: (value || '?').slice(0, 1).toUpperCase(),
-  })),
+  // Preserve persisted labels (no "Food" → "Dining"); match production contract used by lib/insights.js
+  getCategoryPresentation: jest.fn(({ name, icon, kind = 'expense' }) => {
+    const label = (name == null || String(name).trim() === '')
+      ? (kind === 'income' ? 'No source' : 'No cat')
+      : String(name)
+    return {
+      label,
+      color: `#${String(label).length}23456`,
+      soft: 'rgba(120, 140, 160, 0.18)',
+      symbol: icon || String(label).slice(0, 1).toUpperCase(),
+    }
+  }),
 }))
 
 const {
@@ -16,7 +22,10 @@ const {
   buildComparisonMetrics,
   buildDailySpendDetails,
   buildDailySpendSeries,
+  buildInsightsSnapshot,
 } = require('@/lib/insights')
+const db = require('@/lib/db')
+const { buildBudgetSummary } = require('@/lib/budget')
 
 describe('buildComparisonMetrics', () => {
   it('builds neutral metrics when summaries are empty or missing', () => {
@@ -285,5 +294,67 @@ describe('buildDailySpendSeries', () => {
     expect(daily.totalAmount).toBe(255)
     expect(daily.activeDayAverage).toBe(85)
     expect(daily.peakDay).toEqual(expect.objectContaining({ day: 22, amount: 147 }))
+  })
+})
+
+describe('buildInsightsSnapshot savings goals', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('marks current-month past-due savings goals overdue', async () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date('2026-04-29T12:00:00Z'))
+    buildBudgetSummary
+      .mockResolvedValueOnce({
+        month: '2026-04-01',
+        total_budget: '1000.00',
+        remaining_budget: '900.00',
+        total_expenses: '100.00',
+        total_income: '2000.00',
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        total_budget: '1000.00',
+        remaining_budget: '800.00',
+        total_expenses: '200.00',
+        total_income: '2000.00',
+        category_statuses: [],
+      })
+
+    db.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ earliest_date: '2026-04-01' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Conference fund',
+            target_amount: '1000.00',
+            current_amount: '100.00',
+            target_date: '2026-04-10',
+            archived: false,
+            archived_at: null,
+            created_at: '2026-04-01T00:00:00Z',
+            updated_at: '2026-04-01T00:00:00Z',
+          },
+        ],
+      })
+
+    try {
+      const snapshot = await buildInsightsSnapshot('uid', '2026-04-01')
+      expect(snapshot.savingsGoals.goals[0].budget_context.status).toBe('overdue')
+      expect(snapshot.savingsGoals.goals[0].months_remaining).toBe(1)
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })

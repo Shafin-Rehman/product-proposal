@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
 import { demoActivity } from '@/lib/demoData'
-import { getCategoryVisual, getEntryVisual } from '@/lib/financeVisuals'
+import { getCategoryPresentation, getEntryVisual } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
   formatCurrency,
   formatLongDate,
   formatShortDate,
+  getEditFormCategoryName,
   groupActivityByDate,
+  resolveCategoryOrSourceMutation,
 } from '@/lib/financeUtils'
 import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
@@ -156,17 +158,18 @@ function createEntryDraft() {
     kind: 'expense',
     amount: '',
     counterparty: '',
-    category: ENTRY_CATEGORY_OPTIONS.expense[0],
+    category: '',
     occurredOn: getTodayInputValue(),
     note: '',
   }
 }
 
 function createEditDraft(entry) {
+  const fromPersisted = getEditFormCategoryName(entry)
   const base = {
     kind: entry.kind,
     amount: String(entry.amount),
-    category: entry.chip || (entry.kind === 'income' ? ENTRY_CATEGORY_OPTIONS.income[0] : ENTRY_CATEGORY_OPTIONS.expense[0]),
+    category: fromPersisted,
     occurredOn: entry.occurredOn || getTodayInputValue(),
     note: '',
   }
@@ -317,6 +320,19 @@ export default function TransactionsView() {
   }, [deleteConfirm, isEntrySheetOpen, selectedEntry])
 
   useEffect(() => {
+    if (!isEntrySheetOpen || editingEntry) return
+    const options = entryDraft.kind === 'expense' ? expenseCategories : incomeCategories
+    const firstCategory = options[0]?.name
+    if (!firstCategory) return
+    setEntryDraft((current) => {
+      const currentOptions = current.kind === 'expense' ? expenseCategories : incomeCategories
+      const isValid = currentOptions.some((o) => o.name === current.category)
+      if (current.category && isValid) return current
+      return { ...current, category: firstCategory }
+    })
+  }, [isEntrySheetOpen, editingEntry, entryDraft.kind, expenseCategories, incomeCategories])
+
+  useEffect(() => {
     let hideTimeoutId
     let intervalId
 
@@ -359,7 +375,7 @@ export default function TransactionsView() {
     apiGet('/api/income/categories', { accessToken: token }).then(setIncomeCategories).catch(() => {})
   }, [isReady, isSampleMode, session?.accessToken])
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 
@@ -378,19 +394,23 @@ export default function TransactionsView() {
   })
   const groupedFeed = groupActivityByDate(filteredFeed)
   const isLoading = !isSampleMode && liveState.status === 'loading' && !feed.length
-  const entryPreview = getCategoryVisual(
-    [entryDraft.category, entryDraft.counterparty].filter(Boolean).join(' '),
-    entryDraft.kind
-  )
+  const selectedCategoryOrSource = entryDraft.kind === 'expense'
+    ? expenseCategories.find((c) => c.name === entryDraft.category)
+    : incomeCategories.find((c) => c.name === entryDraft.category)
+  const entryPreview = getCategoryPresentation({
+    name: entryDraft.category,
+    icon: selectedCategoryOrSource?.icon ?? null,
+    kind: entryDraft.kind,
+  })
   const entryAmountValue = Number(entryDraft.amount)
   const entryAmountLabel = entryDraft.amount ? formatCurrency(Math.abs(entryAmountValue || 0)) : '$0.00'
   const entryTitle = entryDraft.counterparty.trim() || (entryDraft.kind === 'income' ? 'New income' : 'New expense')
-  const counterpartyLabel = entryDraft.kind === 'income' ? 'Source' : 'Merchant'
+  const counterpartyLabel = entryDraft.kind === 'income' ? 'Description' : 'Merchant'
+  const categoryFieldLabel = entryDraft.kind === 'income' ? 'Source' : 'Category'
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
-  const hideFab = Boolean(selectedEntry) || isEntrySheetOpen
-
+  const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen
   const updateDraft = (field, value) => {
     setEntryDraft((current) => ({
       ...current,
@@ -401,7 +421,11 @@ export default function TransactionsView() {
   const openEntrySheet = (entryToEdit = null) => {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
-    setEntryDraft(entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft())
+    const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
+    if (!entryToEdit) {
+      draft.category = (draft.kind === 'expense' ? expenseCategories[0]?.name : incomeCategories[0]?.name) || ''
+    }
+    setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
   }
@@ -413,17 +437,22 @@ export default function TransactionsView() {
   }
 
   const handleSaveEntry = async () => {
+    if (isSampleMode || !session?.accessToken) return
     if (isSaving) return
     setIsSaving(true)
     setSaveError('')
     try {
       if (entryDraft.kind === 'expense') {
-        const categoryId = expenseCategories.find((c) => c.name === entryDraft.category)?.id
         const body = {
           amount: Number(entryDraft.amount),
           description: entryDraft.counterparty.trim() || undefined,
           date: entryDraft.occurredOn,
-          ...(categoryId ? { category_id: categoryId } : {}),
+          ...resolveCategoryOrSourceMutation({
+            isEdit: Boolean(editingEntry),
+            selectedName: entryDraft.category,
+            options: expenseCategories,
+            kind: 'expense',
+          }),
         }
         if (editingEntry) {
           await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -431,12 +460,16 @@ export default function TransactionsView() {
           await apiPost('/api/expenses', body, { accessToken: session.accessToken })
         }
       } else {
-        const sourceId = incomeCategories.find((c) => c.name === entryDraft.category)?.id
         const body = {
           amount: Number(entryDraft.amount),
           date: entryDraft.occurredOn,
           notes: (entryDraft.note.trim() || entryDraft.counterparty.trim()) || undefined,
-          ...(sourceId ? { source_id: sourceId } : {}),
+          ...resolveCategoryOrSourceMutation({
+            isEdit: Boolean(editingEntry),
+            selectedName: entryDraft.category,
+            options: incomeCategories,
+            kind: 'income',
+          }),
         }
         if (editingEntry) {
           await apiPost('/api/income/update', { income_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
@@ -460,6 +493,7 @@ export default function TransactionsView() {
   }
 
   const handleDeleteEntry = async () => {
+    if (isSampleMode || !session?.accessToken) return
     if (isDeleting || !selectedEntry) return
     setIsDeleting(true)
     try {
@@ -715,7 +749,7 @@ export default function TransactionsView() {
                 onClick={() => setEntryDraft((current) => ({
                   ...current,
                   kind: 'expense',
-                  category: expenseCategories[0]?.name ?? ENTRY_CATEGORY_OPTIONS.expense[0],
+                  category: '',
                 }))}
                 type="button"
               >
@@ -727,7 +761,7 @@ export default function TransactionsView() {
                 onClick={() => setEntryDraft((current) => ({
                   ...current,
                   kind: 'income',
-                  category: incomeCategories[0]?.name ?? ENTRY_CATEGORY_OPTIONS.income[0],
+                  category: '',
                 }))}
                 type="button"
               >
@@ -763,18 +797,22 @@ export default function TransactionsView() {
 
               <div className="entry-sheet__grid entry-sheet__grid--secondary">
                 <label className="entry-sheet__field">
-                  <span>Category</span>
+                  <span>{categoryFieldLabel}</span>
                   <select
                     className="input-field"
+                    disabled={entryCategories.length === 0}
                     onChange={(event) => updateDraft('category', event.target.value)}
-                    value={entryDraft.category}
+                    value={entryCategories.length === 0 ? '' : entryDraft.category}
                   >
+                    <option value="">
+                      {entryDraft.kind === 'income' ? 'Select source' : 'Select category'}
+                    </option>
                     {entryCategories.map((option) => (
                       <option key={option.name} value={option.name}>
                         {option.icon ? `${option.icon} ${option.name}` : option.name}
                       </option>
-                    ))}
-                  </select>
+                 ))}
+                </select>
                 </label>
 
                 <label className="entry-sheet__field">
@@ -817,7 +855,17 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
+                    disabled={
+                      isSaving || 
+                      isSampleMode || 
+                      !entryDraft.amount || 
+                      !entryDraft.occurredOn || 
+                      (!editingEntry && (!entryDraft.category ||
+                        !(entryDraft.kind === 'expense' ? expenseCategories : incomeCategories).some(
+                           (category) => category.name === entryDraft.category
+                        ))
+                      )
+                    }
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
