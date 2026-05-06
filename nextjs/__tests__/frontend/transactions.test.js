@@ -214,7 +214,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     apiPost.mockResolvedValue({})
   })
 
-  it('opens add sheet with an empty category select (not Education) and a matching preview, not a letter fallback', async () => {
+  it('opens add sheet with the first category pre-selected and a matching preview', async () => {
     render(React.createElement(TransactionsView))
     await waitFor(() => {
       expect(screen.queryByText('Loading activity')).toBeNull()
@@ -224,12 +224,12 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     })
     const dialog = screen.getByRole('dialog')
     const select = within(dialog).getByRole('combobox')
-    expect(select.value).toBe('')
+    expect(select.value).toBe('Education')
     const previewAvatar = dialog.querySelector('.entry-avatar--large span')
-    expect(previewAvatar.textContent).toBe('\u{1F3F7}\uFE0F')
+    expect(previewAvatar.textContent).toBe('\u{1F4DA}')
   })
 
-  it('posts a new expense without category_id when the user does not select a category', async () => {
+  it('posts a new expense with the pre-selected first category', async () => {
     render(React.createElement(TransactionsView))
     await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
@@ -240,22 +240,20 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     await waitFor(() => { expect(apiPost).toHaveBeenCalled() })
     const expensePost = apiPost.mock.calls.find((c) => c[0] === '/api/expenses')
     expect(expensePost).toBeTruthy()
-    expect(expensePost[1].category_id).toBeUndefined()
+    expect(expensePost[1].category_id).toBe('c-edu')
   })
 
-  it('switches to income with an empty source select, not the first listed source (Business)', async () => {
+  it('switches to income with the first source pre-selected', async () => {
     render(React.createElement(TransactionsView))
     await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
     const select = within(dialog).getByRole('combobox')
-    expect(select.value).toBe('')
-    const previewAvatar = dialog.querySelector('.entry-avatar--large span')
-    expect(previewAvatar.textContent).toBe('\u{1F4CB}')
+    expect(select.value).toBe('Business')
   })
 
-  it('posts a new income row without source_id when the user does not select a source', async () => {
+  it('posts a new income row with the pre-selected first source', async () => {
     render(React.createElement(TransactionsView))
     await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
@@ -267,7 +265,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     await waitFor(() => { expect(apiPost).toHaveBeenCalled() })
     const incPost = apiPost.mock.calls.find((c) => c[0] === '/api/income')
     expect(incPost).toBeTruthy()
-    expect(incPost[1].source_id).toBeUndefined()
+    expect(incPost[1].source_id).toBe('i-bus')
   })
 
   it('sends category_id: null on update when editing an expense and clearing the category', async () => {

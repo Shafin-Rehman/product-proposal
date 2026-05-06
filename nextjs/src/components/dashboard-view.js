@@ -355,7 +355,7 @@ export default function DashboardView() {
       ? buildDemoRecentCashFlow(demoBudgetSummary)
       : buildRecentCashFlow(liveState.expenses, liveState.income, chartMonth, 3)
   ), [chartMonth, isSampleMode, liveState.expenses, liveState.income])
-  const firstName = getFirstName(session?.user?.email)
+  const firstName = isSampleMode ? 'Explorer' : getFirstName(session?.user?.email)
   const periodLabel = formatMonthPeriod(chartMonth)
   const previewCategories = useMemo(() => (
     getPreviewCategories(categoryCards)
@@ -365,7 +365,7 @@ export default function DashboardView() {
     : null
   const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0) : '--'
 
-  if (!isReady || !session?.accessToken) {
+  if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
   }
 

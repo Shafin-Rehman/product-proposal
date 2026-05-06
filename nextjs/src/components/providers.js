@@ -93,25 +93,27 @@ function AuthProvider({ children }) {
 
 function DataModeProvider({ children }) {
   const [mode, setModeState] = useState('live')
+  const [isDataModeReady, setIsDataModeReady] = useState(false)
 
   useEffect(() => {
     setModeState(readStoredDataMode())
+    setIsDataModeReady(true)
   }, [])
 
-  const setMode = (nextMode) => {
+  const setMode = useCallback((nextMode) => {
     const safeMode = nextMode === 'sample' ? 'sample' : 'live'
     setModeState(safeMode)
-
     try {
       window.localStorage.setItem(DATA_MODE_STORAGE_KEY, safeMode)
     } catch {}
-  }
+  }, [])
 
   const value = useMemo(() => ({
     mode,
     isSampleMode: mode === 'sample',
+    isDataModeReady,
     setMode,
-  }), [mode])
+  }), [mode, isDataModeReady, setMode])
 
   return <DataModeContext.Provider value={value}>{children}</DataModeContext.Provider>
 }
