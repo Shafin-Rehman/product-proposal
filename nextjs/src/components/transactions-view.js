@@ -337,6 +337,8 @@ export default function TransactionsView() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [deleteConfirm, isEntrySheetOpen, selectedEntry])
 
+  
+
   useEffect(() => {
     if (!isEntrySheetOpen || editingEntry) return
     const options = entryDraft.kind === 'expense' ? expenseCategories : incomeCategories
