@@ -20,6 +20,10 @@ const categoriesHandler = require('@/app/api/income/categories/route')
 const getHandler = require('@/app/api/income/get/route')
 const updateHandler = require('@/app/api/income/update/route')
 const deleteHandler = require('@/app/api/income/delete/route')
+const {
+  INCOME_NOTES_LENGTH_MESSAGE,
+  INCOME_NOTES_MAX_LENGTH,
+} = require('@/lib/transactionText')
 
 const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
 
@@ -61,6 +65,22 @@ describe('POST /api/income', () => {
         expect(db.query).toHaveBeenCalledWith(
           expect.stringContaining('INSERT INTO public.income'),
           ['uid', null, 3000, '2026-03-15', null]
+        )
+      }
+    })
+  })
+
+  it('accepts notes at the length limit', async () => {
+    const notes = 'N'.repeat(INCOME_NOTES_MAX_LENGTH)
+    db.query.mockResolvedValueOnce({ rows: [{ ...row, notes }] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ amount: 3000, date: '2026-03-15', notes }))
+        expect(res.status).toBe(201)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO public.income'),
+          ['uid', null, 3000, '2026-03-15', notes]
         )
       }
     })
@@ -119,6 +139,22 @@ describe('POST /api/income', () => {
         const res = await fetch(post({ amount: '0.001', date: '2026-03-15' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('rejects over-limit notes before querying', async () => {
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          amount: 3000,
+          date: '2026-03-15',
+          notes: 'N'.repeat(INCOME_NOTES_MAX_LENGTH + 1),
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(INCOME_NOTES_LENGTH_MESSAGE)
       }
     })
     expect(db.query).not.toHaveBeenCalled()
@@ -383,6 +419,37 @@ describe('POST /api/income/update', () => {
     })
   })
 
+  it('accepts notes at the length limit during update', async () => {
+    const notes = 'N'.repeat(INCOME_NOTES_MAX_LENGTH)
+    db.query.mockResolvedValueOnce({ rows: [{ ...row, notes }] })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, notes }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE public.income SET'),
+          [notes, 1, 'uid']
+        )
+      }
+    })
+  })
+
+  it('persists notes null when the client clears the note on edit', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ ...row, notes: null }] })
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ income_id: 1, notes: null }))
+        expect(res.status).toBe(200)
+        expect(db.query).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE public.income SET'),
+          [null, 1, 'uid']
+        )
+      }
+    })
+  })
+
   it('rejects update without income_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,
@@ -436,6 +503,21 @@ describe('POST /api/income/update', () => {
         const res = await fetch(post({ income_id: 1, amount: '1.999' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be a valid positive money amount')
+      }
+    })
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('rejects over-limit update notes before querying', async () => {
+    await testApiHandler({
+      appHandler: updateHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          income_id: 1,
+          notes: 'N'.repeat(INCOME_NOTES_MAX_LENGTH + 1),
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe(INCOME_NOTES_LENGTH_MESSAGE)
       }
     })
     expect(db.query).not.toHaveBeenCalled()

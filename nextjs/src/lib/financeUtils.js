@@ -256,8 +256,8 @@ export function buildActivityFeed(expenses = [], income = []) {
       amount: Number(expense.amount ?? 0),
       occurredOn: expense.date || expense.created_at,
       sortOn: parseCalendarDate(expense.date || expense.created_at)?.getTime() ?? 0,
-      note: description ? displayCategory : '',
-      merchant: description || displayCategory,
+      note: '',
+      merchant: description || '',
       raw: expense,
     }
   })
@@ -270,7 +270,7 @@ export function buildActivityFeed(expenses = [], income = []) {
     return {
       id: `income-${entry.id}`,
       kind: 'income',
-      title: notes || sourceName || displayCategory,
+      title: sourceName || displayCategory,
       chip: displayCategory,
       sourceIcon: entry.source_icon ?? null,
       amount: Number(entry.amount ?? 0),

@@ -88,6 +88,12 @@ const { useAuth, useDataMode, useDataChanged } = require('@/components/providers
 const { apiGet, apiPost } = require('@/lib/apiClient')
 const financeUtils = require('@/lib/financeUtils')
 const actualFinanceUtils = jest.requireActual('@/lib/financeUtils')
+const {
+  EXPENSE_DESCRIPTION_LENGTH_MESSAGE,
+  EXPENSE_DESCRIPTION_MAX_LENGTH,
+  INCOME_NOTES_LENGTH_MESSAGE,
+  INCOME_NOTES_MAX_LENGTH,
+} = require('@/lib/transactionText')
 const { default: TransactionsView } = require('@/components/transactions-view')
 
 beforeEach(() => {
@@ -268,6 +274,96 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     const incPost = apiPost.mock.calls.find((c) => c[0] === '/api/income')
     expect(incPost).toBeTruthy()
     expect(incPost[1].source_id).toBeUndefined()
+  })
+
+  it('hides expense notes and validates over-limit merchant text before posting', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByLabelText('Note')).toBeNull()
+
+    act(() => {
+      fireEvent.change(within(dialog).getByLabelText('Merchant'), {
+        target: { value: 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH + 1) },
+      })
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe(EXPENSE_DESCRIPTION_LENGTH_MESSAGE)
+    expect(within(dialog).getByRole('button', { name: 'Add transaction' }).disabled).toBe(true)
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
+  it('uses Note as the only income free-text field and posts it as notes', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
+
+    expect(within(dialog).queryByLabelText('Merchant')).toBeNull()
+    expect(within(dialog).getByLabelText('Note')).toBeTruthy()
+    act(() => { fireEvent.change(dialog.querySelector('input.input-field[inputmode="decimal"]'), { target: { value: '100' } }) })
+    act(() => { fireEvent.change(within(dialog).getByLabelText('Note'), { target: { value: 'Weekend session' } }) })
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Add transaction' })) })
+
+    await waitFor(() => {
+      const incPost = apiPost.mock.calls.find((c) => c[0] === '/api/income')
+      expect(incPost[1].notes).toBe('Weekend session')
+    })
+  })
+
+  it('validates over-limit income notes before posting', async () => {
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
+    const dialog = screen.getByRole('dialog')
+    act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
+    act(() => {
+      fireEvent.change(within(dialog).getByLabelText('Note'), {
+        target: { value: 'N'.repeat(INCOME_NOTES_MAX_LENGTH + 1) },
+      })
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe(INCOME_NOTES_LENGTH_MESSAGE)
+    expect(within(dialog).getByRole('button', { name: 'Add transaction' }).disabled).toBe(true)
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
+  it('renders long live transaction text in constrained list elements', async () => {
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    const longMerchant = 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH + 20)
+    const longNote = 'N'.repeat(INCOME_NOTES_MAX_LENGTH)
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') {
+        return Promise.resolve([{
+          id: 70,
+          amount: '8.00',
+          date: '2026-03-12',
+          description: longMerchant,
+          category_name: 'Food',
+        }])
+      }
+      if (url === '/api/income') {
+        return Promise.resolve([{
+          id: 91,
+          amount: '200.00',
+          date: '2026-03-11',
+          notes: longNote,
+          source_name: 'Freelance',
+        }])
+      }
+      if (url === '/api/expenses/categories') return Promise.resolve([])
+      if (url === '/api/income/categories') return Promise.resolve([])
+      return Promise.resolve([])
+    })
+
+    render(React.createElement(TransactionsView))
+    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+
+    expect(document.querySelector('.transaction-item__title').textContent).toBe(longMerchant)
+    expect(document.querySelector('.transaction-item__note').textContent).toBe(longNote)
   })
 
   it('sends category_id: null on update when editing an expense and clearing the category', async () => {

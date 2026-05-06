@@ -3,6 +3,7 @@ import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
 import { buildTransactionListQuery } from '@/lib/transactionQuery'
+import { validateExpenseDescription } from '@/lib/transactionText'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -47,11 +48,15 @@ export async function POST(request) {
   if (!normalizedDate) {
     return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
   }
+  const descriptionValidation = validateExpenseDescription(description)
+  if (descriptionValidation.error) {
+    return NextResponse.json({ error: descriptionValidation.error }, { status: 400 })
+  }
   try {
     const { rows } = await db.query(
       `INSERT INTO public.expenses (user_id, category_id, amount, description, date)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [user.id, category_id ?? null, amount, description ?? null, normalizedDate]
+      [user.id, category_id ?? null, amount, descriptionValidation.value ?? null, normalizedDate]
     )
     const { user_id, ...expense } = rows[0]
     const threshold = await evaluateThresholdForMonth(user.id, expense.date)
