@@ -15,6 +15,7 @@ import {
   groupActivityByDate,
   resolveCategoryOrSourceMutation,
 } from '@/lib/financeUtils'
+import { validateExpenseDescription, validateIncomeNotes } from '@/lib/transactionText'
 import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ENTRY_CATEGORY_OPTIONS = {
@@ -148,6 +149,9 @@ const EXTRA_SAMPLE_ACTIVITY = [
 const SAMPLE_ACTIVITY = [...demoActivity, ...EXTRA_SAMPLE_ACTIVITY]
   .sort((left, right) => right.occurredOn.localeCompare(left.occurredOn) || right.id.localeCompare(left.id))
 
+const MONEY_DRAFT_PATTERN = /^\d*(?:\.\d{0,2})?$/
+const MONEY_SUBMIT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
+
 function getTodayInputValue(date = new Date()) {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
   return localDate.toISOString().slice(0, 10)
@@ -178,8 +182,8 @@ function createEditDraft(entry) {
   }
   return {
     ...base,
-    counterparty: '',
     note: entry.raw?.notes || '',
+    counterparty: '',
   }
 }
 
@@ -187,6 +191,20 @@ function getErrorMessage(error) {
   if (error instanceof ApiError) return error.message
   if (error instanceof Error && error.message) return error.message
   return 'The live transaction feed is not available right now.'
+}
+
+function isValidMoneyDraft(value) {
+  return value === '' || MONEY_DRAFT_PATTERN.test(value)
+}
+
+function validateMoneyAmount(value) {
+  const trimmedValue = value.trim()
+  if (!MONEY_SUBMIT_PATTERN.test(trimmedValue)) return 'Enter a valid amount with up to 2 decimal places.'
+
+  const amount = Number(trimmedValue)
+  if (!Number.isFinite(amount) || amount <= 0) return 'Enter a valid amount greater than $0.00.'
+
+  return ''
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -387,10 +405,11 @@ export default function TransactionsView() {
     if (!searchQuery.trim()) return true
 
     const query = searchQuery.toLowerCase()
+    const searchableNote = entry.kind === 'income' ? entry.note : ''
     return (
       entry.title.toLowerCase().includes(query) ||
       entry.chip.toLowerCase().includes(query) ||
-      entry.note.toLowerCase().includes(query) ||
+      searchableNote.toLowerCase().includes(query) ||
       entry.merchant.toLowerCase().includes(query)
     )
   })
@@ -406,18 +425,32 @@ export default function TransactionsView() {
   })
   const entryAmountValue = Number(entryDraft.amount)
   const entryAmountLabel = entryDraft.amount ? formatCurrency(Math.abs(entryAmountValue || 0)) : '$0.00'
-  const entryTitle = entryDraft.counterparty.trim() || (entryDraft.kind === 'income' ? 'New income' : 'New expense')
-  const counterpartyLabel = entryDraft.kind === 'income' ? 'Description' : 'Merchant'
+  const entryTitle = entryDraft.kind === 'income'
+    ? entryDraft.note.trim() || entryDraft.category || 'New income'
+    : entryDraft.counterparty.trim() || 'New expense'
   const categoryFieldLabel = entryDraft.kind === 'income' ? 'Source' : 'Category'
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
   const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen
+  const draftTextValidation = entryDraft.kind === 'expense'
+    ? validateExpenseDescription(entryDraft.counterparty)
+    : validateIncomeNotes(entryDraft.note)
+  const draftTextError = draftTextValidation.error || ''
+  const draftAmountError = entryDraft.amount ? validateMoneyAmount(entryDraft.amount) : ''
+  const footerError = saveError || draftTextError || draftAmountError
+
   const updateDraft = (field, value) => {
+    setSaveError('')
     setEntryDraft((current) => ({
       ...current,
       [field]: value,
     }))
+  }
+
+  const updateAmountDraft = (value) => {
+    if (!isValidMoneyDraft(value)) return
+    updateDraft('amount', value)
   }
 
   const openEntrySheet = (entryToEdit = null) => {
@@ -441,13 +474,23 @@ export default function TransactionsView() {
   const handleSaveEntry = async () => {
     if (isSampleMode || !session?.accessToken) return
     if (isSaving) return
+    if (draftTextError) {
+      setSaveError(draftTextError)
+      return
+    }
+    const amountError = validateMoneyAmount(entryDraft.amount)
+    if (amountError) {
+      setSaveError(amountError)
+      return
+    }
     setIsSaving(true)
     setSaveError('')
     try {
       if (entryDraft.kind === 'expense') {
+        const description = validateExpenseDescription(entryDraft.counterparty).value
         const body = {
           amount: Number(entryDraft.amount),
-          description: entryDraft.counterparty.trim() || undefined,
+          description: editingEntry ? description ?? null : description ?? undefined,
           date: entryDraft.occurredOn,
           ...resolveCategoryOrSourceMutation({
             isEdit: Boolean(editingEntry),
@@ -462,10 +505,11 @@ export default function TransactionsView() {
           await apiPost('/api/expenses', body, { accessToken: session.accessToken })
         }
       } else {
+        const notes = validateIncomeNotes(entryDraft.note).value
         const body = {
           amount: Number(entryDraft.amount),
           date: entryDraft.occurredOn,
-          notes: entryDraft.note.trim() || undefined,
+          notes: editingEntry ? notes ?? null : notes ?? undefined,
           ...resolveCategoryOrSourceMutation({
             isEdit: Boolean(editingEntry),
             selectedName: entryDraft.category,
@@ -606,10 +650,10 @@ export default function TransactionsView() {
                         </div>
 
                         <div className="transaction-item__body">
-                          <strong>{entry.merchant || entry.title}</strong>
+                          <strong className="transaction-item__title">{entry.merchant || entry.title}</strong>
                           <div className="transaction-item__meta">
                             <span className="entry-chip">{entry.chip}</span>
-                            {entry.note && entry.note !== entry.chip ? <span>{entry.note}</span> : null}
+                            {entry.kind === 'income' && entry.note ? <span className="transaction-item__note">{entry.note}</span> : null}
                           </div>
                         </div>
 
@@ -748,11 +792,15 @@ export default function TransactionsView() {
               <button
                 className={`segment-control__button${entryDraft.kind === 'expense' ? ' segment-control__button--active' : ''}`}
                 disabled={!!editingEntry}
-                onClick={() => setEntryDraft((current) => ({
-                  ...current,
-                  kind: 'expense',
-                  category: '',
-                }))}
+                onClick={() => {
+                  setSaveError('')
+                  setEntryDraft((current) => ({
+                    ...current,
+                    kind: 'expense',
+                    category: '',
+                    note: '',
+                  }))
+                }}
                 type="button"
               >
                 Expense
@@ -760,11 +808,15 @@ export default function TransactionsView() {
               <button
                 className={`segment-control__button${entryDraft.kind === 'income' ? ' segment-control__button--active' : ''}`}
                 disabled={!!editingEntry}
-                onClick={() => setEntryDraft((current) => ({
-                  ...current,
-                  kind: 'income',
-                  category: '',
-                }))}
+                onClick={() => {
+                  setSaveError('')
+                  setEntryDraft((current) => ({
+                    ...current,
+                    kind: 'income',
+                    category: '',
+                    counterparty: '',
+                  }))
+                }}
                 type="button"
               >
                 Income
@@ -778,23 +830,26 @@ export default function TransactionsView() {
                   <input
                     className="input-field"
                     inputMode="decimal"
-                    onChange={(event) => updateDraft('amount', event.target.value)}
+                    onChange={(event) => updateAmountDraft(event.target.value)}
                     placeholder="0.00"
-                    type="number"
+                    type="text"
                     value={entryDraft.amount}
                   />
                 </label>
 
-                <label className="entry-sheet__field">
-                  <span>{counterpartyLabel}</span>
-                  <input
-                    className="input-field"
-                    onChange={(event) => updateDraft('counterparty', event.target.value)}
-                    placeholder={entryDraft.kind === 'income' ? 'Payroll, transfer, refund...' : 'Target, Uber, rent...'}
-                    type="text"
-                    value={entryDraft.counterparty}
-                  />
-                </label>
+                {entryDraft.kind === 'expense' ? (
+                  <label className="entry-sheet__field">
+                    <span>Merchant</span>
+                    <input
+                      className="input-field"
+                      aria-invalid={draftTextError ? 'true' : undefined}
+                      onChange={(event) => updateDraft('counterparty', event.target.value)}
+                      placeholder="Target, Uber, rent..."
+                      type="text"
+                      value={entryDraft.counterparty}
+                    />
+                  </label>
+                ) : null}
               </div>
 
               <div className="entry-sheet__grid entry-sheet__grid--secondary">
@@ -828,20 +883,23 @@ export default function TransactionsView() {
                 </label>
               </div>
 
-              <label className="entry-sheet__field">
-                <span>Note</span>
-                <textarea
-                  className="input-field entry-sheet__textarea"
-                  onChange={(event) => updateDraft('note', event.target.value)}
-                  placeholder="Add context for the transaction"
-                  rows="3"
-                  value={entryDraft.note}
-                />
-              </label>
+              {entryDraft.kind === 'income' ? (
+                <label className="entry-sheet__field">
+                  <span>Note</span>
+                  <textarea
+                    className="input-field entry-sheet__textarea"
+                    aria-invalid={draftTextError ? 'true' : undefined}
+                    onChange={(event) => updateDraft('note', event.target.value)}
+                    placeholder="Add context for the transaction"
+                    rows="3"
+                    value={entryDraft.note}
+                  />
+                </label>
+              ) : null}
 
               <div className="entry-sheet__footer">
-                {saveError ? (
-                  <div className="inline-error" role="alert">{saveError}</div>
+                {footerError ? (
+                  <div className="inline-error" role="alert">{footerError}</div>
                 ) : (
                   <span className="entry-sheet__hint">
                     {isSampleMode
@@ -858,10 +916,12 @@ export default function TransactionsView() {
                   <button
                     className="button-primary"
                     disabled={
-                      isSaving || 
-                      isSampleMode || 
-                      !entryDraft.amount || 
-                      !entryDraft.occurredOn || 
+                      isSaving ||
+                      isSampleMode ||
+                      !entryDraft.amount ||
+                      !entryDraft.occurredOn ||
+                      Boolean(draftTextError) ||
+                      Boolean(draftAmountError) ||
                       (!editingEntry && (!entryDraft.category ||
                         !(entryDraft.kind === 'expense' ? expenseCategories : incomeCategories).some(
                            (category) => category.name === entryDraft.category

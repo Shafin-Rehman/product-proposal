@@ -3,6 +3,7 @@ import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
 import { buildTransactionListQuery } from '@/lib/transactionQuery'
+import { validateIncomeNotes } from '@/lib/transactionText'
 
 export async function GET(request) {
   const { user, error } = await authenticate(request)
@@ -43,11 +44,15 @@ export async function POST(request) {
   }
   const normalizedDate = normalizeDate(date)
   if (!normalizedDate) return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
+  const notesValidation = validateIncomeNotes(notes)
+  if (notesValidation.error) {
+    return NextResponse.json({ error: notesValidation.error }, { status: 400 })
+  }
   try {
     const { rows } = await db.query(
       `INSERT INTO public.income (user_id, source_id, amount, date, notes)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [user.id, source_id ?? null, amount, normalizedDate, notes ?? null]
+      [user.id, source_id ?? null, amount, normalizedDate, notesValidation.value ?? null]
     )
     const { user_id, ...income } = rows[0]
     return NextResponse.json(income, { status: 201 })
