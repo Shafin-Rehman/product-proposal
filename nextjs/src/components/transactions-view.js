@@ -149,6 +149,9 @@ const EXTRA_SAMPLE_ACTIVITY = [
 const SAMPLE_ACTIVITY = [...demoActivity, ...EXTRA_SAMPLE_ACTIVITY]
   .sort((left, right) => right.occurredOn.localeCompare(left.occurredOn) || right.id.localeCompare(left.id))
 
+const MONEY_DRAFT_PATTERN = /^\d*(?:\.\d{0,2})?$/
+const MONEY_SUBMIT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
+
 function getTodayInputValue(date = new Date()) {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
   return localDate.toISOString().slice(0, 10)
@@ -188,6 +191,20 @@ function getErrorMessage(error) {
   if (error instanceof ApiError) return error.message
   if (error instanceof Error && error.message) return error.message
   return 'The live transaction feed is not available right now.'
+}
+
+function isValidMoneyDraft(value) {
+  return value === '' || MONEY_DRAFT_PATTERN.test(value)
+}
+
+function validateMoneyAmount(value) {
+  const trimmedValue = value.trim()
+  if (!MONEY_SUBMIT_PATTERN.test(trimmedValue)) return 'Enter a valid amount with up to 2 decimal places.'
+
+  const amount = Number(trimmedValue)
+  if (!Number.isFinite(amount) || amount <= 0) return 'Enter a valid amount greater than $0.00.'
+
+  return ''
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -418,7 +435,8 @@ export default function TransactionsView() {
     ? validateExpenseDescription(entryDraft.counterparty)
     : validateIncomeNotes(entryDraft.note)
   const draftTextError = draftTextValidation.error || ''
-  const footerError = saveError || draftTextError
+  const draftAmountError = entryDraft.amount ? validateMoneyAmount(entryDraft.amount) : ''
+  const footerError = saveError || draftTextError || draftAmountError
 
   const updateDraft = (field, value) => {
     setSaveError('')
@@ -426,6 +444,11 @@ export default function TransactionsView() {
       ...current,
       [field]: value,
     }))
+  }
+
+  const updateAmountDraft = (value) => {
+    if (!isValidMoneyDraft(value)) return
+    updateDraft('amount', value)
   }
 
   const openEntrySheet = (entryToEdit = null) => {
@@ -451,6 +474,11 @@ export default function TransactionsView() {
     if (isSaving) return
     if (draftTextError) {
       setSaveError(draftTextError)
+      return
+    }
+    const amountError = validateMoneyAmount(entryDraft.amount)
+    if (amountError) {
+      setSaveError(amountError)
       return
     }
     setIsSaving(true)
@@ -800,9 +828,9 @@ export default function TransactionsView() {
                   <input
                     className="input-field"
                     inputMode="decimal"
-                    onChange={(event) => updateDraft('amount', event.target.value)}
+                    onChange={(event) => updateAmountDraft(event.target.value)}
                     placeholder="0.00"
-                    type="number"
+                    type="text"
                     value={entryDraft.amount}
                   />
                 </label>
@@ -891,6 +919,7 @@ export default function TransactionsView() {
                       !entryDraft.amount ||
                       !entryDraft.occurredOn ||
                       Boolean(draftTextError) ||
+                      Boolean(draftAmountError) ||
                       (!editingEntry && (!entryDraft.category ||
                         !(entryDraft.kind === 'expense' ? expenseCategories : incomeCategories).some(
                            (category) => category.name === entryDraft.category
