@@ -179,6 +179,7 @@ function createEditDraft(entry) {
   return {
     ...base,
     counterparty: '',
+    note: entry.raw?.notes || '',
   }
 }
 
@@ -318,16 +319,7 @@ export default function TransactionsView() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [deleteConfirm, isEntrySheetOpen, selectedEntry])
 
-  useEffect(() => {
-    if (!isEntrySheetOpen || editingEntry) return
-    if (entryDraft.category) return
-    const firstCategory = entryDraft.kind === 'expense'
-      ? expenseCategories[0]?.name
-      : incomeCategories[0]?.name
-    if (firstCategory) {
-     setEntryDraft((current) => ({ ...current, category: firstCategory }))
-    }
-  }, [isEntrySheetOpen, editingEntry, entryDraft.category, entryDraft.kind, expenseCategories, incomeCategories])
+  
 
   useEffect(() => {
     let hideTimeoutId
@@ -419,9 +411,7 @@ export default function TransactionsView() {
     setEditingEntry(entryToEdit)
     setSelectedEntry(null)
     const draft = entryToEdit ? createEditDraft(entryToEdit) : createEntryDraft()
-    if (!entryToEdit) {
-      draft.category = (draft.kind === 'expense' ? expenseCategories[0]?.name : incomeCategories[0]?.name) || ''
-    }
+    setEntryDraft(draft)
     setEntryDraft(draft)
     setSaveError('')
     setIsEntrySheetOpen(true)
@@ -433,7 +423,7 @@ export default function TransactionsView() {
     setSaveError('')
   }
 
-  const handleSaveEntry = async () => {
+const handleSaveEntry = async () => {
     if (isSaving) return
     setIsSaving(true)
     setSaveError('')
@@ -459,7 +449,7 @@ export default function TransactionsView() {
         const body = {
           amount: Number(entryDraft.amount),
           date: entryDraft.occurredOn,
-          notes: (entryDraft.note.trim() || entryDraft.counterparty.trim()) || undefined,
+          notes: entryDraft.note.trim() || undefined,
           ...resolveCategoryOrSourceMutation({
             isEdit: Boolean(editingEntry),
             selectedName: entryDraft.category,
@@ -850,16 +840,7 @@ export default function TransactionsView() {
                   </button>
                   <button
                     className="button-primary"
-                    disabled={
-                      isSaving || 
-                      isSampleMode || 
-                      !entryDraft.amount || 
-                      !entryDraft.occurredOn || 
-                      !entryDraft.category ||
-                      !entryCategories.some(
-                         (category) => category.name === entryDraft.category
-                      )
-                    }
+                    disabled={isSaving || isSampleMode || !entryDraft.amount || !entryDraft.occurredOn}
                     type="submit"
                   >
                     {isSaving ? 'Saving...' : editingEntry ? 'Save changes' : 'Add transaction'}
