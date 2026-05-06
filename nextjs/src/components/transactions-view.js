@@ -179,6 +179,7 @@ function createEditDraft(entry) {
   return {
     ...base,
     counterparty: entry.raw?.notes || '',
+    note: entry.raw?.notes || '',
   }
 }
 
