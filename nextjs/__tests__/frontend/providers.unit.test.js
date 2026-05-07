@@ -97,6 +97,32 @@ describe('AppProviders auth session storage sync', () => {
     })
   })
 
+  it('updates auth state when another tab clears all local storage', async () => {
+    const storedSession = createStoredSession()
+    window.localStorage.setItem(SESSION_STORAGE_KEY, storedSession)
+
+    renderWithProviders()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ready').textContent).toBe('ready')
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
+    })
+
+    window.localStorage.clear()
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: null,
+        oldValue: null,
+        newValue: null,
+      }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-out')
+      expect(screen.getByTestId('token').textContent).toBe('none')
+    })
+  })
+
   it('stores a valid auth response and ignores an invalid auth response', async () => {
     renderWithProviders()
 
