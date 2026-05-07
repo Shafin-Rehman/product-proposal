@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataChanged, useDataMode } from '@/components/providers'
-import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
+import { ApiError, apiDelete, apiGet, apiPost } from '@/lib/apiClient'
 import { DEMO_MONTH, demoBudgetSummary, demoCategoryBudgets, demoSavingsGoals } from '@/lib/demoData'
 import { getCategoryPresentation } from '@/lib/financeVisuals'
 import {
@@ -23,6 +23,7 @@ import {
   buildCopyLastMonthPayload,
   buildPlannerRows,
   buildPlannerSummary,
+  getPlannerAmountDraftValidation,
   getCopyLastMonthState,
   getPlannerAdjacentMonths,
   mergePlannerDrafts,
@@ -621,8 +622,11 @@ export default function PlannerView() {
     if (isSampleMode || savingTarget || !row.isEditable) return
 
     const draftValue = rowDrafts[row.id]
-    const nextLimit = normalizeMoneyDraftForSave(draftValue)
-    if (nextLimit == null) return
+    const draftValidation = getPlannerAmountDraftValidation(draftValue, {
+      hasSavedPlan: row.hasSavedPlan,
+    })
+    if (!draftValidation.isValid) return
+    const nextLimit = draftValidation.amount
 
     setSavingTarget(row.id)
     try {
@@ -680,6 +684,68 @@ export default function PlannerView() {
           icon: row.categoryIcon,
           kind: 'expense',
         }).label} plan saved for ${formatMonthPeriod(activeMonth)}.`,
+      })
+      handleRetry()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleAuthError()
+        return
+      }
+
+      setFeedback({
+        tone: 'warning',
+        message: getErrorMessage(error),
+      })
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const handleClearCategory = async (row) => {
+    if (isSampleMode || savingTarget || !row.isEditable || !row.hasSavedPlan) return
+
+    setSavingTarget(`clear:${row.id}`)
+    try {
+      const params = new URLSearchParams({
+        month: activeMonth,
+        category_id: row.categoryId,
+      })
+      await apiDelete(`/api/budget?${params.toString()}`, {
+        accessToken: session.accessToken,
+      })
+
+      setLiveState((current) => {
+        if (current.month !== activeMonth) return current
+
+        const categoryBudgets = (current.config?.category_budgets ?? [])
+          .filter((budget) => budget.category_id !== row.categoryId)
+
+        return {
+          ...current,
+          config: {
+            month: activeMonth,
+            monthly_limit: current.config?.monthly_limit ?? null,
+            category_budgets: categoryBudgets,
+          },
+        }
+      })
+      dirtyRowIdsRef.current.delete(row.id)
+      rowDraftsRef.current = {
+        ...rowDraftsRef.current,
+        [row.id]: '',
+      }
+      setRowDrafts((current) => ({
+        ...current,
+        [row.id]: '',
+      }))
+      notifyDataChanged()
+      setFeedback({
+        tone: 'success',
+        message: `${getCategoryPresentation({
+          name: row.categoryName,
+          icon: row.categoryIcon,
+          kind: 'expense',
+        }).label} plan cleared for ${formatMonthPeriod(activeMonth)}.`,
       })
       handleRetry()
     } catch (error) {
@@ -1262,9 +1328,13 @@ export default function PlannerView() {
                 kind: 'expense',
               })
               const rowDraft = rowDrafts[row.id] ?? ''
-              const normalizedRowDraft = normalizeMoneyDraftForSave(rowDraft)
+              const rowDraftValidation = getPlannerAmountDraftValidation(rowDraft, {
+                hasSavedPlan: row.hasSavedPlan,
+              })
+              const normalizedRowDraft = rowDraftValidation.amount ?? null
               const normalizedPlannedAmount = normalizeMoneyDraftForSave(row.plannedAmount)
-              const hasValidDraft = normalizedRowDraft != null
+              const hasValidDraft = rowDraftValidation.isValid
+              const validationMessageId = `planner-row-${row.id}-validation`
               const isUnchanged = hasValidDraft
                 && normalizedPlannedAmount != null
                 && normalizedRowDraft === normalizedPlannedAmount
@@ -1336,32 +1406,53 @@ export default function PlannerView() {
                     <label className="planner-row__field">
                       <span>{row.isEditable ? 'Plan amount ($)' : 'Plan amount'}</span>
                       <input
+                        aria-describedby={rowDraftValidation.message ? validationMessageId : undefined}
+                        aria-invalid={rowDraftValidation.message ? 'true' : undefined}
                         className="input-field"
                         disabled={isSampleMode || !row.isEditable}
                         inputMode="decimal"
-                        min="0.01"
                         onChange={(event) => handleRowDraftChange(row.id, event.target.value)}
                         placeholder={row.isEditable ? 'e.g. 250' : 'Read-only'}
-                        step="0.01"
-                        type="number"
+                        type="text"
                         value={rowDraft}
                       />
+                      {rowDraftValidation.message ? (
+                        <small className="planner-row__validation" id={validationMessageId} role="alert">
+                          {rowDraftValidation.message}
+                        </small>
+                      ) : null}
                     </label>
 
-                    <button
-                      className="button-secondary"
-                      disabled={
-                        isSampleMode
-                        || !row.isEditable
-                        || savingTarget === row.id
-                        || !hasValidDraft
-                        || isUnchanged
-                      }
-                      onClick={() => handleSaveCategory(row)}
-                      type="button"
-                    >
-                      {savingTarget === row.id ? 'Saving...' : row.hasSavedPlan ? 'Save update' : 'Save plan'}
-                    </button>
+                    <div className="planner-row__actions">
+                      <button
+                        className="button-secondary"
+                        disabled={
+                          isSampleMode
+                          || !row.isEditable
+                          || Boolean(savingTarget)
+                          || !hasValidDraft
+                          || isUnchanged
+                        }
+                        onClick={() => handleSaveCategory(row)}
+                        type="button"
+                      >
+                        {savingTarget === row.id ? 'Saving...' : row.hasSavedPlan ? 'Save update' : 'Save plan'}
+                      </button>
+                      {row.hasSavedPlan ? (
+                        <button
+                          className="button-secondary planner-row__clear"
+                          disabled={
+                            isSampleMode
+                            || !row.isEditable
+                            || Boolean(savingTarget)
+                          }
+                          onClick={() => handleClearCategory(row)}
+                          type="button"
+                        >
+                          {savingTarget === `clear:${row.id}` ? 'Clearing...' : 'Clear plan'}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </article>
               )

@@ -188,6 +188,17 @@ export async function upsertCategoryBudgets(userId, month, categoryBudgets = [])
   return rows
 }
 
+export async function deleteCategoryBudget(userId, month, categoryId) {
+  const { rows } = await db.query(
+    `DELETE FROM public.category_budgets
+     WHERE user_id = $1 AND month = $2 AND category_id = $3
+     RETURNING category_id, month`,
+    [userId, month, categoryId]
+  )
+
+  return rows[0] ?? null
+}
+
 export async function getMonthlyTotals(userId, month) {
   const endMonth = nextMonth(month)
 

@@ -6969,8 +6969,27 @@ html[data-theme='dark'] .planner-row__progress-track {
   align-items: end;
 }
 
-.planner-row__editor .button-secondary {
+.planner-row__validation {
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.planner-row__actions {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.planner-row__actions .button-secondary {
   min-width: 9rem;
+}
+
+.planner-row__clear {
+  color: var(--danger);
 }
 
 @media (max-width: 880px) {
@@ -6991,6 +7010,14 @@ html[data-theme='dark'] .planner-row__progress-track {
   .planner-row__metrics,
   .planner-row__editor {
     grid-template-columns: 1fr;
+  }
+
+  .planner-row__actions {
+    justify-content: stretch;
+  }
+
+  .planner-row__actions .button-secondary {
+    flex: 1 1 9rem;
   }
 }
 

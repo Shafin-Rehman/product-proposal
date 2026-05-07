@@ -9,6 +9,7 @@ jest.mock('@/lib/budget', () => {
     getMonthlyBudget: jest.fn(),
     getMonthlyBudgetConfig: jest.fn(),
     getOwnedOrGlobalCategoriesByIds: jest.fn(),
+    deleteCategoryBudget: jest.fn(),
     upsertMonthlyBudget: jest.fn(),
     upsertCategoryBudgets: jest.fn(),
     evaluateThresholdForMonth: jest.fn(),
@@ -29,7 +30,9 @@ const categoriesHandler = require('@/app/api/expenses/categories/route')
 
 const authorizedUser = { id: 'uid', email: 'a@b.com' }
 const FOOD_CATEGORY_ID = '11111111-1111-4111-8111-111111111111'
+const TRANSIT_CATEGORY_ID = '22222222-2222-4222-8222-222222222222'
 const post = (body) => ({ method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
+const deleteBudget = () => ({ method: 'DELETE' })
 
 beforeEach(() => {
   authenticate.mockClear()
@@ -38,6 +41,7 @@ beforeEach(() => {
   budget.getMonthlyBudget.mockClear()
   budget.getMonthlyBudgetConfig.mockClear()
   budget.getOwnedOrGlobalCategoriesByIds.mockClear()
+  budget.deleteCategoryBudget.mockClear()
   budget.upsertMonthlyBudget.mockClear()
   budget.upsertCategoryBudgets.mockClear()
   budget.evaluateThresholdForMonth.mockClear()
@@ -384,6 +388,128 @@ describe('POST /api/budget', () => {
   })
 })
 
+describe('DELETE /api/budget', () => {
+  it('clears one category budget and returns remaining category budgets', async () => {
+    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID }])
+    budget.deleteCategoryBudget.mockResolvedValueOnce({
+      category_id: FOOD_CATEGORY_ID,
+      month: '2026-03-01',
+    })
+    budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
+      month: '2026-03-01',
+      monthly_limit: null,
+      notified: false,
+      category_budgets: [
+        {
+          category_id: TRANSIT_CATEGORY_ID,
+          category_name: 'Transit',
+          category_icon: '🚌',
+          monthly_limit: '25.00',
+        },
+      ],
+    })
+
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: `http://localhost/api/budget?month=2026-03-01&category_id=${FOOD_CATEGORY_ID}`,
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({
+          month: '2026-03-01',
+          monthly_limit: null,
+          notified: false,
+          budget_alert: null,
+          category_budgets: [
+            {
+              category_id: TRANSIT_CATEGORY_ID,
+              category_name: 'Transit',
+              category_icon: '🚌',
+              monthly_limit: '25.00',
+            },
+          ],
+        })
+        expect(budget.getOwnedOrGlobalCategoriesByIds).toHaveBeenCalledWith('uid', [FOOD_CATEGORY_ID])
+        expect(budget.deleteCategoryBudget).toHaveBeenCalledWith('uid', '2026-03-01', FOOD_CATEGORY_ID)
+      }
+    })
+  })
+
+  it('returns an empty budget envelope when clearing the final or missing category budget', async () => {
+    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID }])
+    budget.deleteCategoryBudget.mockResolvedValueOnce(null)
+    budget.getMonthlyBudgetConfig.mockResolvedValueOnce(null)
+
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: `http://localhost/api/budget?month=2026-03-01&category_id=${FOOD_CATEGORY_ID}`,
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({
+          month: '2026-03-01',
+          monthly_limit: null,
+          notified: false,
+          budget_alert: null,
+          category_budgets: [],
+        })
+      }
+    })
+  })
+
+  it('returns 400 when category_id is a valid UUID but not owned or global', async () => {
+    budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([])
+
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: `http://localhost/api/budget?month=2026-03-01&category_id=${FOOD_CATEGORY_ID}`,
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('category_id must reference an owned or global category')
+        expect(budget.getOwnedOrGlobalCategoriesByIds).toHaveBeenCalledWith('uid', [FOOD_CATEGORY_ID])
+        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+      }
+    })
+  })
+
+  it('returns 400 when category_id is missing or invalid', async () => {
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: 'http://localhost/api/budget?month=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('category_id is required')
+      }
+    })
+
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: 'http://localhost/api/budget?month=2026-03-01&category_id=cat-1',
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('category_id must be a valid UUID')
+        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+      }
+    })
+  })
+
+  it('returns 400 when the clear month is invalid', async () => {
+    await testApiHandler({
+      appHandler: budgetHandler,
+      url: `http://localhost/api/budget?month=bad&category_id=${FOOD_CATEGORY_ID}`,
+      async test({ fetch }) {
+        const res = await fetch(deleteBudget())
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid month is required')
+        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+      }
+    })
+  })
+})
+
 describe('GET /api/budget/summary', () => {
   it('returns the monthly budget summary with category totals and statuses', async () => {
     budget.buildBudgetSummary.mockResolvedValueOnce({
@@ -724,6 +850,29 @@ describe('isPositiveMoneyValue', () => {
     expect(actualBudget.isPositiveMoneyValue('1e2')).toBe(false)
     expect(actualBudget.isPositiveMoneyValue('100000000')).toBe(false)
     expect(actualBudget.isPositiveMoneyValue(100000000)).toBe(false)
+  })
+})
+
+describe('deleteCategoryBudget', () => {
+  it('deletes only the matching user month and category budget row', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01' }]
+    })
+
+    await expect(actualBudget.deleteCategoryBudget('uid', '2026-03-01', FOOD_CATEGORY_ID)).resolves.toEqual({
+      category_id: FOOD_CATEGORY_ID,
+      month: '2026-03-01',
+    })
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(/DELETE FROM public\.category_budgets[\s\S]*WHERE user_id = \$1 AND month = \$2 AND category_id = \$3[\s\S]*RETURNING category_id, month/),
+      ['uid', '2026-03-01', FOOD_CATEGORY_ID]
+    )
+  })
+
+  it('returns null when there is no matching category budget row to clear', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+
+    await expect(actualBudget.deleteCategoryBudget('uid', '2026-03-01', FOOD_CATEGORY_ID)).resolves.toBeNull()
   })
 })
 

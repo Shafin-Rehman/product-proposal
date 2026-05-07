@@ -4,6 +4,7 @@ import { buildCategoryBudgetHealth } from './budgetHealth'
 const UNCATEGORIZED_KEY = '__uncategorized__'
 const MAX_MONEY_CENTS = 9999999999n
 const MAX_EXPANDED_MONEY_LENGTH = 32
+const MONEY_DRAFT_PATTERN = /^[+]?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/
 
 function expandScientificNotation(rawValue) {
   if (!/[eE]/.test(rawValue)) return rawValue
@@ -50,12 +51,10 @@ function parseMoneyAmount(value) {
 
   const integerDigits = match[2] ?? '0'
   const fractionDigits = match[3] ?? match[4] ?? ''
+  if (fractionDigits.length > 2) return null
+
   let cents = BigInt(integerDigits) * 100n
   cents += BigInt((fractionDigits.padEnd(2, '0').slice(0, 2)) || '0')
-
-  if ((fractionDigits[2] ?? '0') >= '5') {
-    cents += 1n
-  }
 
   if (cents <= 0n || cents > MAX_MONEY_CENTS) return null
   return Number(cents) / 100
@@ -99,6 +98,64 @@ export function areMoneyDraftValuesEquivalent(left, right) {
 
 export function normalizeMoneyDraftForSave(value) {
   return parseMoneyAmount(value)
+}
+
+export function getPlannerAmountDraftValidation(value, { hasSavedPlan = false } = {}) {
+  const rawValue = value == null ? '' : String(value).trim()
+
+  if (!rawValue) {
+    return {
+      isValid: false,
+      message: '',
+      kind: 'empty',
+    }
+  }
+
+  if (rawValue.startsWith('-')) {
+    return {
+      isValid: false,
+      message: 'Amount cannot be negative.',
+      kind: 'negative',
+    }
+  }
+
+  const plainValue = expandScientificNotation(rawValue) ?? rawValue
+  const moneyDraftMatch = plainValue.match(MONEY_DRAFT_PATTERN)
+  const fractionDigits = moneyDraftMatch?.[2] ?? moneyDraftMatch?.[3] ?? ''
+  if (moneyDraftMatch && fractionDigits.length > 2) {
+    return {
+      isValid: false,
+      message: 'Enter a dollar amount with no more than 2 decimal places.',
+      kind: 'too_many_decimals',
+    }
+  }
+
+  const normalizedValue = normalizeMoneyDraftForSave(rawValue)
+  if (normalizedValue != null) {
+    return {
+      isValid: true,
+      message: '',
+      kind: 'valid',
+      amount: normalizedValue,
+    }
+  }
+
+  const numericValue = Number(rawValue)
+  if (Number.isFinite(numericValue) && numericValue === 0) {
+    return {
+      isValid: false,
+      message: hasSavedPlan
+        ? 'Use Clear plan to return this category to Not set.'
+        : 'Enter an amount greater than $0.',
+      kind: 'zero',
+    }
+  }
+
+  return {
+    isValid: false,
+    message: 'Enter a valid dollar amount.',
+    kind: 'malformed',
+  }
 }
 
 export function buildPlannerRows({

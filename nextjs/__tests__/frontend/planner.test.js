@@ -13,6 +13,7 @@ jest.mock('@/lib/apiClient', () => ({
       this.status = status
     }
   },
+  apiDelete: jest.fn(),
   apiGet: jest.fn(),
   apiPost: jest.fn(),
 }))
@@ -65,7 +66,7 @@ const React = require('react')
 const { render, screen, waitFor, cleanup, act, fireEvent } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataChanged, useDataMode } = require('@/components/providers')
-const { ApiError, apiGet, apiPost } = require('@/lib/apiClient')
+const { ApiError, apiDelete, apiGet, apiPost } = require('@/lib/apiClient')
 const PlannerView = require('@/components/planner-view').default
 
 async function flushAsyncUpdates() {
@@ -332,6 +333,287 @@ describe('PlannerView', () => {
     expect(screen.getByText('Actual spend')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
     expect(screen.getByText('Save update')).toBeTruthy()
+  })
+
+  it('clears one saved category plan and leaves other category plans intact', async () => {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+        { id: 'cat-fun', name: 'Fun', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
+          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '200.00',
+        total_expenses: '50.00',
+        total_income: '1000.00',
+        remaining_budget: '150.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00', spent: '20.00' },
+          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00', spent: '30.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+    apiDelete.mockResolvedValueOnce({
+      month: '2026-03-01',
+      monthly_limit: null,
+      notified: false,
+      budget_alert: null,
+      category_budgets: [
+        { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00' },
+      ],
+    })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+        { id: 'cat-fun', name: 'Fun', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        category_budgets: [
+          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '80.00',
+        total_expenses: '50.00',
+        total_income: '1000.00',
+        remaining_budget: '30.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: null, spent: '20.00' },
+          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00', spent: '30.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Clear plan' })[0])
+      await flushAsyncUpdates()
+    })
+
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/api/budget?month=2026-03-01&category_id=cat-food',
+      { accessToken: 'test-token' }
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Food plan cleared for 2026-03-01.')).toBeTruthy()
+      expect(screen.getByText('Not set')).toBeTruthy()
+    })
+    expect(screen.getAllByDisplayValue('').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByDisplayValue('80.00')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Clear plan' })).toHaveLength(1)
+  })
+
+  it('shows inline validation feedback for invalid category amount drafts', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    const input = screen.getByLabelText('Plan amount ($)')
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '-5' } })
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByText('Amount cannot be negative.')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'abc' } })
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByText('Enter a valid dollar amount.')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '1.005' } })
+      await flushAsyncUpdates()
+    })
+    const decimalMessage = screen.getByText('Enter a dollar amount with no more than 2 decimal places.')
+    expect(decimalMessage).toBeTruthy()
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toBe(decimalMessage.id)
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '0' } })
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByText('Enter an amount greater than $0.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save plan' }).disabled).toBe(true)
+  })
+
+  it('points zero drafts on saved rows to the clear action', async () => {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '120.00',
+        total_expenses: '20.00',
+        total_income: '1000.00',
+        remaining_budget: '100.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00', spent: '20.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Plan amount ($)'), { target: { value: '0' } })
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByText('Use Clear plan to return this category to Not set.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save update' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Clear plan' }).disabled).toBe(false)
+  })
+
+  it('preserves positive decimal category budget saves', async () => {
+    mockPlannerResponses()
+    apiPost.mockResolvedValueOnce({
+      month: '2026-03-01',
+      monthly_limit: '1000.00',
+      notified: false,
+      budget_alert: null,
+      category_budgets: [
+        { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '49.23' },
+      ],
+    })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '49.23' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '200.00',
+        total_income: '1200.00',
+        remaining_budget: '800.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '49.23', spent: '20.00' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Plan amount ($)'), { target: { value: '49.23' } })
+      await flushAsyncUpdates()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save plan' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/budget',
+      {
+        month: '2026-03-01',
+        category_budgets: [{ category_id: 'cat-food', monthly_limit: 49.23 }],
+      },
+      { accessToken: 'test-token' }
+    )
+    await waitFor(() => expect(screen.getByDisplayValue('49.23')).toBeTruthy())
   })
 
   it('opens the inline Add goal form from the savings goals CTA', async () => {
