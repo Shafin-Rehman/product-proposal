@@ -13,6 +13,7 @@ function AuthStatus() {
       React.createElement('span', { 'data-testid': 'ready' }, isReady ? 'ready' : 'loading'),
       React.createElement('span', { 'data-testid': 'auth-state' }, isAuthenticated ? 'signed-in' : 'signed-out'),
       React.createElement('span', { 'data-testid': 'token' }, session?.accessToken ?? 'none'),
+      React.createElement('span', { 'data-testid': 'user-email' }, session?.user?.email ?? 'none'),
       React.createElement('button', {
         onClick: () => setSessionFromAuthResponse({
           access_token: 'tok-login',
@@ -58,13 +59,10 @@ function renderProviderControls() {
   return render(React.createElement(AppProviders, null, React.createElement(ProviderControls)))
 }
 
-function createStoredSession(accessToken = 'tok-123') {
+function createStoredSession(accessToken = 'tok-123', user = { id: 'u1', email: 'a@b.com' }) {
   return JSON.stringify({
     accessToken,
-    user: {
-      id: 'u1',
-      email: 'a@b.com',
-    },
+    user,
   })
 }
 
@@ -197,6 +195,35 @@ describe('AppProviders auth session storage sync', () => {
     await waitFor(() => {
       expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
       expect(screen.getByTestId('token').textContent).toBe('tok-next')
+    })
+  })
+
+  it('updates auth state when another tab replaces the stored session', async () => {
+    const storedSession = createStoredSession('tok-current', { id: 'u-current', email: 'current@example.com' })
+    window.localStorage.setItem(SESSION_STORAGE_KEY, storedSession)
+
+    renderWithProviders()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
+      expect(screen.getByTestId('token').textContent).toBe('tok-current')
+      expect(screen.getByTestId('user-email').textContent).toBe('current@example.com')
+    })
+
+    const nextStoredSession = createStoredSession('tok-replacement', { id: 'u-replacement', email: 'replacement@example.com' })
+    window.localStorage.setItem(SESSION_STORAGE_KEY, nextStoredSession)
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: SESSION_STORAGE_KEY,
+        oldValue: storedSession,
+        newValue: nextStoredSession,
+      }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
+      expect(screen.getByTestId('token').textContent).toBe('tok-replacement')
+      expect(screen.getByTestId('user-email').textContent).toBe('replacement@example.com')
     })
   })
 
