@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/components/providers'
 
 export default function ChangePasswordForm() {
   const { session } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -25,6 +27,8 @@ export default function ChangePasswordForm() {
     setErrorMessage('')
     setStatus('idle')
   }, [])
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -98,13 +102,15 @@ export default function ChangePasswordForm() {
         </button>
       </div>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           aria-label="Change password"
           aria-modal="true"
-          className="cpw-popup"
+          className="acct-modal-overlay"
           role="dialog"
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
         >
+          <div className="acct-modal">
           <div className="cpw-popup__header">
             <span className="cpw-popup__title">Change password</span>
             <button
@@ -199,7 +205,9 @@ export default function ChangePasswordForm() {
               </form>
             </>
           )}
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </>
   )

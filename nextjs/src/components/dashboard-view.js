@@ -112,7 +112,7 @@ function LiveNotice({ message, onRetry }) {
 
 export default function DashboardView() {
   const router = useRouter()
-  const { isReady, logout, session } = useAuth()
+  const { isReady, logout, session, profileName } = useAuth()
   const { isSampleMode } = useDataMode()
   const { dataChangedToken } = useDataChanged()
   const [currentMonth] = useState(getCurrentMonthStart)
@@ -355,7 +355,7 @@ export default function DashboardView() {
       ? buildDemoRecentCashFlow(demoBudgetSummary)
       : buildRecentCashFlow(liveState.expenses, liveState.income, chartMonth, 3)
   ), [chartMonth, isSampleMode, liveState.expenses, liveState.income])
-  const firstName = isSampleMode ? 'Explorer' : getFirstName(session?.user?.email)
+  const firstName = profileName || (isSampleMode && !session?.user?.email ? 'Explorer' : getFirstName(session?.user?.email))
   const periodLabel = formatMonthPeriod(chartMonth)
   const previewCategories = useMemo(() => (
     getPreviewCategories(categoryCards)
