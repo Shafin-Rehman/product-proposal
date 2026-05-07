@@ -497,8 +497,10 @@ export default function PlannerView() {
     : actualSpendState === 'loading'
       ? 'Waiting for the live budget summary to load.'
       : 'The live budget summary is unavailable, so actual spend is not being guessed.'
-  const normalizedOverallDraft = normalizeMoneyDraftForSave(overallDraft)
+  const overallDraftValidation = getPlannerAmountDraftValidation(overallDraft)
+  const normalizedOverallDraft = overallDraftValidation.amount ?? null
   const normalizedOverallLimit = normalizeMoneyDraftForSave(plannerSummary.overallLimit)
+  const overallValidationMessageId = 'planner-overall-cap-validation'
   const planDeltaTone = !plannerSummary.hasActualSpendData || plannerSummary.remainingTotal == null
     ? 'neutral'
     : plannerSummary.remainingTotal < 0
@@ -571,7 +573,7 @@ export default function PlannerView() {
     event.preventDefault()
     if (isSampleMode || savingTarget) return
 
-    const nextLimit = normalizeMoneyDraftForSave(overallDraft)
+    const nextLimit = getPlannerAmountDraftValidation(overallDraft).amount ?? null
     if (nextLimit == null) return
 
     setSavingTarget('overall')
@@ -1027,6 +1029,8 @@ export default function PlannerView() {
           <label className="planner-summary__field">
             <span>Overall monthly cap</span>
             <input
+              aria-describedby={overallDraftValidation.message ? overallValidationMessageId : undefined}
+              aria-invalid={overallDraftValidation.message ? 'true' : undefined}
               className="input-field"
               disabled={isSampleMode}
               inputMode="decimal"
@@ -1041,6 +1045,16 @@ export default function PlannerView() {
               type="number"
               value={overallDraft}
             />
+            {overallDraftValidation.message ? (
+              <small
+                aria-live="polite"
+                className="planner-summary__validation"
+                id={overallValidationMessageId}
+                role="status"
+              >
+                {overallDraftValidation.message}
+              </small>
+            ) : null}
           </label>
 
           <div className={`planner-summary__form-copy planner-summary__form-copy--${overallCapTone}`}>
@@ -1417,7 +1431,12 @@ export default function PlannerView() {
                         value={rowDraft}
                       />
                       {rowDraftValidation.message ? (
-                        <small className="planner-row__validation" id={validationMessageId} role="alert">
+                        <small
+                          aria-live="polite"
+                          className="planner-row__validation"
+                          id={validationMessageId}
+                          role="status"
+                        >
                           {rowDraftValidation.message}
                         </small>
                       ) : null}

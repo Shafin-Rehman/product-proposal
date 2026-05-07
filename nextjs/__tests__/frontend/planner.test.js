@@ -476,6 +476,8 @@ describe('PlannerView', () => {
     })
     const decimalMessage = screen.getByText('Enter a dollar amount with no more than 2 decimal places.')
     expect(decimalMessage).toBeTruthy()
+    expect(decimalMessage.getAttribute('role')).toBe('status')
+    expect(decimalMessage.getAttribute('aria-live')).toBe('polite')
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(input.getAttribute('aria-describedby')).toBe(decimalMessage.id)
 
@@ -485,6 +487,27 @@ describe('PlannerView', () => {
     })
     expect(screen.getByText('Enter an amount greater than $0.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Save plan' }).disabled).toBe(true)
+  })
+
+  it('shows inline validation feedback for invalid overall cap drafts', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    const input = screen.getByLabelText('Overall monthly cap')
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '1.005' } })
+      await flushAsyncUpdates()
+    })
+
+    const decimalMessage = screen.getByText('Enter a dollar amount with no more than 2 decimal places.')
+    expect(decimalMessage).toBeTruthy()
+    expect(decimalMessage.getAttribute('role')).toBe('status')
+    expect(decimalMessage.getAttribute('aria-live')).toBe('polite')
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toBe(decimalMessage.id)
+    expect(screen.getByRole('button', { name: 'Update cap' }).disabled).toBe(true)
   })
 
   it('points zero drafts on saved rows to the clear action', async () => {

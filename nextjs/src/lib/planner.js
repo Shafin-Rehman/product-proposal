@@ -4,7 +4,7 @@ import { buildCategoryBudgetHealth } from './budgetHealth'
 const UNCATEGORIZED_KEY = '__uncategorized__'
 const MAX_MONEY_CENTS = 9999999999n
 const MAX_EXPANDED_MONEY_LENGTH = 32
-const MONEY_DRAFT_PATTERN = /^[+]?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/
+const MONEY_AMOUNT_PATTERN = /^([+-])?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/
 
 function expandScientificNotation(rawValue) {
   if (!/[eE]/.test(rawValue)) return rawValue
@@ -42,15 +42,12 @@ function parseMoneyAmount(value) {
   const rawValue = String(value).trim()
   if (!rawValue) return null
 
-  const plainValue = expandScientificNotation(rawValue) ?? rawValue
-  const match = plainValue.match(/^([+-])?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/)
-  if (!match) return null
+  const draftParts = parseMoneyDraftParts(rawValue)
+  if (!draftParts) return null
 
-  const sign = match[1]
+  const { sign, integerDigits, fractionDigits } = draftParts
   if (sign === '-') return null
 
-  const integerDigits = match[2] ?? '0'
-  const fractionDigits = match[3] ?? match[4] ?? ''
   if (fractionDigits.length > 2) return null
 
   let cents = BigInt(integerDigits) * 100n
@@ -58,6 +55,18 @@ function parseMoneyAmount(value) {
 
   if (cents <= 0n || cents > MAX_MONEY_CENTS) return null
   return Number(cents) / 100
+}
+
+function parseMoneyDraftParts(rawValue) {
+  const plainValue = expandScientificNotation(rawValue) ?? rawValue
+  const match = plainValue.match(MONEY_AMOUNT_PATTERN)
+  if (!match) return null
+
+  return {
+    sign: match[1] ?? '',
+    integerDigits: match[2] ?? '0',
+    fractionDigits: match[3] ?? match[4] ?? '',
+  }
 }
 
 function parseSpendAmount(value) {
@@ -119,10 +128,8 @@ export function getPlannerAmountDraftValidation(value, { hasSavedPlan = false } 
     }
   }
 
-  const plainValue = expandScientificNotation(rawValue) ?? rawValue
-  const moneyDraftMatch = plainValue.match(MONEY_DRAFT_PATTERN)
-  const fractionDigits = moneyDraftMatch?.[2] ?? moneyDraftMatch?.[3] ?? ''
-  if (moneyDraftMatch && fractionDigits.length > 2) {
+  const moneyDraftParts = parseMoneyDraftParts(rawValue)
+  if (moneyDraftParts && moneyDraftParts.fractionDigits.length > 2) {
     return {
       isValid: false,
       message: 'Enter a dollar amount with no more than 2 decimal places.',

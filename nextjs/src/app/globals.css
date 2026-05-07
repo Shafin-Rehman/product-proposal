@@ -6969,6 +6969,7 @@ html[data-theme='dark'] .planner-row__progress-track {
   align-items: end;
 }
 
+.planner-summary__validation,
 .planner-row__validation {
   color: var(--danger);
   font-size: 0.82rem;
