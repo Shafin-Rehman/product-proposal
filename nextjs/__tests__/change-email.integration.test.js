@@ -95,8 +95,25 @@ describe('POST /api/change-email', () => {
     })
   })
 
-  it('400 — Supabase admin error is forwarded', async () => {
+  it('500 — DB write fails before auth is touched, returns error', async () => {
     mockAnonClient.auth.getUser.mockResolvedValueOnce({ data: { user: { id: 'u1', email: 'old@example.com' } }, error: null })
+    mockUsersQuery.eq.mockResolvedValueOnce({ error: { message: 'DB write failed' } })
+    await testApiHandler({
+      appHandler: changeEmailHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({ access_token: 'tok', new_email: 'new@example.com' }))
+        expect(res.status).toBe(500)
+        expect((await res.json()).error).toBe('DB write failed')
+        expect(mockAdminClient.auth.admin.updateUserById).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  it('400 — auth update fails after DB write, rolls back users table to original email', async () => {
+    mockAnonClient.auth.getUser.mockResolvedValueOnce({ data: { user: { id: 'u1', email: 'old@example.com' } }, error: null })
+    mockUsersQuery.eq
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: null })
     mockAdminClient.auth.admin.updateUserById.mockResolvedValueOnce({ error: { message: 'Email rate limit exceeded' } })
     await testApiHandler({
       appHandler: changeEmailHandler,
@@ -104,6 +121,8 @@ describe('POST /api/change-email', () => {
         const res = await fetch(post({ access_token: 'tok', new_email: 'new@example.com' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('Email rate limit exceeded')
+        expect(mockUsersQuery.update).toHaveBeenNthCalledWith(1, { email: 'new@example.com' })
+        expect(mockUsersQuery.update).toHaveBeenNthCalledWith(2, { email: 'old@example.com' })
       },
     })
   })

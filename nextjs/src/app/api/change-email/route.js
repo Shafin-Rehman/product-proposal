@@ -48,15 +48,23 @@ export async function POST(request) {
       { auth: { autoRefreshToken: false, persistSession: false } },
     )
 
+    const { error: dbError } = await adminClient
+      .from('users')
+      .update({ email: emailTrimmed })
+      .eq('id', user.id)
+
+    if (dbError) {
+      return NextResponse.json({ error: dbError.message }, { status: 500 })
+    }
+
     const { error: updateError } = await adminClient.auth.admin.updateUserById(user.id, {
       email: emailTrimmed,
     })
 
     if (updateError) {
+      await adminClient.from('users').update({ email: user.email }).eq('id', user.id)
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
-
-    await adminClient.from('users').update({ email: emailTrimmed }).eq('id', user.id)
 
     return NextResponse.json({ email: emailTrimmed })
   } catch {

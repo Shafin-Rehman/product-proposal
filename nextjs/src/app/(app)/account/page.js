@@ -289,13 +289,13 @@ export default function AccountPage() {
       </div>
 
       <section className="account-group">
-        <span className="account-group__label">Privacy</span>
+        <span className="account-group__label">Forgot password</span>
         <div className="settings-panel">
           <div className="settings-item settings-item--static">
-            <div aria-hidden="true" className="settings-item__icon">{'\u{1F512}'}</div>
+            <div aria-hidden="true" className="settings-item__icon">{'\u{1F511}'}</div>
             <div className="settings-item__copy">
-              <strong>Privacy</strong>
-              <span>Session details stay private on this device.</span>
+              <strong>Can&apos;t remember your password?</strong>
+              <span>Log out, then select "Can&apos;t remember your password?" on the login page.</span>
             </div>
           </div>
         </div>

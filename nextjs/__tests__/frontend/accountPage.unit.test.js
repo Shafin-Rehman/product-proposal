@@ -130,3 +130,96 @@ describe('AccountPage — logout', () => {
   })
 })
 
+describe('AccountPage — forgot password hint', () => {
+  it('renders the "Can\'t remember your password?" heading', async () => {
+    setup()
+    await act(async () => { render(React.createElement(AccountPage)) })
+    const [heading] = screen.getAllByText(/can't remember your password\?/i)
+    expect(heading).toBeTruthy()
+  })
+
+  it('hint text instructs to log out then use the login-page link', async () => {
+    setup()
+    await act(async () => { render(React.createElement(AccountPage)) })
+    expect(screen.getByText(/log out.*on the login page/i)).toBeTruthy()
+  })
+})
+
+describe('AccountPage — display name editing', () => {
+  it('opens the name input pre-filled with current display name on edit click', async () => {
+    setup({ profileName: 'Jane S.' })
+    await act(async () => { render(React.createElement(AccountPage)) })
+    fireEvent.click(screen.getByRole('button', { name: /edit display name/i }))
+    expect(screen.getByRole('textbox', { name: /display name/i }).value).toBe('Jane S.')
+  })
+
+  it('cancel editing restores the display name without saving', async () => {
+    setup({ profileName: 'Jane S.' })
+    await act(async () => { render(React.createElement(AccountPage)) })
+    fireEvent.click(screen.getByRole('button', { name: /edit display name/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /display name/i }), { target: { value: 'Something Else' } })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('shows a validation error and does not save when name is empty', async () => {
+    setup({ profileName: 'Jane S.' })
+    await act(async () => { render(React.createElement(AccountPage)) })
+    fireEvent.click(screen.getByRole('button', { name: /edit display name/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /display name/i }), { target: { value: '   ' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    })
+    expect(screen.getByText(/name cannot be empty/i)).toBeTruthy()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('calls PATCH /api/profile and updateProfileName on successful save', async () => {
+    const updateProfileName = jest.fn()
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({
+      user: { email: 'jane@example.com' },
+      logout: jest.fn(),
+      profileName: 'Jane S.',
+      session: { accessToken: 'tok' },
+      updateProfileName,
+      updateEmail: jest.fn(),
+    })
+    useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
+    useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ name: 'Jane Updated' }) })
+    await act(async () => { render(React.createElement(AccountPage)) })
+    fireEvent.click(screen.getByRole('button', { name: /edit display name/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /display name/i }), { target: { value: 'Jane Updated' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    })
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/profile',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'Jane Updated' }),
+      })
+    )
+    expect(updateProfileName).toHaveBeenCalledWith('Jane Updated')
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('shows a server error message when the API returns a non-ok response', async () => {
+    setup({ profileName: 'Jane S.' })
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'Name update failed on server' }),
+    })
+    await act(async () => { render(React.createElement(AccountPage)) })
+    fireEvent.click(screen.getByRole('button', { name: /edit display name/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /display name/i }), { target: { value: 'New Name' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    })
+    expect(screen.getByText('Name update failed on server')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: /display name/i })).toBeTruthy()
+  })
+})
+
