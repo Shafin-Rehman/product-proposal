@@ -17,32 +17,54 @@ jest.mock('@/components/change-password-form', () => {
   }
 })
 
+let capturedOnSuccess = null
+jest.mock('@/components/change-email-form', () => {
+  const React = require('react')
+  return function MockChangeEmailForm({ onSuccess }) {
+    capturedOnSuccess = onSuccess
+    return React.createElement('div', { 'data-testid': 'change-email-form' })
+  }
+})
+
 const React = require('react')
-const { render, screen, fireEvent, act } = require('@testing-library/react')
+const { render, screen, fireEvent, act, waitFor } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode, useTheme } = require('@/components/providers')
 const AccountPage = require('@/app/(app)/account/page').default
 
-function setup({ email = 'john.doe@example.com', theme = 'light', mode = 'live' } = {}) {
+function setup({ email = 'john.doe@example.com', theme = 'light', mode = 'live', profileName = '' } = {}) {
   const mockReplace = jest.fn()
-  useRouter.mockReturnValue({ replace: mockReplace, push: jest.fn() })
-  useAuth.mockReturnValue({ user: email ? { email } : {}, logout: jest.fn() })
+  useRouter.mockReturnValue({ replace: mockReplace })
+  useAuth.mockReturnValue({
+    user: email ? { email } : {},
+    logout: jest.fn(),
+    profileName: profileName || '',
+    session: { accessToken: 'test-token' },
+    updateProfileName: jest.fn(),
+    updateEmail: jest.fn(),
+  })
   useDataMode.mockReturnValue({ mode, isSampleMode: mode === 'sample', setMode: jest.fn() })
   useTheme.mockReturnValue({ theme, setTheme: jest.fn() })
-  return { mockReplace }
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
 }
 
-describe('AccountPage — display name and initials', () => {
-  it('renders display name derived from email', async () => {
-    setup({ email: 'jane.smith@example.com' })
+afterEach(() => {
+  jest.clearAllMocks()
+  delete global.fetch
+})
+
+
+describe('AccountPage — profile section', () => {
+  it('shows email-derived name when no profile name is in context', async () => {
+    setup({ email: 'jane.smith@example.com', profileName: '' })
     await act(async () => { render(React.createElement(AccountPage)) })
     expect(screen.getByText('Jane Smith')).toBeTruthy()
   })
 
-  it('falls back to "BudgetBuddy member" when email is absent', async () => {
-    setup({ email: '' })
+  it('shows profile name from auth context when one is set', async () => {
+    setup({ email: 'jane.smith@example.com', profileName: 'Jane S.' })
     await act(async () => { render(React.createElement(AccountPage)) })
-    expect(screen.getByText('BudgetBuddy member')).toBeTruthy()
+    expect(screen.getByText('Jane S.')).toBeTruthy()
   })
 
   it('renders the email address', async () => {
@@ -61,7 +83,7 @@ describe('AccountPage — theme controls', () => {
 
   it('calls setTheme("dark") when Dark button is clicked', async () => {
     const setTheme = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme })
@@ -72,7 +94,7 @@ describe('AccountPage — theme controls', () => {
 
   it('calls setTheme("light") when Light button is clicked', async () => {
     const setTheme = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout: jest.fn() })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'dark', setTheme })
@@ -86,7 +108,7 @@ describe('AccountPage — logout', () => {
   it('logout button calls logout and router.replace("/login")', async () => {
     const logout = jest.fn()
     const mockReplace = jest.fn()
-    useRouter.mockReturnValue({ replace: mockReplace, push: jest.fn() })
+    useRouter.mockReturnValue({ replace: mockReplace })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })
@@ -98,7 +120,7 @@ describe('AccountPage — logout', () => {
 
   it('logout button shows "Signing you out..." and becomes disabled when clicked', async () => {
     const logout = jest.fn()
-    useRouter.mockReturnValue({ replace: jest.fn(), push: jest.fn() })
+    useRouter.mockReturnValue({ replace: jest.fn() })
     useAuth.mockReturnValue({ user: { email: 'a@b.com' }, logout })
     useDataMode.mockReturnValue({ mode: 'live', isSampleMode: false, setMode: jest.fn() })
     useTheme.mockReturnValue({ theme: 'light', setTheme: jest.fn() })

@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useTheme } from '@/components/providers'
 import ChangePasswordForm from '@/components/change-password-form'
+import ChangeEmailForm from '@/components/change-email-form'
 
 function getDisplayName(email) {
   if (!email) return 'BudgetBuddy member'
@@ -19,12 +20,20 @@ function getDisplayName(email) {
     .join(' ')
 }
 
-function getInitials(email) {
-  if (!email) return 'BB'
+function getInitials(nameOrEmail) {
+  if (!nameOrEmail) return 'BB'
 
-  return email
-    .split('@')[0]
-    .split(/[.\-_]/)
+  if (nameOrEmail.includes('@')) {
+    return nameOrEmail
+      .split('@')[0]
+      .split(/[.\-_]/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || '')
+      .join('')
+  }
+
+  return nameOrEmail
+    .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('')
@@ -32,11 +41,70 @@ function getInitials(email) {
 
 export default function AccountPage() {
   const router = useRouter()
-  const { user, logout } = useAuth()
-  const { isSampleMode, setMode } = useDataMode()
+  const { user, session, logout, profileName, refreshProfile, updateProfileName, updateEmail } = useAuth()
+  const { mode, isSampleMode, setMode } = useDataMode()
   const { theme, setTheme } = useTheme()
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
+
+  const displayName = profileName || getDisplayName(user?.email)
+  const displayEmail = user?.email || ''
+
+  const startEditingName = () => {
+    setNameInput(displayName)
+    setNameError('')
+    setIsEditingName(true)
+  }
+
+  const cancelEditingName = useCallback(() => {
+    setIsEditingName(false)
+    setNameInput('')
+    setNameError('')
+  }, [])
+
+  useEffect(() => {
+    if (!isEditingName) return
+    const onKey = (e) => { if (e.key === 'Escape') cancelEditingName() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isEditingName, cancelEditingName])
+
+  const saveNameHandler = async (e) => {
+    e.preventDefault()
+    const trimmed = nameInput.trim()
+    if (!trimmed) { setNameError('Name cannot be empty.'); return }
+    if (trimmed.length > 60) { setNameError('Name must be 60 characters or fewer.'); return }
+
+    setNameSaving(true)
+    setNameError('')
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNameError(body?.error || 'Could not save name. Please try again.')
+      } else {
+        updateProfileName(trimmed)
+        setIsEditingName(false)
+        setNameInput('')
+      }
+    } catch {
+      setNameError('Could not save name. Please check your connection.')
+    } finally {
+      setNameSaving(false)
+    }
+  }
 
   const handleLogout = () => {
     setIsLoggingOut(true)
@@ -128,13 +196,54 @@ export default function AccountPage() {
   return (
     <section className="app-screen account-screen">
       <article className="account-hero">
-        <div className="account-hero__avatar">{getInitials(user?.email)}</div>
+        <div className="account-hero__avatar">{getInitials(profileName || user?.email)}</div>
         <div className="account-hero__copy">
           <span className="account-hero__eyebrow">Account settings</span>
 
-          <h1>{getDisplayName(user?.email)}</h1>
+          {isEditingName ? (
+            <form className="account-name-edit" onSubmit={saveNameHandler}>
+              <input
+                aria-label="Display name"
+                autoFocus
+                className="account-name-input"
+                maxLength={60}
+                onChange={(e) => setNameInput(e.target.value)}
+                type="text"
+                value={nameInput}
+              />
+              {nameError && (
+                <span className="account-name-error" role="alert">{nameError}</span>
+              )}
+              <div className="account-name-edit__actions">
+                <button
+                  className="button-primary"
+                  disabled={nameSaving}
+                  type="submit"
+                >
+                  {nameSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  className="button-secondary"
+                  onClick={cancelEditingName}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              aria-label="Edit display name"
+              className="account-hero__name-btn"
+              onClick={startEditingName}
+              type="button"
+            >
+              <h1>{displayName}</h1>
+              <span aria-hidden="true" className="account-hero__edit-icon">✎</span>
+            </button>
+          )}
 
-          <p>{user?.email || 'No email available'}</p>
+          <p>{displayEmail || 'No email available'}</p>
         </div>
       </article>
 
@@ -173,43 +282,20 @@ export default function AccountPage() {
         <section className="account-group">
           <span className="account-group__label">Account management</span>
           <div className="settings-panel">
-            <div className="settings-item settings-item--static">
-              <div aria-hidden="true" className="settings-item__icon">{'\u{1F4B3}'}</div>
-              <div className="settings-item__copy">
-                <strong>Linked accounts</strong>
-                <span>Linked accounts are available to view here.</span>
-              </div>
-            </div>
-
-            <div className="settings-item settings-item--static">
-              <div aria-hidden="true" className="settings-item__icon">{'\u{1F514}'}</div>
-              <div className="settings-item__copy">
-                <strong>Notifications</strong>
-                <span>Budget reminders and monthly recaps stay optional.</span>
-              </div>
-            </div>
+            <ChangePasswordForm />
+            <ChangeEmailForm onSuccess={(newEmail) => { if (newEmail) updateEmail(newEmail) }} />
           </div>
         </section>
       </div>
 
       <section className="account-group">
-        <span className="account-group__label">Privacy & support</span>
+        <span className="account-group__label">Privacy</span>
         <div className="settings-panel">
           <div className="settings-item settings-item--static">
             <div aria-hidden="true" className="settings-item__icon">{'\u{1F512}'}</div>
             <div className="settings-item__copy">
               <strong>Privacy</strong>
               <span>Session details stay private on this device.</span>
-            </div>
-          </div>
-
-          <ChangePasswordForm />
-
-          <div className="settings-item settings-item--static">
-            <div aria-hidden="true" className="settings-item__icon">{'\u2753'}</div>
-            <div className="settings-item__copy">
-              <strong>Support</strong>
-              <span>Get help with account questions and sign-in issues.</span>
             </div>
           </div>
         </div>

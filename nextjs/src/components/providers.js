@@ -57,10 +57,47 @@ function ThemeProvider({ children }) {
 function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [isReady, setIsReady] = useState(false)
+  const [profileName, setProfileName] = useState('')
 
   useEffect(() => {
     setSession(readSession())
     setIsReady(true)
+  }, [])
+
+  const refreshProfile = useCallback(async (accessToken) => {
+    if (!accessToken) return
+    try {
+      const res = await fetch('/api/profile', {
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setProfileName(data.name ?? '')
+      if (data.email) {
+        setSession((prev) => {
+          if (!prev || prev.user?.email === data.email) return prev
+          const updated = { ...prev, user: { ...prev.user, email: data.email } }
+          try { writeSession({ accessToken: prev.accessToken, user: updated.user }) } catch {}
+          return updated
+        })
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (session?.accessToken) refreshProfile(session.accessToken)
+  }, [session?.accessToken, refreshProfile])
+
+  const updateProfileName = useCallback((name) => setProfileName(name ?? ''), [])
+
+  const updateEmail = useCallback((email) => {
+    if (!email) return
+    setSession((prev) => {
+      if (!prev || prev.user?.email === email) return prev
+      const updated = { ...prev, user: { ...prev.user, email } }
+      try { writeSession({ accessToken: prev.accessToken, user: updated.user }) } catch {}
+      return updated
+    })
   }, [])
 
   const setSessionFromAuthResponse = (responseBody) => {
@@ -77,6 +114,7 @@ function AuthProvider({ children }) {
   const logout = () => {
     clearSession()
     setSession(null)
+    setProfileName('')
   }
 
   const value = useMemo(() => ({
@@ -84,9 +122,13 @@ function AuthProvider({ children }) {
     user: session?.user ?? null,
     isReady,
     isAuthenticated: Boolean(session?.accessToken),
+    profileName,
+    refreshProfile: () => refreshProfile(session?.accessToken),
+    updateProfileName,
+    updateEmail,
     setSessionFromAuthResponse,
     logout,
-  }), [isReady, session])
+  }), [isReady, session, profileName, refreshProfile, updateProfileName, updateEmail])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
@@ -129,6 +171,8 @@ function DataChangedProvider({ children }) {
 
   return <DataChangedContext.Provider value={value}>{children}</DataChangedContext.Provider>
 }
+
+export { AuthProvider }
 
 export function AppProviders({ children }) {
   return (
