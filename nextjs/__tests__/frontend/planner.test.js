@@ -335,7 +335,7 @@ describe('PlannerView', () => {
     expect(screen.getByText('Save update')).toBeTruthy()
   })
 
-  it('clears one saved category plan and leaves other category plans intact', async () => {
+  it('clears one saved category plan immediately, recomputes summary totals, and does not refetch', async () => {
     apiGet
       .mockResolvedValueOnce([
         { id: 'cat-food', name: 'Food', icon: null },
@@ -390,6 +390,7 @@ describe('PlannerView', () => {
 
     await renderPlanner()
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(screen.getByText('$150.00 left')).toBeTruthy()
 
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Clear plan' })[0])
@@ -406,6 +407,9 @@ describe('PlannerView', () => {
     })
     expect(screen.getAllByDisplayValue('').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByDisplayValue('80.00')).toBeTruthy()
+    expect(screen.queryByText('$150.00 left')).toBeNull()
+    expect(screen.getByText('$30.00 left')).toBeTruthy()
+    expect(screen.getByText('$30.00 under plan')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Clear plan' })).toHaveLength(1)
     expect(apiGet).toHaveBeenCalledTimes(5)
   })

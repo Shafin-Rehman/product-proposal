@@ -73,6 +73,53 @@ function buildSampleCategories() {
   }))
 }
 
+function toSummaryMoneyNumber(value) {
+  if (value == null || value === '') return null
+
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return null
+  return Number(amount.toFixed(2))
+}
+
+function toSummaryMoneyString(value) {
+  return Number(value ?? 0).toFixed(2)
+}
+
+function updateSummaryAfterCategoryClear(summary, categoryBudgets, clearedCategoryId) {
+  if (!summary) return summary
+
+  const categoryBudgetTotal = categoryBudgets.reduce((sum, budget) => {
+    const amount = toSummaryMoneyNumber(budget.monthly_limit)
+    return amount == null ? sum : sum + amount
+  }, 0)
+  const categoryBudgetTotalText = toSummaryMoneyString(categoryBudgetTotal)
+  const monthlyLimit = summary.monthly_limit ?? null
+  const totalBudget = monthlyLimit ?? (categoryBudgets.length ? categoryBudgetTotalText : null)
+  const totalBudgetNumber = toSummaryMoneyNumber(totalBudget)
+  const totalExpenses = toSummaryMoneyNumber(summary.total_expenses) ?? 0
+
+  return {
+    ...summary,
+    category_budget_total: categoryBudgetTotalText,
+    total_budget: totalBudget,
+    remaining_budget: totalBudgetNumber == null
+      ? null
+      : toSummaryMoneyString(totalBudgetNumber - totalExpenses),
+    threshold_exceeded: totalBudgetNumber == null ? false : totalExpenses >= totalBudgetNumber,
+    category_statuses: (summary.category_statuses ?? []).map((status) => (
+      status.category_id === clearedCategoryId
+        ? {
+            ...status,
+            monthly_limit: null,
+            remaining_budget: null,
+            threshold_exceeded: false,
+            progress_percentage: 0,
+          }
+        : status
+    )),
+  }
+}
+
 function LiveNotice({ message, onRetry }) {
   if (!message) return null
 
@@ -739,16 +786,7 @@ export default function PlannerView() {
             monthly_limit: current.config?.monthly_limit ?? null,
             category_budgets: categoryBudgets,
           },
-          summary: current.summary
-            ? {
-                ...current.summary,
-                category_statuses: (current.summary.category_statuses ?? []).map((status) => (
-                  status.category_id === row.categoryId
-                    ? { ...status, monthly_limit: null }
-                    : status
-                )),
-              }
-            : current.summary,
+          summary: updateSummaryAfterCategoryClear(current.summary, categoryBudgets, row.categoryId),
         }
       })
       dirtyRowIdsRef.current.delete(row.id)
