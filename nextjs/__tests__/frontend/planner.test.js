@@ -639,6 +639,47 @@ describe('PlannerView', () => {
     await waitFor(() => expect(screen.getByDisplayValue('49.23')).toBeTruthy())
   })
 
+  it('disables the overall cap save while a category plan save is in flight', async () => {
+    mockPlannerResponses()
+    let resolveCategorySave
+    apiPost.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveCategorySave = resolve
+    }))
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Overall monthly cap'), { target: { value: '1200' } })
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByRole('button', { name: 'Update cap' }).disabled).toBe(false)
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Plan amount ($)'), { target: { value: '49.23' } })
+      await flushAsyncUpdates()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save plan' }))
+      await flushAsyncUpdates()
+    })
+
+    expect(screen.getByRole('button', { name: 'Update cap' }).disabled).toBe(true)
+
+    await act(async () => {
+      resolveCategorySave({
+        month: '2026-03-01',
+        monthly_limit: '1000.00',
+        notified: false,
+        budget_alert: null,
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '49.23' },
+        ],
+      })
+      await flushAsyncUpdates()
+    })
+  })
+
   it('opens the inline Add goal form from the savings goals CTA', async () => {
     mockPlannerResponses()
 

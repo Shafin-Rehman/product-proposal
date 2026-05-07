@@ -1066,7 +1066,7 @@ export default function PlannerView() {
             className="button-primary"
             disabled={
               isSampleMode
-              || savingTarget === 'overall'
+              || Boolean(savingTarget)
               || normalizedOverallDraft == null
               || normalizedOverallDraft === normalizedOverallLimit
             }
