@@ -170,6 +170,8 @@ describe('buildActivityFeed', () => {
     expect(entry.id).toBe('expense-e1')
     expect(entry.amount).toBe(25)
     expect(entry.title).toBe('Coffee')
+    expect(entry.merchant).toBe('Coffee')
+    expect(entry.note).toBe('')
   })
 
   it('uses a compact no-category label for expenses without a category name', () => {
@@ -182,9 +184,17 @@ describe('buildActivityFeed', () => {
     const expenseRow = { id: 'e3', amount: '4.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: '', category_name: 'Education' }
     const [entry] = buildActivityFeed([expenseRow], [])
     expect(entry.title).toBe('Education')
-    expect(entry.merchant).toBe('Education')
+    expect(entry.merchant).toBe('')
     expect(entry.note).toBe('')
     expect(Object.values(entry).join(' ')).not.toMatch(/live expense/i)
+  })
+
+  it('keeps the compact expense title fallback separate from a cleared merchant', () => {
+    const expenseRow = { id: 'e4', amount: '18.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: null, category_name: 'Dining' }
+    const [entry] = buildActivityFeed([expenseRow], [])
+    expect(entry.title).toBe('Dining')
+    expect(entry.chip).toBe('Dining')
+    expect(entry.merchant).toBe('')
   })
 
   it('sorts combined entries with the most recent first', () => {
@@ -239,6 +249,14 @@ describe('buildActivityFeed', () => {
     const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', source_name: 'Payroll' }]
     const [entry] = buildActivityFeed([], income)
     expect(entry.note).toBe('')
+  })
+
+  it('keeps income source as the title and saved notes as the note text', () => {
+    const income = [{ id: 'i2', amount: '100.00', date: '2026-03-21', source_name: 'Freelance', notes: 'Weekend session' }]
+    const [entry] = buildActivityFeed([], income)
+    expect(entry.title).toBe('Freelance')
+    expect(entry.merchant).toBe('Freelance')
+    expect(entry.note).toBe('Weekend session')
   })
 
   it('treats explicit "No source" the same as missing for chip display, but keeps a literal "Income" source name', () => {

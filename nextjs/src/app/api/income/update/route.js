@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
+import { validateIncomeNotes } from '@/lib/transactionText'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -21,11 +22,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
   }
 
+  const notesValidation = validateIncomeNotes(notes)
+  if (notesValidation.error) {
+    return NextResponse.json({ error: notesValidation.error }, { status: 400 })
+  }
+
   const entries = Object.entries({
     source_id,
     amount,
     date: normalizedDate,
-    notes
+    notes: notesValidation.value
   }).filter(([, v]) => v !== undefined)
   if (!entries.length) return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
 

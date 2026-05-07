@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { authenticate } from '@/lib/auth'
 import { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } from '@/lib/budget'
+import { validateExpenseDescription } from '@/lib/transactionText'
 
 export async function POST(request) {
   const { user, error } = await authenticate(request)
@@ -21,10 +22,15 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Valid date is required' }, { status: 400 })
   }
 
+  const descriptionValidation = validateExpenseDescription(description)
+  if (descriptionValidation.error) {
+    return NextResponse.json({ error: descriptionValidation.error }, { status: 400 })
+  }
+
   const entries = Object.entries({
     category_id,
     amount,
-    description,
+    description: descriptionValidation.value,
     date: normalizedDate
   }).filter(([, v]) => v !== undefined)
   if (!entries.length) return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })

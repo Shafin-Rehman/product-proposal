@@ -3119,12 +3119,33 @@ button.activity-feed__row:focus-visible {
   flex: 1;
 }
 
+.transaction-item__body {
+  overflow: hidden;
+}
+
+.transaction-item__title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .entry-meta,
 .transaction-item__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.55rem;
   align-items: center;
+}
+
+.transaction-item__note {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .entry-chip {
@@ -3341,6 +3362,11 @@ html[data-theme='dark'] .search-field__input {
   margin: 0.35rem 0 0.15rem;
   font-size: 1.45rem;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.detail-sheet__subtitle {
+  overflow-wrap: anywhere;
 }
 
 .detail-sheet__amount {
@@ -3377,6 +3403,11 @@ html[data-theme='dark'] .detail-grid div {
   display: block;
   font-size: 0.95rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.detail-grid__item--wide {
+  grid-column: 1 / -1;
 }
 
 .insight-stage {
@@ -5495,6 +5526,7 @@ html[data-theme='dark'] .transactions-fab {
 .entry-sheet__amount small,
 .entry-sheet__hint {
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .entry-sheet__segment {
@@ -11927,4 +11959,3 @@ html[data-theme='dark'] .demo-banner__cta--primary {
   border: 1px solid var(--border);
   color: var(--text-primary);
 }
-
