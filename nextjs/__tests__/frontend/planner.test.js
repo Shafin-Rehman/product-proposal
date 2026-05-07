@@ -391,48 +391,6 @@ describe('PlannerView', () => {
     await renderPlanner()
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
 
-    apiGet
-      .mockResolvedValueOnce([
-        { id: 'cat-food', name: 'Food', icon: null },
-        { id: 'cat-fun', name: 'Fun', icon: null },
-      ])
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
-        monthly_limit: null,
-        category_budgets: [
-          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
-        monthly_limit: null,
-        total_budget: '80.00',
-        total_expenses: '50.00',
-        total_income: '1000.00',
-        remaining_budget: '30.00',
-        threshold_exceeded: false,
-        category_statuses: [
-          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: null, spent: '20.00' },
-          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00', spent: '30.00' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
-
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Clear plan' })[0])
       await flushAsyncUpdates()
@@ -449,6 +407,7 @@ describe('PlannerView', () => {
     expect(screen.getAllByDisplayValue('').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByDisplayValue('80.00')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Clear plan' })).toHaveLength(1)
+    expect(apiGet).toHaveBeenCalledTimes(5)
   })
 
   it('shows inline validation feedback for invalid category amount drafts', async () => {

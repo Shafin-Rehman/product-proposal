@@ -1,11 +1,12 @@
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
-jest.mock('@/lib/db', () => ({ query: jest.fn() }))
+jest.mock('@/lib/db', () => ({ connect: jest.fn(), query: jest.fn() }))
 jest.mock('@/lib/budget', () => {
   const actual = jest.requireActual('@/lib/budget')
   return {
     ...actual,
     normalizeMonth: jest.fn(actual.normalizeMonth),
     isPositiveMoneyValue: jest.fn(actual.isPositiveMoneyValue),
+    clearCategoryBudgetConfig: jest.fn(),
     getMonthlyBudget: jest.fn(),
     getMonthlyBudgetConfig: jest.fn(),
     getOwnedOrGlobalCategoriesByIds: jest.fn(),
@@ -37,10 +38,12 @@ const deleteBudget = () => ({ method: 'DELETE' })
 beforeEach(() => {
   authenticate.mockClear()
   db.query.mockClear()
+  db.connect.mockClear()
   budget.normalizeMonth.mockClear()
   budget.getMonthlyBudget.mockClear()
   budget.getMonthlyBudgetConfig.mockClear()
   budget.getOwnedOrGlobalCategoriesByIds.mockClear()
+  budget.clearCategoryBudgetConfig.mockClear()
   budget.deleteCategoryBudget.mockClear()
   budget.upsertMonthlyBudget.mockClear()
   budget.upsertCategoryBudgets.mockClear()
@@ -391,11 +394,7 @@ describe('POST /api/budget', () => {
 describe('DELETE /api/budget', () => {
   it('clears one category budget and returns remaining category budgets', async () => {
     budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID }])
-    budget.deleteCategoryBudget.mockResolvedValueOnce({
-      category_id: FOOD_CATEGORY_ID,
-      month: '2026-03-01',
-    })
-    budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
+    budget.clearCategoryBudgetConfig.mockResolvedValueOnce({
       month: '2026-03-01',
       monthly_limit: null,
       notified: false,
@@ -430,15 +429,14 @@ describe('DELETE /api/budget', () => {
           ],
         })
         expect(budget.getOwnedOrGlobalCategoriesByIds).toHaveBeenCalledWith('uid', [FOOD_CATEGORY_ID])
-        expect(budget.deleteCategoryBudget).toHaveBeenCalledWith('uid', '2026-03-01', FOOD_CATEGORY_ID)
+        expect(budget.clearCategoryBudgetConfig).toHaveBeenCalledWith('uid', '2026-03-01', FOOD_CATEGORY_ID)
       }
     })
   })
 
   it('returns an empty budget envelope when clearing the final or missing category budget', async () => {
     budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID }])
-    budget.deleteCategoryBudget.mockResolvedValueOnce(null)
-    budget.getMonthlyBudgetConfig.mockResolvedValueOnce(null)
+    budget.clearCategoryBudgetConfig.mockResolvedValueOnce(null)
 
     await testApiHandler({
       appHandler: budgetHandler,
@@ -468,7 +466,7 @@ describe('DELETE /api/budget', () => {
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('category_id must reference an owned or global category')
         expect(budget.getOwnedOrGlobalCategoriesByIds).toHaveBeenCalledWith('uid', [FOOD_CATEGORY_ID])
-        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+        expect(budget.clearCategoryBudgetConfig).not.toHaveBeenCalled()
       }
     })
   })
@@ -491,7 +489,7 @@ describe('DELETE /api/budget', () => {
         const res = await fetch(deleteBudget())
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('category_id must be a valid UUID')
-        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+        expect(budget.clearCategoryBudgetConfig).not.toHaveBeenCalled()
       }
     })
   })
@@ -504,7 +502,7 @@ describe('DELETE /api/budget', () => {
         const res = await fetch(deleteBudget())
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('Valid month is required')
-        expect(budget.deleteCategoryBudget).not.toHaveBeenCalled()
+        expect(budget.clearCategoryBudgetConfig).not.toHaveBeenCalled()
       }
     })
   })
@@ -873,6 +871,64 @@ describe('deleteCategoryBudget', () => {
     db.query.mockResolvedValueOnce({ rows: [] })
 
     await expect(actualBudget.deleteCategoryBudget('uid', '2026-03-01', FOOD_CATEGORY_ID)).resolves.toBeNull()
+  })
+})
+
+describe('clearCategoryBudgetConfig', () => {
+  it('deletes and reads the updated budget config in one transaction', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01' }] })
+        .mockResolvedValueOnce({ rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: false }] })
+        .mockResolvedValueOnce({
+          rows: [{
+            category_id: TRANSIT_CATEGORY_ID,
+            category_name: 'Transit',
+            category_icon: '🚌',
+            monthly_limit: '25.00',
+          }],
+        })
+        .mockResolvedValueOnce({}),
+      release: jest.fn(),
+    }
+    db.connect.mockResolvedValueOnce(client)
+
+    await expect(actualBudget.clearCategoryBudgetConfig('uid', '2026-03-01', FOOD_CATEGORY_ID)).resolves.toEqual({
+      month: '2026-03-01',
+      monthly_limit: '100.00',
+      notified: false,
+      category_budgets: [{
+        category_id: TRANSIT_CATEGORY_ID,
+        category_name: 'Transit',
+        category_icon: '🚌',
+        monthly_limit: '25.00',
+      }],
+    })
+    expect(client.query).toHaveBeenNthCalledWith(1, 'BEGIN')
+    expect(client.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/DELETE FROM public\.category_budgets/),
+      ['uid', '2026-03-01', FOOD_CATEGORY_ID]
+    )
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT')
+    expect(client.release).toHaveBeenCalled()
+  })
+
+  it('rolls back when the post-delete config read fails', async () => {
+    const client = {
+      query: jest.fn()
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01' }] })
+        .mockRejectedValueOnce(new Error('read failed'))
+        .mockResolvedValueOnce({}),
+      release: jest.fn(),
+    }
+    db.connect.mockResolvedValueOnce(client)
+
+    await expect(actualBudget.clearCategoryBudgetConfig('uid', '2026-03-01', FOOD_CATEGORY_ID)).rejects.toThrow('read failed')
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK')
+    expect(client.release).toHaveBeenCalled()
   })
 })
 

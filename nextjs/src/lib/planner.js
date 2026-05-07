@@ -4,6 +4,7 @@ import { buildCategoryBudgetHealth } from './budgetHealth'
 const UNCATEGORIZED_KEY = '__uncategorized__'
 const MAX_MONEY_CENTS = 9999999999n
 const MAX_EXPANDED_MONEY_LENGTH = 32
+const MAX_MONEY_INTEGER_DIGITS = 8
 const MONEY_AMOUNT_PATTERN = /^([+-])?(?:(\d+)(?:\.(\d*))?|\.(\d+))$/
 
 function expandScientificNotation(rawValue) {
@@ -48,9 +49,12 @@ function parseMoneyAmount(value) {
   const { sign, integerDigits, fractionDigits } = draftParts
   if (sign === '-') return null
 
+  const normalizedIntegerDigits = integerDigits.replace(/^0+/, '') || '0'
+  if (normalizedIntegerDigits.length > MAX_MONEY_INTEGER_DIGITS) return null
+
   if (fractionDigits.length > 2) return null
 
-  let cents = BigInt(integerDigits) * 100n
+  let cents = BigInt(normalizedIntegerDigits) * 100n
   cents += BigInt((fractionDigits.padEnd(2, '0').slice(0, 2)) || '0')
 
   if (cents <= 0n || cents > MAX_MONEY_CENTS) return null

@@ -85,8 +85,8 @@ export function isPositiveMoneyValue(value) {
   return Number.isFinite(amount) && amount > 0 && amount <= MAX_MONEY_VALUE
 }
 
-export async function getMonthlyBudget(userId, month) {
-  const { rows } = await db.query(
+export async function getMonthlyBudget(userId, month, queryable = db) {
+  const { rows } = await queryable.query(
     `SELECT month, monthly_limit, notified
      FROM public.budget_thresholds
      WHERE user_id = $1 AND month = $2`,
@@ -110,8 +110,8 @@ export async function getOwnedOrGlobalCategoriesByIds(userId, categoryIds = []) 
   return rows
 }
 
-export async function getCategoryBudgets(userId, month) {
-  const { rows } = await db.query(
+export async function getCategoryBudgets(userId, month, queryable = db) {
+  const { rows } = await queryable.query(
     `SELECT
        cb.category_id,
        cb.monthly_limit,
@@ -127,11 +127,9 @@ export async function getCategoryBudgets(userId, month) {
   return rows
 }
 
-export async function getMonthlyBudgetConfig(userId, month) {
-  const [budget, categoryBudgets] = await Promise.all([
-    getMonthlyBudget(userId, month),
-    getCategoryBudgets(userId, month),
-  ])
+export async function getMonthlyBudgetConfig(userId, month, queryable = db) {
+  const budget = await getMonthlyBudget(userId, month, queryable)
+  const categoryBudgets = await getCategoryBudgets(userId, month, queryable)
 
   if (!budget && !categoryBudgets.length) return null
 
@@ -188,8 +186,8 @@ export async function upsertCategoryBudgets(userId, month, categoryBudgets = [])
   return rows
 }
 
-export async function deleteCategoryBudget(userId, month, categoryId) {
-  const { rows } = await db.query(
+export async function deleteCategoryBudget(userId, month, categoryId, queryable = db) {
+  const { rows } = await queryable.query(
     `DELETE FROM public.category_budgets
      WHERE user_id = $1 AND month = $2 AND category_id = $3
      RETURNING category_id, month`,
@@ -197,6 +195,23 @@ export async function deleteCategoryBudget(userId, month, categoryId) {
   )
 
   return rows[0] ?? null
+}
+
+export async function clearCategoryBudgetConfig(userId, month, categoryId) {
+  const client = await db.connect()
+
+  try {
+    await client.query('BEGIN')
+    await deleteCategoryBudget(userId, month, categoryId, client)
+    const savedBudget = await getMonthlyBudgetConfig(userId, month, client)
+    await client.query('COMMIT')
+    return savedBudget
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export async function getMonthlyTotals(userId, month) {

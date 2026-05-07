@@ -667,6 +667,16 @@ export default function PlannerView() {
             monthly_limit: current.config?.monthly_limit ?? null,
             category_budgets: categoryBudgets,
           },
+          summary: current.summary
+            ? {
+                ...current.summary,
+                category_statuses: (current.summary.category_statuses ?? []).map((status) => (
+                  status.category_id === row.categoryId
+                    ? { ...status, monthly_limit: nextLimit }
+                    : status
+                )),
+              }
+            : current.summary,
         }
       })
       dirtyRowIdsRef.current.delete(row.id)
@@ -729,6 +739,16 @@ export default function PlannerView() {
             monthly_limit: current.config?.monthly_limit ?? null,
             category_budgets: categoryBudgets,
           },
+          summary: current.summary
+            ? {
+                ...current.summary,
+                category_statuses: (current.summary.category_statuses ?? []).map((status) => (
+                  status.category_id === row.categoryId
+                    ? { ...status, monthly_limit: null }
+                    : status
+                )),
+              }
+            : current.summary,
         }
       })
       dirtyRowIdsRef.current.delete(row.id)
@@ -749,7 +769,6 @@ export default function PlannerView() {
           kind: 'expense',
         }).label} plan cleared for ${formatMonthPeriod(activeMonth)}.`,
       })
-      handleRetry()
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         handleAuthError()

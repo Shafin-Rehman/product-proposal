@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
 import {
-  deleteCategoryBudget,
+  clearCategoryBudgetConfig,
   evaluateThresholdForMonth,
   getMonthlyBudgetConfig,
   getOwnedOrGlobalCategoriesByIds,
@@ -137,8 +137,7 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'category_id must reference an owned or global category' }, { status: 400 })
     }
 
-    await deleteCategoryBudget(user.id, month, categoryId)
-    const savedBudget = await getMonthlyBudgetConfig(user.id, month)
+    const savedBudget = await clearCategoryBudgetConfig(user.id, month, categoryId)
 
     return NextResponse.json({
       month: savedBudget?.month ?? month,

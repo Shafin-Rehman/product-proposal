@@ -340,6 +340,7 @@ describe('planner money normalization', () => {
     expect(normalizeMoneyDraftForSave('1.005')).toBeNull()
     expect(normalizeMoneyDraftForSave('1.105')).toBeNull()
     expect(normalizeMoneyDraftForSave('100000000.00')).toBeNull()
+    expect(normalizeMoneyDraftForSave('1'.repeat(1000))).toBeNull()
     expect(normalizeMoneyDraftForSave('0.004')).toBeNull()
     expect(normalizeMoneyDraftForSave('1e1000')).toBeNull()
     expect(normalizeMoneyDraftForSave('')).toBeNull()

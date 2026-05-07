@@ -1,16 +1,16 @@
 const { ApiError, apiDelete, apiGet } = require('@/lib/apiClient')
 
+const originalFetch = global.fetch
+
+beforeEach(() => {
+  global.fetch = jest.fn()
+})
+
+afterAll(() => {
+  global.fetch = originalFetch
+})
+
 describe('apiGet', () => {
-  const originalFetch = global.fetch
-
-  beforeEach(() => {
-    global.fetch = jest.fn()
-  })
-
-  afterAll(() => {
-    global.fetch = originalFetch
-  })
-
   it('attaches the bearer token and returns parsed json', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
@@ -69,7 +69,9 @@ describe('apiGet', () => {
     expect(error.status).toBe(418)
     expect(error.body).toEqual({ error: 'Boom' })
   })
+})
 
+describe('apiDelete', () => {
   it('sends authenticated DELETE requests and returns parsed json', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
