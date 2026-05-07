@@ -20,6 +20,11 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
   }
 
+  let adminClient = null
+  let originalEmail = null
+  let userId = null
+  let dbUpdateSucceeded = false
+
   try {
     const anonClient = createClient(
       process.env.SUPABASE_URL,
@@ -42,7 +47,10 @@ export async function POST(request) {
       )
     }
 
-    const adminClient = createClient(
+    originalEmail = user.email
+    userId = user.id
+
+    adminClient = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       { auth: { autoRefreshToken: false, persistSession: false } },
@@ -51,23 +59,29 @@ export async function POST(request) {
     const { error: dbError } = await adminClient
       .from('users')
       .update({ email: emailTrimmed })
-      .eq('id', user.id)
+      .eq('id', userId)
 
     if (dbError) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(user.id, {
+    dbUpdateSucceeded = true
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
       email: emailTrimmed,
     })
 
     if (updateError) {
-      await adminClient.from('users').update({ email: user.email }).eq('id', user.id)
+      await adminClient.from('users').update({ email: originalEmail }).eq('id', userId).catch(() => {})
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
 
     return NextResponse.json({ email: emailTrimmed })
   } catch {
+    // Attempt to rollback the users table update if it succeeded
+    if (dbUpdateSucceeded && adminClient && originalEmail && userId) {
+      await adminClient.from('users').update({ email: originalEmail }).eq('id', userId).catch(() => {})
+    }
     return NextResponse.json({ error: 'Failed to update email' }, { status: 500 })
   }
 }

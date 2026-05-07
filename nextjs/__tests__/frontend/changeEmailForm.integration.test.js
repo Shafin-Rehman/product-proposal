@@ -81,6 +81,20 @@ it('sends correct payload to POST /api/change-email', async () => {
   )
 })
 
+it('shows generic error when fetch throws', async () => {
+  global.fetch.mockRejectedValueOnce(new Error('network error'))
+  await openForm()
+
+  fireEvent.change(screen.getByPlaceholderText(/you@example\.com/i), { target: { value: 'new@example.com' } })
+  await act(async () => {
+    fireEvent.submit(screen.getByRole('button', { name: /update email/i }).closest('form'))
+  })
+
+  await waitFor(() => {
+    expect(screen.getByRole('alert').textContent).toMatch(/something went wrong/i)
+  })
+})
+
 it('disables the Change email button when there is no access token', async () => {
   const { useAuth } = require('@/components/providers')
   useAuth.mockReturnValue({ session: null })
