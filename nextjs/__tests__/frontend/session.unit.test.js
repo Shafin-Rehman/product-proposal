@@ -1,6 +1,4 @@
-const { readSession, writeSession, clearSession } = require('@/lib/session')
-
-const SESSION_KEY = 'budgetbuddy.session'
+const { SESSION_STORAGE_KEY, readSession, writeSession, clearSession } = require('@/lib/session')
 
 let store = {}
 
@@ -25,7 +23,7 @@ describe('readSession', () => {
   })
 
   it('returns the session for valid stored data', () => {
-    store[SESSION_KEY] = JSON.stringify({ accessToken: 'tok-123', user: { id: 'u1', email: 'a@b.com' } })
+    store[SESSION_STORAGE_KEY] = JSON.stringify({ accessToken: 'tok-123', user: { id: 'u1', email: 'a@b.com' } })
     const session = readSession()
     expect(session.accessToken).toBe('tok-123')
     expect(session.user).toEqual({ id: 'u1', email: 'a@b.com' })
@@ -40,15 +38,15 @@ describe('writeSession', () => {
   it('persists the session and returns it', () => {
     const result = writeSession({ accessToken: 'tok-abc', user: { id: 'u1', email: 'a@b.com' } })
     expect(result.accessToken).toBe('tok-abc')
-    expect(JSON.parse(store[SESSION_KEY]).user.id).toBe('u1')
+    expect(JSON.parse(store[SESSION_STORAGE_KEY]).user.id).toBe('u1')
   })
 })
 
 describe('clearSession', () => {
   it('removes a stored session', () => {
-    store[SESSION_KEY] = JSON.stringify({ accessToken: 'tok', user: { id: 'u1', email: 'a@b.com' } })
+    store[SESSION_STORAGE_KEY] = JSON.stringify({ accessToken: 'tok', user: { id: 'u1', email: 'a@b.com' } })
     clearSession()
-    expect(store[SESSION_KEY]).toBeUndefined()
+    expect(store[SESSION_STORAGE_KEY]).toBeUndefined()
   })
 
   it('does not throw when nothing is stored', () => {

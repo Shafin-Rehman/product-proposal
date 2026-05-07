@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { clearSession, readSession, writeSession } from '@/lib/session'
+import { SESSION_STORAGE_KEY, clearSession, readSession, writeSession } from '@/lib/session'
 
 const THEME_STORAGE_KEY = 'budgetbuddy.theme'
 const DATA_MODE_STORAGE_KEY = 'budgetbuddy.data-mode'
@@ -61,6 +61,16 @@ function AuthProvider({ children }) {
   useEffect(() => {
     setSession(readSession())
     setIsReady(true)
+  }, [])
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key !== SESSION_STORAGE_KEY) return
+      setSession(readSession())
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
   }, [])
 
   const setSessionFromAuthResponse = (responseBody) => {
