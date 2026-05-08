@@ -5,6 +5,7 @@ const {
   buildPlannerRows,
   buildPlannerSummary,
   formatMoneyDraftValue,
+  getPlannerAmountDraftValidation,
   getCopyLastMonthState,
   getPlannerAdjacentMonths,
   mergePlannerDrafts,
@@ -333,15 +334,60 @@ describe('planner money normalization', () => {
   })
 
   it('normalizes valid save drafts to the stored two-decimal number shape', () => {
-    expect(normalizeMoneyDraftForSave('1.005')).toBe(1.01)
-    expect(normalizeMoneyDraftForSave('1.105')).toBe(1.11)
     expect(normalizeMoneyDraftForSave('80')).toBe(80)
     expect(normalizeMoneyDraftForSave('1.')).toBe(1)
     expect(normalizeMoneyDraftForSave('99999999.99')).toBe(99999999.99)
+    expect(normalizeMoneyDraftForSave('1.005')).toBeNull()
+    expect(normalizeMoneyDraftForSave('1.105')).toBeNull()
     expect(normalizeMoneyDraftForSave('100000000.00')).toBeNull()
+    expect(normalizeMoneyDraftForSave('1'.repeat(1000))).toBeNull()
     expect(normalizeMoneyDraftForSave('0.004')).toBeNull()
     expect(normalizeMoneyDraftForSave('1e1000')).toBeNull()
     expect(normalizeMoneyDraftForSave('')).toBeNull()
+  })
+})
+
+describe('planner amount draft validation', () => {
+  it('accepts positive decimal drafts and returns the normalized amount', () => {
+    expect(getPlannerAmountDraftValidation('49.23')).toEqual({
+      isValid: true,
+      message: '',
+      kind: 'valid',
+      amount: 49.23,
+    })
+  })
+
+  it('returns clear validation messages for invalid category amount drafts', () => {
+    expect(getPlannerAmountDraftValidation('-5')).toEqual({
+      isValid: false,
+      message: 'Amount cannot be negative.',
+      kind: 'negative',
+    })
+    expect(getPlannerAmountDraftValidation('abc')).toEqual({
+      isValid: false,
+      message: 'Enter a valid dollar amount.',
+      kind: 'malformed',
+    })
+    expect(getPlannerAmountDraftValidation('1.005')).toEqual({
+      isValid: false,
+      message: 'Enter a dollar amount with no more than 2 decimal places.',
+      kind: 'too_many_decimals',
+    })
+    expect(getPlannerAmountDraftValidation('0')).toEqual({
+      isValid: false,
+      message: 'Enter an amount greater than $0.',
+      kind: 'zero',
+    })
+    expect(getPlannerAmountDraftValidation('0', { hasSavedPlan: true })).toEqual({
+      isValid: false,
+      message: 'Use Clear plan to return this category to Not set.',
+      kind: 'zero',
+    })
+    expect(getPlannerAmountDraftValidation('')).toEqual({
+      isValid: false,
+      message: '',
+      kind: 'empty',
+    })
   })
 })
 
