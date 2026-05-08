@@ -8,18 +8,22 @@ jest.mock('@/lib/budget', () => {
     evaluateThresholdForMonth: jest.fn(),
     isPositiveMoneyValue: jest.fn(actual.isPositiveMoneyValue),
     normalizeDate: jest.fn(actual.normalizeDate),
+    normalizeMonth: jest.fn(actual.normalizeMonth),
   }
 })
 
 const { testApiHandler } = require('next-test-api-route-handler')
+const { NextResponse } = require('next/server')
 const db = require('@/lib/db')
 const { authenticate } = require('@/lib/auth')
-const { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate } = require('@/lib/budget')
+const { evaluateThresholdForMonth, isPositiveMoneyValue, normalizeDate, normalizeMonth } = require('@/lib/budget')
 const actualBudget = jest.requireActual('@/lib/budget')
 const expensesHandler = require('@/app/api/expenses/route')
 const getHandler = require('@/app/api/expenses/get/route')
 const updateHandler = require('@/app/api/expenses/update/route')
 const deleteHandler = require('@/app/api/expenses/delete/route')
+const breakdownHandler = require('@/app/api/expenses/breakdown/route')
+const categoriesHandler = require('@/app/api/expenses/categories/route')
 const {
   EXPENSE_DESCRIPTION_LENGTH_MESSAGE,
   EXPENSE_DESCRIPTION_MAX_LENGTH,
@@ -33,10 +37,69 @@ beforeEach(() => {
   evaluateThresholdForMonth.mockClear()
   isPositiveMoneyValue.mockClear()
   normalizeDate.mockClear()
+  normalizeMonth.mockClear()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
   evaluateThresholdForMonth.mockResolvedValue(null)
   isPositiveMoneyValue.mockImplementation(actualBudget.isPositiveMoneyValue)
   normalizeDate.mockImplementation(actualBudget.normalizeDate)
+  normalizeMonth.mockImplementation(actualBudget.normalizeMonth)
+})
+
+describe('GET /api/expenses/categories', () => {
+  it('returns global and user expense categories', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ id: 'cat-1', name: 'Food', icon: 'icon' }] })
+    await testApiHandler({
+      appHandler: categoriesHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([{ id: 'cat-1', name: 'Food', icon: 'icon' }])
+      }
+    })
+  })
+
+  it('returns 401 when unauthenticated', async () => {
+    authenticate.mockResolvedValueOnce({ error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) })
+    await testApiHandler({
+      appHandler: categoriesHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(401)
+      }
+    })
+  })
+})
+
+describe('GET /api/expenses/breakdown', () => {
+  it('returns grouped spending totals for the requested month', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ category_id: null, category_name: 'Uncategorized', total_amount: '45.00' }]
+    })
+    await testApiHandler({
+      appHandler: breakdownHandler,
+      url: 'http://localhost/api/expenses/breakdown?month=2026-03-01',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([
+          { category_id: null, category_name: 'Uncategorized', total_amount: '45.00' }
+        ])
+      }
+    })
+  })
+
+  it('returns 400 for an invalid month', async () => {
+    normalizeMonth.mockReturnValueOnce(null)
+    await testApiHandler({
+      appHandler: breakdownHandler,
+      url: 'http://localhost/api/expenses/breakdown?month=bad',
+      async test({ fetch }) {
+        const res = await fetch()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Valid month is required')
+      }
+    })
+  })
 })
 
 describe('POST /api/expenses', () => {
