@@ -1,4 +1,4 @@
-const SESSION_STORAGE_KEY = 'budgetbuddy.session'
+export const SESSION_STORAGE_KEY = 'budgetbuddy.session'
 
 const pickUser = (user) => {
   if (!user?.id || !user?.email) return null
