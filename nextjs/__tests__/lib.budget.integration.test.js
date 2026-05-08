@@ -1,7 +1,7 @@
-import { getMonthlyCategorySpend, getMonthlyTotals } from '../src/lib/budget'
-import db from '../src/lib/db'
+import { getMonthlyCategorySpend, getMonthlyTotals } from '@/lib/budget'
+import db from '@/lib/db'
 
-jest.mock('../src/lib/db', () => ({
+jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
     query: jest.fn(),
