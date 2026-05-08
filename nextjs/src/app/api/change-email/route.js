@@ -72,7 +72,9 @@ export async function POST(request) {
     })
 
     if (updateError) {
-      await adminClient.from('users').update({ email: originalEmail }).eq('id', userId).catch(() => {})
+      if (originalEmail) {
+        await adminClient.from('users').update({ email: originalEmail }).eq('id', userId).catch(() => {})
+      }
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
 
