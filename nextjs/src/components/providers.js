@@ -65,6 +65,7 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     const handleStorage = (event) => {
+      if (event.storageArea !== window.localStorage) return
       if (event.key !== SESSION_STORAGE_KEY && event.key !== null) return
       setSession(readSession())
     }

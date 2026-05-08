@@ -69,6 +69,7 @@ function createStoredSession(accessToken = 'tok-123', user = { id: 'u1', email: 
 describe('AppProviders auth session storage sync', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    window.sessionStorage.clear()
   })
 
   it('updates auth state when another tab removes the stored session', async () => {
@@ -88,6 +89,7 @@ describe('AppProviders auth session storage sync', () => {
         key: SESSION_STORAGE_KEY,
         oldValue: storedSession,
         newValue: null,
+        storageArea: window.localStorage,
       }))
     })
 
@@ -114,6 +116,7 @@ describe('AppProviders auth session storage sync', () => {
         key: null,
         oldValue: null,
         newValue: null,
+        storageArea: window.localStorage,
       }))
     })
 
@@ -164,6 +167,7 @@ describe('AppProviders auth session storage sync', () => {
         key: SESSION_STORAGE_KEY,
         oldValue: null,
         newValue: null,
+        storageArea: window.localStorage,
       }))
     })
 
@@ -187,6 +191,7 @@ describe('AppProviders auth session storage sync', () => {
         key: SESSION_STORAGE_KEY,
         oldValue: storedSession,
         newValue: '{not-json',
+        storageArea: window.localStorage,
       }))
     })
 
@@ -215,6 +220,7 @@ describe('AppProviders auth session storage sync', () => {
         key: SESSION_STORAGE_KEY,
         oldValue: '{not-json',
         newValue: nextStoredSession,
+        storageArea: window.localStorage,
       }))
     })
 
@@ -243,6 +249,7 @@ describe('AppProviders auth session storage sync', () => {
         key: SESSION_STORAGE_KEY,
         oldValue: storedSession,
         newValue: nextStoredSession,
+        storageArea: window.localStorage,
       }))
     })
 
@@ -253,7 +260,7 @@ describe('AppProviders auth session storage sync', () => {
     })
   })
 
-  it('ignores unrelated storage events', async () => {
+  it('ignores unrelated localStorage key events', async () => {
     const storedSession = createStoredSession()
     window.localStorage.setItem(SESSION_STORAGE_KEY, storedSession)
 
@@ -263,12 +270,39 @@ describe('AppProviders auth session storage sync', () => {
       expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
     })
 
-    window.localStorage.removeItem(SESSION_STORAGE_KEY)
     act(() => {
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'budgetbuddy.theme',
         oldValue: 'light',
         newValue: 'dark',
+        storageArea: window.localStorage,
+      }))
+    })
+
+    expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
+    expect(screen.getByTestId('token').textContent).toBe('tok-123')
+    expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBe(storedSession)
+  })
+
+  it('ignores sessionStorage events for the session key', async () => {
+    const storedSession = createStoredSession()
+    window.localStorage.setItem(SESSION_STORAGE_KEY, storedSession)
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, createStoredSession('tok-session-storage'))
+
+    renderWithProviders()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-in')
+      expect(screen.getByTestId('token').textContent).toBe('tok-123')
+    })
+
+    window.localStorage.removeItem(SESSION_STORAGE_KEY)
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: SESSION_STORAGE_KEY,
+        oldValue: null,
+        newValue: createStoredSession('tok-session-storage'),
+        storageArea: window.sessionStorage,
       }))
     })
 
@@ -299,6 +333,7 @@ describe('AppProviders auth session storage sync', () => {
 describe('AppProviders shared app contexts', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    window.sessionStorage.clear()
     document.documentElement.dataset.theme = ''
     document.documentElement.style.colorScheme = ''
   })
