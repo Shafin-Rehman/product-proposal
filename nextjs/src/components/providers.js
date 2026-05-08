@@ -70,7 +70,13 @@ function AuthProvider({ children }) {
       const res = await fetch('/api/profile', {
         headers: { authorization: `Bearer ${accessToken}` },
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        if (res.status === 401) {
+          clearSession()
+          setSession(null)
+        }
+        return
+      }
       const data = await res.json()
       setProfileName(data.name ?? '')
       if (data.email) {
