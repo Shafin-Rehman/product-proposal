@@ -6,12 +6,18 @@ export async function GET(request) {
   const { user, error } = await authenticate(request)
   if (error) return error
 
+  const url = new URL(request.url)
+  const includeArchived = url.searchParams.get('include_archived') === 'true'
+
   try {
+    const archivedFilter = includeArchived ? '' : 'AND archived = FALSE'
+
     const { rows } = await db.query(
-      `SELECT id, name, icon
+      `SELECT id, name, icon, archived, user_id
        FROM public.categories
-       WHERE user_id IS NULL OR user_id = $1
-       ORDER BY name ASC`,
+       WHERE (user_id IS NULL OR user_id = $1)
+       ${archivedFilter}
+       ORDER BY CASE WHEN user_id = $1 THEN 0 ELSE 1 END, name ASC`,
       [user.id]
     )
 
