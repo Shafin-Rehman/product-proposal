@@ -27,3 +27,24 @@ variable "instance_profile_name" {
   type        = string
   default     = "aws-elasticbeanstalk-ec2-role"
 }
+
+variable "supabase_url" {
+  description = "Runtime SUPABASE_URL for the app."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "supabase_anon_key" {
+  description = "Runtime SUPABASE_ANON_KEY for the app."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "database_url" {
+  description = "Runtime DATABASE_URL for the app."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

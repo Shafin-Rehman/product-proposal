@@ -20,4 +20,22 @@ resource "aws_elastic_beanstalk_environment" "app_env" {
     name      = "NodeCommand"
     value     = "npm start"
   }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "SUPABASE_URL"
+    value     = var.supabase_url
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "SUPABASE_ANON_KEY"
+    value     = var.supabase_anon_key
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "DATABASE_URL"
+    value     = var.database_url
+  }
 }

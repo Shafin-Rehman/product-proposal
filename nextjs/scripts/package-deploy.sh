@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-timestamp="$(date +%Y%m%d%H%M%S)"
-zip_name="deploy-${timestamp}.zip"
+zip_name="${ZIP_NAME:-deploy-$(date +%Y%m%d%H%M%S).zip}"
 
 rm -f deploy-*.zip
 
