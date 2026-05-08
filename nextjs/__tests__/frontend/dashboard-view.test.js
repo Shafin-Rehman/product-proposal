@@ -202,6 +202,9 @@ beforeEach(() => {
       accessToken: 'test-token',
       user: { email: 'sam.tester@example.com' },
     },
+    profileName: '',
+    refreshProfile: jest.fn(),
+    updateProfileName: jest.fn(),
   })
   useDataMode.mockReturnValue({ isSampleMode: false })
   useDataChanged.mockReturnValue({ dataChangedToken: 0 })
@@ -693,12 +696,33 @@ describe('DashboardView', () => {
       isReady: false,
       logout: jest.fn(),
       session: null,
+      profileName: '',
+      refreshProfile: jest.fn(),
+      updateProfileName: jest.fn(),
     })
 
     await renderDashboard()
 
     expect(document.body.textContent).toBe('')
     expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('shows email-derived name when no profile name is in context', async () => {
+    await renderDashboard()
+    expect(screen.getByText('Sam Tester')).toBeTruthy()
+  })
+
+  it('shows stored profile name from auth context', async () => {
+    useAuth.mockReturnValue({
+      isReady: true,
+      logout: jest.fn(),
+      session: { accessToken: 'test-token', user: { email: 'sam.tester@example.com' } },
+      profileName: 'Zakariacny',
+      refreshProfile: jest.fn(),
+      updateProfileName: jest.fn(),
+    })
+    await renderDashboard()
+    expect(screen.getByText('Zakariacny')).toBeTruthy()
   })
 
   it('renders the sample dashboard HUD, chart, categories, and activity without calling live APIs', async () => {
@@ -952,6 +976,9 @@ describe('DashboardView', () => {
         accessToken: 'expired-token',
         user: { email: 'sam.tester@example.com' },
       },
+      profileName: '',
+      refreshProfile: jest.fn(),
+      updateProfileName: jest.fn(),
     })
     useRouter.mockReturnValue({ replace })
     apiGet

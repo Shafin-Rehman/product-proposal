@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
 import {
+  clearCategoryBudgetConfig,
   evaluateThresholdForMonth,
   getMonthlyBudgetConfig,
   getOwnedOrGlobalCategoriesByIds,
@@ -113,5 +114,39 @@ export async function POST(request) {
     })
   } catch {
     return NextResponse.json({ error: 'Failed to save budget' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request) {
+  const { user, error } = await authenticate(request)
+  if (error) return error
+
+  const params = new URL(request.url).searchParams
+  const month = normalizeMonth(params.get('month'))
+  const categoryId = params.get('category_id')
+
+  if (!month) return NextResponse.json({ error: 'Valid month is required' }, { status: 400 })
+  if (!categoryId) return NextResponse.json({ error: 'category_id is required' }, { status: 400 })
+  if (!UUID_PATTERN.test(categoryId)) {
+    return NextResponse.json({ error: 'category_id must be a valid UUID' }, { status: 400 })
+  }
+
+  try {
+    const validCategories = await getOwnedOrGlobalCategoriesByIds(user.id, [categoryId])
+    if (validCategories.length !== 1) {
+      return NextResponse.json({ error: 'category_id must reference an owned or global category' }, { status: 400 })
+    }
+
+    const savedBudget = await clearCategoryBudgetConfig(user.id, month, categoryId)
+
+    return NextResponse.json({
+      month: savedBudget?.month ?? month,
+      monthly_limit: savedBudget?.monthly_limit ?? null,
+      notified: savedBudget?.notified ?? false,
+      budget_alert: null,
+      category_budgets: savedBudget?.category_budgets ?? [],
+    })
+  } catch {
+    return NextResponse.json({ error: 'Failed to clear category budget' }, { status: 500 })
   }
 }

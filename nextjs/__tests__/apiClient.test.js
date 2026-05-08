@@ -1,16 +1,16 @@
-const { ApiError, apiGet } = require('@/lib/apiClient')
+const { ApiError, apiDelete, apiGet } = require('@/lib/apiClient')
+
+const originalFetch = global.fetch
+
+beforeEach(() => {
+  global.fetch = jest.fn()
+})
+
+afterAll(() => {
+  global.fetch = originalFetch
+})
 
 describe('apiGet', () => {
-  const originalFetch = global.fetch
-
-  beforeEach(() => {
-    global.fetch = jest.fn()
-  })
-
-  afterAll(() => {
-    global.fetch = originalFetch
-  })
-
   it('attaches the bearer token and returns parsed json', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
@@ -68,5 +68,31 @@ describe('apiGet', () => {
 
     expect(error.status).toBe(418)
     expect(error.body).toEqual({ error: 'Boom' })
+  })
+})
+
+describe('apiDelete', () => {
+  it('sends authenticated DELETE requests and returns parsed json', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce({ cleared: true }),
+    })
+
+    await expect(apiDelete('/api/test?item=1', { accessToken: 'token-123' })).resolves.toEqual({ cleared: true })
+    expect(global.fetch).toHaveBeenCalledWith('/api/test?item=1', expect.objectContaining({
+      method: 'DELETE',
+      cache: 'no-store',
+      headers: {
+        authorization: 'Bearer token-123',
+      },
+    }))
+  })
+
+  it('throws a 401 ApiError when deleting without an access token', async () => {
+    await expect(apiDelete('/api/test')).rejects.toEqual(expect.objectContaining({
+      name: 'ApiError',
+      status: 401,
+      message: 'Missing access token',
+    }))
   })
 })

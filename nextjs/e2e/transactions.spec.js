@@ -174,7 +174,8 @@ test('Planner: expense and category budget update budget health with cleanup', a
 
   categoryName = (await editableRow.locator('.planner-row__copy strong').innerText()).trim()
   originalBudget = await editableRow.locator('input').inputValue()
-  hadExistingBudget = (await editableRow.getByRole('button').innerText()).trim() === 'Save update'
+  const initialSaveButton = editableRow.getByRole('button', { name: /Save update|Save plan/ })
+  hadExistingBudget = (await initialSaveButton.innerText()).trim() === 'Save update'
   const originalActual = await readCurrency(
     editableRow.locator('.planner-row__metrics > div').nth(1).locator('strong')
   )
