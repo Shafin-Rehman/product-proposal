@@ -251,12 +251,19 @@ describe('buildActivityFeed', () => {
     expect(entry.note).toBe('')
   })
 
-  it('keeps income source as the title and saved notes as the note text', () => {
+  it('uses notes as the income title and keeps source as merchant when notes are present', () => {
     const income = [{ id: 'i2', amount: '100.00', date: '2026-03-21', source_name: 'Freelance', notes: 'Weekend session' }]
     const [entry] = buildActivityFeed([], income)
-    expect(entry.title).toBe('Freelance')
+    expect(entry.title).toBe('Weekend session')
     expect(entry.merchant).toBe('Freelance')
     expect(entry.note).toBe('Weekend session')
+  })
+
+  it('falls back to source name as income title when notes are absent', () => {
+    const income = [{ id: 'i3', amount: '100.00', date: '2026-03-21', source_name: 'Salary' }]
+    const [entry] = buildActivityFeed([], income)
+    expect(entry.title).toBe('Salary')
+    expect(entry.merchant).toBe('Salary')
   })
 
   it('treats explicit "No source" the same as missing for chip display, but keeps a literal "Income" source name', () => {

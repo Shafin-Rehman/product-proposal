@@ -237,6 +237,40 @@ describe('TransactionDetailSheet', () => {
     expect(noteCell.querySelector('strong').textContent).toBe(longNote)
   })
 
+  it('income with notes shows notes as title and merchant (source name) as subtitle', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Social Security Income',
+        merchant: 'Other',
+        occurredOn: '2026-05-09',
+        amount: 2380.23,
+        chip: 'Other',
+        note: 'Social Security Income',
+      },
+    }))
+    expect(screen.getByRole('heading', { name: 'Social Security Income' })).toBeTruthy()
+    expect(document.querySelector('.detail-sheet__subtitle').textContent).toBe('Other')
+  })
+
+  it('income without notes shows source name as title and date as subtitle', () => {
+    render(React.createElement(TransactionDetailSheet, {
+      onClose: jest.fn(),
+      entry: {
+        kind: 'income',
+        title: 'Salary',
+        merchant: 'Salary',
+        occurredOn: '2026-05-01',
+        amount: 3000,
+        chip: 'Salary',
+        note: '',
+      },
+    }))
+    expect(screen.getByRole('heading', { name: 'Salary' })).toBeTruthy()
+    expect(document.querySelector('.detail-sheet__subtitle').textContent).toBe('Long date 2026-05-01')
+  })
+
   it('passes through extra detail content in children', () => {
     render(React.createElement(
       TransactionDetailSheet,

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth, useDataMode } from '@/components/providers'
+import { apiPost } from '@/lib/apiClient'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -79,7 +80,7 @@ function TabIcon({ icon }) {
 export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isReady, isAuthenticated } = useAuth()
+  const { isReady, isAuthenticated, session } = useAuth()
   const { isSampleMode, isDataModeReady } = useDataMode()
 
   useEffect(() => {
@@ -88,6 +89,11 @@ export default function AppLayout({ children }) {
     if (!isReady || isAuthenticated) return
     router.replace('/login')
   }, [isAuthenticated, isDataModeReady, isReady, isSampleMode, router])
+
+  useEffect(() => {
+    if (isSampleMode || !session?.accessToken) return
+    apiPost('/api/recurring/process', {}, { accessToken: session.accessToken }).catch(() => {})
+  }, [session?.accessToken, isSampleMode])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />

@@ -221,6 +221,35 @@ describe('GET /api/expenses', () => {
     })
   })
 
+  it('SQL JOINs recurring_rules to include recurring_cancelled_at in each row', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        await fetch()
+        const [sql] = db.query.mock.calls[0]
+        expect(sql.toUpperCase()).toContain('RECURRING_RULES')
+        expect(sql).toContain('recurring_cancelled_at')
+      }
+    })
+  })
+
+  it('recurring expense includes recurring_cancelled_at from joined rule', async () => {
+    const rows = [{
+      id: 1, user_id: 'uid', amount: '11.99', date: '2026-05-01',
+      category_name: 'Fun', recurring_rule_id: 'rule-1', recurring_cancelled_at: '2026-05-09T00:00:00Z',
+    }]
+    db.query.mockResolvedValueOnce({ rows })
+    await testApiHandler({
+      appHandler: expensesHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        const body = await res.json()
+        expect(body[0].recurring_cancelled_at).toBe('2026-05-09T00:00:00Z')
+      }
+    })
+  })
+
   it('can narrow expenses to a requested month', async () => {
     db.query.mockResolvedValueOnce({ rows: [] })
     await testApiHandler({

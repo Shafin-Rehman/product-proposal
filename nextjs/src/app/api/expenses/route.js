@@ -17,9 +17,11 @@ export async function GET(request) {
   try {
     const whereClause = ['e.user_id = $1', ...query.clauses].join(' AND ')
     const { rows } = await db.query(
-      `SELECT e.*, c.name AS category_name, c.icon AS category_icon
+      `SELECT e.*, c.name AS category_name, c.icon AS category_icon,
+              rr.cancelled_at AS recurring_cancelled_at
        FROM public.expenses e
        LEFT JOIN public.categories c ON e.category_id = c.id
+       LEFT JOIN public.recurring_rules rr ON e.recurring_rule_id = rr.id
        WHERE ${whereClause}
        ORDER BY e.date DESC, e.created_at DESC
        ${query.limitClause}`,

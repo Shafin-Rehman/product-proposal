@@ -5598,6 +5598,154 @@ html[data-theme='dark'] .transactions-fab {
   flex: 1;
 }
 
+.entry-sheet__recurring-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(var(--accent-rgb, 99, 102, 241), 0.07);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.15);
+}
+
+.entry-chip--recurring {
+  background: rgba(var(--accent-rgb, 99, 102, 241), 0.12);
+  color: var(--accent-strong, #6366f1);
+  flex-shrink: 0;
+}
+
+.button-secondary--small {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+.button-danger--small {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+.screen-heading__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.transactions-recurring-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.transactions-recurring-btn:hover {
+  background: var(--surface-raised);
+  border-color: var(--accent-strong, #6366f1);
+  color: var(--accent-strong, #6366f1);
+}
+
+/* ── RecurringRulesSheet ────────────────────────────────────────────────── */
+
+.detail-sheet--recurring {
+  gap: 0;
+}
+
+.recurring-sheet__header {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.recurring-sheet__title {
+  flex: 1;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.blank-state--sheet {
+  padding: 2rem 1.25rem;
+}
+
+.recurring-rules-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.recurring-rule-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.5rem 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.recurring-rule-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.recurring-rule-row__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.recurring-rule-row__meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.entry-chip--freq {
+  background: rgba(122, 181, 146, 0.14);
+  color: var(--success, #16a34a);
+}
+
+.entry-chip--paused {
+  background: rgba(234, 179, 8, 0.12);
+  color: #a16207;
+}
+
+.recurring-rule-row__side {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.recurring-rule-row__amount {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.recurring-rule-row__next {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.recurring-rule-row__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.recurring-rule-row__actions > * {
+  flex: 1;
+}
+
 .account-layout .settings-panel {
   gap: 0.78rem;
   padding: 0.85rem;
@@ -11986,4 +12134,60 @@ html[data-theme='dark'] .demo-banner__cta--primary {
   background: var(--surface-strong);
   border: 1px solid var(--border);
   color: var(--text-primary);
+}
+
+/* Upcoming recurring list (insights) */
+.insights-v57__recurring-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.insights-v57__recurring-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.insights-v57__recurring-row:last-child {
+  border-bottom: none;
+}
+
+.insights-v57__recurring-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.insights-v57__recurring-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.insights-v57__recurring-meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.insights-v57__recurring-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.insights-v57__recurring-side small {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }

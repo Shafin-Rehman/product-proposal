@@ -422,3 +422,87 @@ describe('InsightsView CSV export', () => {
     expect(screen.queryByText('The monthly CSV export is not available right now.')).toBeNull()
   })
 })
+
+describe('InsightsView — upcoming recurring section', () => {
+  const { useRouter } = require('next/navigation')
+  const { useAuth, useDataMode } = require('@/components/providers')
+  const { apiGet } = require('@/lib/apiClient')
+
+  const BASE_SNAPSHOT = {
+    comparisonMetrics: [], expenseBreakdown: [], incomeBreakdown: [],
+    cashFlowSeries: [], cashFlowSummary: { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 },
+    budgetHealth: { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] },
+    categoryMovers: [], dailySpend: { series: [], details: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, activeDays: 0, peakDay: null },
+    previousDailySpend: { series: [], details: [], totalAmount: 0 }, topExpenses: [], earliestMonth: '2026-01-01',
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({ isReady: true, logout: jest.fn(), session: { accessToken: 'live-token' } })
+    useDataMode.mockReturnValue({ isSampleMode: false })
+  })
+
+  it('shows the upcoming recurring section when rules are present', async () => {
+    const InsightsView = require('@/components/insights-view').default
+    apiGet.mockResolvedValue({
+      ...BASE_SNAPSHOT,
+      upcomingRecurring: [
+        { id: 'r1', type: 'expense', title: 'Spotify', amount: 11.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Fun', sourceName: null },
+      ],
+    })
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(screen.getByText('Spotify')).toBeTruthy())
+    expect(screen.getByText('Upcoming recurring')).toBeTruthy()
+  })
+
+  it('hides the upcoming recurring section when there are no upcoming rules', async () => {
+    const InsightsView = require('@/components/insights-view').default
+    apiGet.mockResolvedValue({ ...BASE_SNAPSHOT, upcomingRecurring: [] })
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(screen.queryByText('Loading')).toBeNull())
+    expect(screen.queryByText('Upcoming recurring')).toBeNull()
+  })
+
+  it('shows multiple upcoming rules with their amounts and frequencies', async () => {
+    const InsightsView = require('@/components/insights-view').default
+    apiGet.mockResolvedValue({
+      ...BASE_SNAPSHOT,
+      upcomingRecurring: [
+        { id: 'r1', type: 'expense', title: 'Spotify', amount: 11.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Fun', sourceName: null },
+        { id: 'r2', type: 'expense', title: 'Gym', amount: 45.00, frequency: 'monthly', nextDate: '2026-06-05', categoryName: 'Health', sourceName: null },
+      ],
+    })
+    render(React.createElement(InsightsView))
+    await waitFor(() => {
+      expect(screen.getByText('Spotify')).toBeTruthy()
+      expect(screen.getByText('Gym')).toBeTruthy()
+    })
+  })
+
+  it('income item shows sourceName in the meta line', async () => {
+    const InsightsView = require('@/components/insights-view').default
+    apiGet.mockResolvedValue({
+      ...BASE_SNAPSHOT,
+      upcomingRecurring: [
+        { id: 'r-income', type: 'income', title: 'Monthly stipend', amount: 1000, frequency: 'monthly', nextDate: '2026-06-01', categoryName: null, sourceName: 'University' },
+      ],
+    })
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(screen.getByText('Monthly stipend')).toBeTruthy())
+    expect(screen.getByText(/University.*Monthly/i)).toBeTruthy()
+  })
+
+  it('expense item shows categoryName in the meta line', async () => {
+    const InsightsView = require('@/components/insights-view').default
+    apiGet.mockResolvedValue({
+      ...BASE_SNAPSHOT,
+      upcomingRecurring: [
+        { id: 'r-expense', type: 'expense', title: 'Netflix', amount: 15.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Entertainment', sourceName: null },
+      ],
+    })
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(screen.getByText('Netflix')).toBeTruthy())
+    expect(screen.getByText(/Entertainment.*Monthly/i)).toBeTruthy()
+  })
+})

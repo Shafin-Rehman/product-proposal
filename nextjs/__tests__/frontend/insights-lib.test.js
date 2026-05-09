@@ -1,7 +1,6 @@
 jest.mock('@/lib/db', () => ({ query: jest.fn() }))
 jest.mock('@/lib/budget', () => ({ buildBudgetSummary: jest.fn() }))
 jest.mock('@/lib/financeVisuals', () => ({
-  // Preserve persisted labels (no "Food" → "Dining"); match production contract used by lib/insights.js
   getCategoryPresentation: jest.fn(({ name, icon, kind = 'expense' }) => {
     const label = (name == null || String(name).trim() === '')
       ? (kind === 'income' ? 'No source' : 'No cat')
@@ -348,6 +347,7 @@ describe('buildInsightsSnapshot savings goals', () => {
           },
         ],
       })
+      .mockResolvedValueOnce({ rows: [] })
 
     try {
       const snapshot = await buildInsightsSnapshot('uid', '2026-04-01')
@@ -356,5 +356,174 @@ describe('buildInsightsSnapshot savings goals', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+})
+
+describe('buildInsightsSnapshot — upcomingRecurring', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    buildBudgetSummary.mockResolvedValue({
+      total_expenses: '0', total_income: '0', monthly_limit: null,
+      category_statuses: [], threshold_notified: false,
+    })
+  })
+
+  function stubRecurring(rows) {
+    db.query.mockImplementation((sql) => {
+      if (sql.includes('recurring_rules')) return Promise.resolve({ rows })
+      return Promise.resolve({ rows: [] })
+    })
+  }
+
+  it('upcomingRecurring is always an array in the snapshot', async () => {
+    stubRecurring([])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(Array.isArray(snapshot.upcomingRecurring)).toBe(true)
+  })
+
+  it('upcomingRecurring is empty when no active rules match', async () => {
+    stubRecurring([])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring).toEqual([])
+  })
+
+  it('expense rule item has correct shape (id, title, amount, frequency, nextDate)', async () => {
+    stubRecurring([{
+      id: 'r1', type: 'expense', description: 'Spotify', amount: '11.99',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: 'Entertainment', category_icon: null, source_name: null,
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    const [item] = snapshot.upcomingRecurring
+    expect(item.id).toBe('r1')
+    expect(item.title).toBe('Spotify')
+    expect(item.amount).toBe(11.99)
+    expect(item.frequency).toBe('monthly')
+    expect(item.nextDate).toBe('2026-06-01')
+  })
+
+  it('SQL for upcomingRecurring uses CURRENT_DATE', async () => {
+    let capturedSql = null
+    db.query.mockImplementation((sql) => {
+      if (sql.includes('recurring_rules')) capturedSql = sql
+      return Promise.resolve({ rows: [] })
+    })
+    await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(capturedSql).not.toBeNull()
+    expect(capturedSql).toContain('CURRENT_DATE')
+  })
+
+  it('SQL for upcomingRecurring filters cancelled_at IS NULL', async () => {
+    let capturedSql = null
+    db.query.mockImplementation((sql) => {
+      if (sql.includes('recurring_rules')) capturedSql = sql
+      return Promise.resolve({ rows: [] })
+    })
+    await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(capturedSql.toUpperCase()).toContain('CANCELLED_AT IS NULL')
+  })
+
+  it('cancelled rule is not surfaced because SQL filters it out', async () => {
+    db.query.mockImplementation((sql) => {
+      if (sql.includes('recurring_rules') && sql.toUpperCase().includes('CANCELLED_AT IS NULL')) {
+        return Promise.resolve({ rows: [] })
+      }
+      if (sql.includes('recurring_rules')) {
+        return Promise.resolve({ rows: [
+          { id: 'r-cancelled', type: 'expense', description: 'Dead Sub', amount: '9.99',
+            frequency: 'monthly', next_date: '2026-06-01', cancelled_at: '2026-05-01',
+            category_name: null, category_icon: null, source_name: null },
+        ]})
+      }
+      return Promise.resolve({ rows: [] })
+    })
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring.find((r) => r.id === 'r-cancelled')).toBeUndefined()
+  })
+
+  it('income rule has type: "income" in the snapshot item', async () => {
+    stubRecurring([{
+      id: 'r2', type: 'income', description: 'Salary', amount: '3000.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: 'Employer',
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring[0].type).toBe('income')
+  })
+
+  it('income rule uses source_name as title when description is null', async () => {
+    stubRecurring([{
+      id: 'r3', type: 'income', description: null, amount: '1000.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: 'Social Security',
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring[0].title).toBe('Social Security')
+  })
+
+  it('income rule uses linked income notes as title when description is null', async () => {
+    stubRecurring([{
+      id: 'r3b', type: 'income', description: null, income_notes: 'Social Security Income', amount: '1000.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: 'Social Security',
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring[0].title).toBe('Social Security Income')
+    expect(snapshot.upcomingRecurring[0].sourceName).toBe('Social Security')
+  })
+
+  it('income rule with no description or source falls back to "Recurring income"', async () => {
+    stubRecurring([{
+      id: 'r4', type: 'income', description: null, amount: '500.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: null,
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring[0].title).toBe('Recurring income')
+  })
+
+  it('expense rule with no description or category falls back to "Recurring expense"', async () => {
+    stubRecurring([{
+      id: 'r5', type: 'expense', description: null, amount: '20.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: null,
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    expect(snapshot.upcomingRecurring[0].title).toBe('Recurring expense')
+  })
+
+  it('income item exposes sourceName separately from the title', async () => {
+    stubRecurring([{
+      id: 'r6', type: 'income', description: 'Monthly stipend', amount: '1000.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: 'University',
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    const item = snapshot.upcomingRecurring[0]
+    expect(item.title).toBe('Monthly stipend')
+    expect(item.sourceName).toBe('University')
+  })
+
+  it('income item with no description has sourceName from source_name join', async () => {
+    stubRecurring([{
+      id: 'r7', type: 'income', description: null, amount: '2000.00',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: null, category_icon: null, source_name: 'Employer',
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    const item = snapshot.upcomingRecurring[0]
+    expect(item.sourceName).toBe('Employer')
+  })
+
+  it('expense item has null sourceName and categoryName populated', async () => {
+    stubRecurring([{
+      id: 'r8', type: 'expense', description: 'Netflix', amount: '15.99',
+      frequency: 'monthly', next_date: '2026-06-01',
+      category_name: 'Entertainment', category_icon: null, source_name: null,
+    }])
+    const snapshot = await buildInsightsSnapshot('uid', '2026-05-01')
+    const item = snapshot.upcomingRecurring[0]
+    expect(item.sourceName).toBeNull()
+    expect(item.categoryName).toBe('Entertainment')
   })
 })

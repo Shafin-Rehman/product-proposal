@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useDataMode, useDataChanged } from '@/components/providers'
 import { ApiError, apiGet, apiPost } from '@/lib/apiClient'
-import { demoActivity } from '@/lib/demoData'
+import { demoActivity, demoRulesForSheet } from '@/lib/demoData'
 import { getCategoryPresentation, getEntryVisual } from '@/lib/financeVisuals'
 import {
   buildActivityFeed,
@@ -17,6 +17,7 @@ import {
 } from '@/lib/financeUtils'
 import { validateExpenseDescription, validateIncomeNotes } from '@/lib/transactionText'
 import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
+import RecurringRulesSheet from '@/components/ui/RecurringRulesSheet'
 
 const ENTRY_CATEGORY_OPTIONS = {
   expense: ['Groceries', 'Dining', 'Shopping', 'Housing', 'Travel', 'Fun', 'Bills', 'Health'],
@@ -165,6 +166,7 @@ function createEntryDraft() {
     category: '',
     occurredOn: getTodayInputValue(),
     note: '',
+    repeat: 'none',
   }
 }
 
@@ -239,6 +241,7 @@ export default function TransactionsView() {
   const [saveError, setSaveError] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [isRecurringSheetOpen, setIsRecurringSheetOpen] = useState(false)
   const [expenseCategories, setExpenseCategories] = useState([])
   const [incomeCategories, setIncomeCategories] = useState([])
   const [liveState, setLiveState] = useState({
@@ -430,7 +433,7 @@ export default function TransactionsView() {
   const entryCategories = entryDraft.kind === 'expense'
     ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
     : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
-  const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen
+  const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen || isRecurringSheetOpen
   const draftTextValidation = entryDraft.kind === 'expense'
     ? validateExpenseDescription(entryDraft.counterparty)
     : validateIncomeNotes(entryDraft.note)
@@ -500,7 +503,19 @@ export default function TransactionsView() {
         if (editingEntry) {
           await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
         } else {
-          await apiPost('/api/expenses', body, { accessToken: session.accessToken })
+          const created = await apiPost('/api/expenses', body, { accessToken: session.accessToken })
+          if (entryDraft.repeat !== 'none') {
+            const selectedCategory = expenseCategories.find((c) => c.name === entryDraft.category)
+            await apiPost('/api/recurring', {
+              type: 'expense',
+              amount: Number(entryDraft.amount),
+              frequency: entryDraft.repeat,
+              start_date: entryDraft.occurredOn,
+              description: description ?? undefined,
+              category_id: selectedCategory?.id ?? undefined,
+              expense_id: created?.id ?? undefined,
+            }, { accessToken: session.accessToken })
+          }
         }
       } else {
         const notes = validateIncomeNotes(entryDraft.note).value
@@ -518,7 +533,19 @@ export default function TransactionsView() {
         if (editingEntry) {
           await apiPost('/api/income/update', { income_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
         } else {
-          await apiPost('/api/income', body, { accessToken: session.accessToken })
+          const created = await apiPost('/api/income', body, { accessToken: session.accessToken })
+          if (entryDraft.repeat !== 'none') {
+            const selectedSource = incomeCategories.find((c) => c.name === entryDraft.category)
+            await apiPost('/api/recurring', {
+              type: 'income',
+              amount: Number(entryDraft.amount),
+              frequency: entryDraft.repeat,
+              start_date: entryDraft.occurredOn,
+              source_id: selectedSource?.id ?? undefined,
+              income_id: created?.id ?? undefined,
+              description: notes ?? undefined,
+            }, { accessToken: session.accessToken })
+          }
         }
       }
       closeEntrySheet()
@@ -569,9 +596,23 @@ export default function TransactionsView() {
           <div className="screen-heading">
             <h1 className="screen-heading__title">Transactions</h1>
           </div>
-          <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
-            {isSampleMode ? 'Sample' : 'Live'}
-          </span>
+          <div className="screen-heading__actions">
+            <button
+              aria-label="Manage recurring transactions"
+              className="transactions-recurring-btn"
+              onClick={() => setIsRecurringSheetOpen(true)}
+              type="button"
+            >
+                <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
+                  <path d="M4 12a8 8 0 0 1 8-8M20 12a8 8 0 0 1-8 8" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+                  <path d="M4 12l-2-2m2 2 2-2M20 12l-2 2m2-2 2 2" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+                </svg>
+                Recurring
+            </button>
+            <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
+              {isSampleMode ? 'Sample' : 'Live'}
+            </span>
+          </div>
         </div>
 
         <div className="search-panel">
@@ -648,10 +689,9 @@ export default function TransactionsView() {
                         </div>
 
                         <div className="transaction-item__body">
-                          <strong className="transaction-item__title">{entry.merchant || entry.title}</strong>
+                          <strong className="transaction-item__title">{entry.kind === 'income' ? (entry.title || entry.merchant) : (entry.merchant || entry.title)}</strong>
                           <div className="transaction-item__meta">
                             <span className="entry-chip">{entry.chip}</span>
-                            {entry.kind === 'income' && entry.note ? <span className="transaction-item__note">{entry.note}</span> : null}
                           </div>
                         </div>
 
@@ -694,8 +734,15 @@ export default function TransactionsView() {
 
       {selectedEntry ? (
         <TransactionDetailSheet entry={selectedEntry} onClose={() => setSelectedEntry(null)}>
+          {selectedEntry.raw?.recurring_rule_id && (
+            <div className="entry-sheet__recurring-badge" style={{ marginTop: '1rem', paddingLeft: '1.25rem' }}>
+              <span className="entry-chip entry-chip--recurring">
+                {selectedEntry.raw.recurring_cancelled_at ? 'Cancelled recurring' : 'Recurring transaction'}
+              </span>
+            </div>
+          )}
           {!isSampleMode && selectedEntry.raw && (
-            <div className="entry-sheet__footer" style={{ marginTop: '1rem' }}>
+            <div className="entry-sheet__footer" style={{ marginTop: '0.75rem' }}>
               {deleteConfirm ? (
                 <>
                   <div className="inline-error" role="alert">
@@ -741,6 +788,15 @@ export default function TransactionsView() {
             </div>
           )}
         </TransactionDetailSheet>
+      ) : null}
+
+      {isRecurringSheetOpen ? (
+        <RecurringRulesSheet
+          demoRules={isSampleMode ? demoRulesForSheet : undefined}
+          onChanged={isSampleMode ? undefined : () => { notifyDataChanged(); setReloadToken((v) => v + 1) }}
+          onClose={() => setIsRecurringSheetOpen(false)}
+          session={session}
+        />
       ) : null}
 
       {isEntrySheetOpen ? (
@@ -797,6 +853,7 @@ export default function TransactionsView() {
                     kind: 'expense',
                     category: '',
                     note: '',
+                    repeat: 'none',
                   }))
                 }}
                 type="button"
@@ -813,6 +870,7 @@ export default function TransactionsView() {
                     kind: 'income',
                     category: '',
                     counterparty: '',
+                    repeat: 'none',
                   }))
                 }}
                 type="button"
@@ -893,6 +951,32 @@ export default function TransactionsView() {
                     value={entryDraft.note}
                   />
                 </label>
+              ) : null}
+
+              {!editingEntry ? (
+                <div className="entry-sheet__field">
+                  <span>Repeat</span>
+                  <div
+                    aria-label="Repeat frequency"
+                    className="segment-control segment-control--strong entry-sheet__repeat"
+                    role="group"
+                  >
+                    {[
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'yearly', label: 'Yearly' },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        className={`segment-control__button${entryDraft.repeat === value ? ' segment-control__button--active' : ''}`}
+                        onClick={() => updateDraft('repeat', entryDraft.repeat === value ? 'none' : value)}
+                        type="button"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
 
               <div className="entry-sheet__footer">
