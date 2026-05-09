@@ -428,8 +428,16 @@ export default function TransactionsView() {
     : entryDraft.counterparty.trim() || 'New expense'
   const categoryFieldLabel = entryDraft.kind === 'income' ? 'Source' : 'Category'
   const entryCategories = entryDraft.kind === 'expense'
-    ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
-    : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
+    ? (
+      expenseCategories.length > 0
+        ? expenseCategories
+        : (isSampleMode ? ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })) : [])
+    )
+    : (
+      incomeCategories.length > 0
+        ? incomeCategories
+        : (isSampleMode ? ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })) : [])
+    )
   const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen
   const draftTextValidation = entryDraft.kind === 'expense'
     ? validateExpenseDescription(entryDraft.counterparty)
