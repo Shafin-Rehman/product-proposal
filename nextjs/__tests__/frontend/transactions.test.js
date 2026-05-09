@@ -230,6 +230,27 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     apiPost.mockResolvedValue({})
   })
 
+  it('does not fall back to hardcoded categories in live mode when API lists are empty', async () => {
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses' || url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') return Promise.resolve([])
+      if (url === '/api/income/categories') return Promise.resolve([])
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => {
+      expect(screen.queryByText('Loading activity')).toBeNull()
+    })
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
+    })
+    const dialog = screen.getByRole('dialog')
+    const select = within(dialog).getByRole('combobox')
+    expect(select.disabled).toBe(true)
+    const options = within(select).getAllByRole('option')
+    expect(options.map((o) => o.textContent).join('')).not.toMatch(/Groceries/)
+  })
+
   it('opens add sheet with the first category pre-selected and a matching preview', async () => {
     render(React.createElement(TransactionsView))
     await waitFor(() => {
