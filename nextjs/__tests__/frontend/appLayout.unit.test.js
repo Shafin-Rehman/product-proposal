@@ -159,6 +159,24 @@ describe('AppLayout — recurring process trigger', () => {
     expect(apiPost).toHaveBeenCalledWith('/api/recurring/process', {}, { accessToken: 'tok-3' })
   })
 
+  it('calls POST /api/recurring/process again when pathname changes (in-app navigation)', async () => {
+    usePathname.mockReturnValue('/dashboard')
+    useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-nav' } })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
+    let rerender
+    await act(async () => {
+      const result = render(React.createElement(AppLayout, null, child()))
+      rerender = result.rerender
+    })
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    usePathname.mockReturnValue('/planner')
+    await act(async () => {
+      rerender(React.createElement(AppLayout, null, child()))
+    })
+    expect(apiPost).toHaveBeenCalledTimes(2)
+    expect(apiPost).toHaveBeenLastCalledWith('/api/recurring/process', {}, { accessToken: 'tok-nav' })
+  })
+
   it('does NOT call POST /api/recurring/process in sample mode', async () => {
     useAuth.mockReturnValue({ isReady: false, isAuthenticated: false, session: null })
     useDataMode.mockReturnValue({ isSampleMode: true, isDataModeReady: true })

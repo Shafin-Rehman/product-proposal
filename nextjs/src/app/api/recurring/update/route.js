@@ -57,8 +57,13 @@ export async function POST(request) {
     const currentRule = currentRows[0]
     if (Boolean(currentRule.paused)) {
       const today = new Date().toISOString().slice(0, 10)
-      const advancedNextDate = advanceToFutureCycle(currentRule.next_date, frequency ?? currentRule.frequency, today)
-      if (advancedNextDate && advancedNextDate !== toDateStr(currentRule.next_date)) {
+      const advancedNextDate = advanceToFutureCycle(currentRule.next_date, currentRule.frequency, today)
+      const prior = toDateStr(currentRule.next_date)
+      if (
+        advancedNextDate &&
+        prior &&
+        advancedNextDate !== prior
+      ) {
         resolvedNextDate = advancedNextDate
       }
     }
@@ -71,7 +76,10 @@ export async function POST(request) {
   if (amount !== undefined) { sets.push(`amount = $${idx++}`); values.push(Number(amount).toFixed(2)) }
   if (frequency !== undefined) { sets.push(`frequency = $${idx++}`); values.push(frequency) }
   if (description !== undefined) { sets.push(`description = $${idx++}`); values.push(description) }
-  if (resolvedNextDate !== undefined) { sets.push(`next_date = $${idx++}`); values.push(resolvedNextDate) }
+  if (resolvedNextDate !== undefined && resolvedNextDate !== null) {
+    sets.push(`next_date = $${idx++}`)
+    values.push(resolvedNextDate)
+  }
   if (paused !== undefined) { sets.push(`paused = $${idx++}`); values.push(Boolean(paused)) }
   sets.push(`updated_at = NOW()`)
 

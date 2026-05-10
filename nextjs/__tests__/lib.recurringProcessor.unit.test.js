@@ -1,4 +1,10 @@
-jest.mock('@/lib/db', () => ({ query: jest.fn() }))
+jest.mock('@/lib/db', () => {
+  const query = jest.fn()
+  return {
+    query,
+    connect: jest.fn(),
+  }
+})
 
 const db = require('@/lib/db')
 
@@ -11,7 +17,14 @@ beforeAll(async () => {
 
 beforeEach(() => {
   db.query.mockReset()
+  db.connect.mockReset()
+  db.connect.mockImplementation(async () => ({
+    query: db.query,
+    release: jest.fn(),
+  }))
 })
+
+const emptySelect = { rows: [], rowCount: 0 }
 
 const EXPENSE_RULE = {
   id: 'r1',
@@ -35,28 +48,42 @@ const INCOME_RULE = {
   description: null,
 }
 
+/** Per-date path: EXISTS (no row) + INSERT; then UPDATE + COMMIT after all dates */
+function mockTxnForExpenseInserts(ruleRows, datesCount) {
+  db.query.mockResolvedValueOnce({ rows: ruleRows })
+  mockTxnBody(datesCount)
+}
+
+function mockTxnBody(datesCount) {
+  db.query.mockResolvedValueOnce(emptySelect) // BEGIN
+  for (let i = 0; i < datesCount; i++) {
+    db.query.mockResolvedValueOnce(emptySelect) // EXISTS
+    db.query.mockResolvedValueOnce(emptySelect) // INSERT
+  }
+  db.query.mockResolvedValueOnce(emptySelect) // UPDATE rule
+  db.query.mockResolvedValueOnce(emptySelect) // COMMIT
+}
+
 describe('processUserRecurring', () => {
   it('returns 0 and makes only SELECT when no rules are due', async () => {
     db.query.mockResolvedValueOnce({ rows: [] })
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(0)
     expect(db.query).toHaveBeenCalledTimes(1)
+    expect(db.connect).not.toHaveBeenCalled()
     const [sql] = db.query.mock.calls[0]
     expect(sql.toUpperCase()).toContain('SELECT')
     expect(sql.toUpperCase()).toContain('RECURRING_RULES')
   })
 
   it('inserts expense row and updates next_date for a due rule', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [EXPENSE_RULE] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([EXPENSE_RULE], 1)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(1)
-    expect(db.query).toHaveBeenCalledTimes(3)
+    expect(db.connect).toHaveBeenCalledTimes(1)
 
-    const [insertSql, insertParams] = db.query.mock.calls[1]
+    const [insertSql, insertParams] = db.query.mock.calls[3]
     expect(insertSql.toUpperCase()).toContain('INSERT INTO PUBLIC.EXPENSES')
     expect(insertParams[0]).toBe('uid')
     expect(insertParams[1]).toBe('cat1')
@@ -64,23 +91,41 @@ describe('processUserRecurring', () => {
     expect(insertParams[4]).toBe('2026-05-01')
     expect(insertParams[5]).toBe('r1')
 
-    const [updateSql, updateParams] = db.query.mock.calls[2]
+    const [updateSql, updateParams] = db.query.mock.calls[4]
     expect(updateSql.toUpperCase()).toContain('UPDATE PUBLIC.RECURRING_RULES')
     expect(updateParams[0]).toBe('2026-06-01')
     expect(updateParams[1]).toBe('r1')
   })
 
+  it('skips INSERT when expense already exists for rule and date but still advances next_date', async () => {
+    db.query.mockResolvedValueOnce({ rows: [EXPENSE_RULE] })
+    db.query.mockResolvedValueOnce(emptySelect) // BEGIN
+    db.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 }) // EXISTS hit
+    db.query.mockResolvedValueOnce(emptySelect) // UPDATE
+    db.query.mockResolvedValueOnce(emptySelect) // COMMIT
+
+    const count = await processUserRecurring('uid', '2026-05-09')
+    expect(count).toBe(0)
+    const insertCalls = db.query.mock.calls.filter(([s]) => String(s).toUpperCase().includes('INSERT INTO PUBLIC.EXPENSES'))
+    expect(insertCalls).toHaveLength(0)
+    const [updateSql, updateParams] = db.query.mock.calls[3]
+    expect(updateSql.toUpperCase()).toContain('UPDATE PUBLIC.RECURRING_RULES')
+    expect(updateParams[0]).toBe('2026-06-01')
+  })
+
   it('inserts income row with notes copied from rule.description', async () => {
     const incomeRuleWithNotes = { ...INCOME_RULE, description: 'Social Security payment' }
-    db.query
-      .mockResolvedValueOnce({ rows: [incomeRuleWithNotes] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    db.query.mockResolvedValueOnce({ rows: [incomeRuleWithNotes] })
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(1)
 
-    const [insertSql, insertParams] = db.query.mock.calls[1]
+    const [insertSql, insertParams] = db.query.mock.calls[3]
     expect(insertSql.toUpperCase()).toContain('INSERT INTO PUBLIC.INCOME')
     expect(insertSql.toUpperCase()).toContain('NOTES')
     expect(insertParams[1]).toBe('src1')
@@ -91,15 +136,17 @@ describe('processUserRecurring', () => {
   })
 
   it('inserts income row with null notes when rule.description is null', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [INCOME_RULE] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    db.query.mockResolvedValueOnce({ rows: [INCOME_RULE] })
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
+    db.query.mockResolvedValueOnce(emptySelect)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(1)
 
-    const [insertSql, insertParams] = db.query.mock.calls[1]
+    const [insertSql, insertParams] = db.query.mock.calls[3]
     expect(insertSql.toUpperCase()).toContain('INSERT INTO PUBLIC.INCOME')
     expect(insertParams[3]).toBeNull()
     expect(insertParams[4]).toBe('2026-05-01')
@@ -108,22 +155,16 @@ describe('processUserRecurring', () => {
 
   it('inserts 4 expenses for a weekly rule added 3 weeks retroactively', async () => {
     const rule = { ...EXPENSE_RULE, frequency: 'weekly', next_date: '2026-04-18' }
-    db.query
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([rule], 4)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(4)
-    expect(db.query).toHaveBeenCalledTimes(6)
 
-    const dates = db.query.mock.calls.slice(1, 5).map(([, p]) => p[4])
+    const insertCallIndexes = [3, 5, 7, 9]
+    const dates = insertCallIndexes.map((i) => db.query.mock.calls[i][1][4])
     expect(dates).toEqual(['2026-04-18', '2026-04-25', '2026-05-02', '2026-05-09'])
 
-    const [, updateParams] = db.query.mock.calls[5]
+    const [, updateParams] = db.query.mock.calls[10]
     expect(updateParams[0]).toBe('2026-05-16')
   })
 
@@ -131,32 +172,26 @@ describe('processUserRecurring', () => {
     const rule1 = { ...EXPENSE_RULE, id: 'r1', next_date: '2026-05-01' }
     const rule2 = { ...EXPENSE_RULE, id: 'r2', next_date: '2026-05-05', category_id: 'cat2' }
 
-    db.query
-      .mockResolvedValueOnce({ rows: [rule1, rule2] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    db.query.mockResolvedValueOnce({ rows: [rule1, rule2] })
+    mockTxnBody(1)
+    mockTxnBody(1)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(2)
-    expect(db.query).toHaveBeenCalledTimes(5)
+    expect(db.connect).toHaveBeenCalledTimes(2)
 
-    const r1UpdateParams = db.query.mock.calls[2][1]
+    const r1UpdateParams = db.query.mock.calls[4][1]
     expect(r1UpdateParams[1]).toBe('r1')
     expect(r1UpdateParams[0]).toBe('2026-06-01')
 
-    const r2UpdateParams = db.query.mock.calls[4][1]
+    const r2UpdateParams = db.query.mock.calls[9][1]
     expect(r2UpdateParams[1]).toBe('r2')
     expect(r2UpdateParams[0]).toBe('2026-06-05')
   })
 
   it('cancelling one rule does not affect processing of the other', async () => {
     const activeRule = { ...EXPENSE_RULE, id: 'r-active', next_date: '2026-05-01' }
-    db.query
-      .mockResolvedValueOnce({ rows: [activeRule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([activeRule], 1)
 
     const count = await processUserRecurring('uid', '2026-05-09')
     expect(count).toBe(1)
@@ -177,13 +212,10 @@ describe('processUserRecurring', () => {
 
   it('charges the next monthly cycle when the due date arrives', async () => {
     const rule = { ...EXPENSE_RULE, next_date: '2026-05-10', amount: '88.25' }
-    db.query
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([rule], 1)
     const count = await processUserRecurring('uid', '2026-05-10')
     expect(count).toBe(1)
-    const [, insertParams] = db.query.mock.calls[1]
+    const [, insertParams] = db.query.mock.calls[3]
     expect(insertParams[2]).toBe('88.25')
     expect(insertParams[4]).toBe('2026-05-10')
   })
@@ -199,26 +231,19 @@ describe('processUserRecurring', () => {
 
   it('backfills all 6 monthly charges when user returns after 5 months away (Jan 1 → Jun 2)', async () => {
     const rule = { ...EXPENSE_RULE, next_date: '2026-01-01', frequency: 'monthly', amount: '99.00' }
-    db.query
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([rule], 6)
 
     const count = await processUserRecurring('uid', '2026-06-02')
     expect(count).toBe(6)
 
-    const insertDates = db.query.mock.calls.slice(1, 7).map(([, p]) => p[4])
+    const insertCallIndexes = [3, 5, 7, 9, 11, 13]
+    const insertDates = insertCallIndexes.map((i) => db.query.mock.calls[i][1][4])
     expect(insertDates).toEqual([
       '2026-01-01', '2026-02-01', '2026-03-01',
       '2026-04-01', '2026-05-01', '2026-06-01',
     ])
 
-    const [, updateParams] = db.query.mock.calls[7]
+    const [, updateParams] = db.query.mock.calls[14]
     expect(updateParams[0]).toBe('2026-07-01')
   })
 
@@ -242,18 +267,15 @@ describe('processUserRecurring', () => {
 
   it('after resume, correctly charges on the advanced next_date (Mar 2) not the skipped date (Feb 2)', async () => {
     const rule = { ...EXPENSE_RULE, next_date: '2026-03-02', frequency: 'monthly', amount: '50.00' }
-    db.query
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([rule], 1)
 
     const count = await processUserRecurring('uid', '2026-03-02')
     expect(count).toBe(1)
 
-    const [, insertParams] = db.query.mock.calls[1]
+    const [, insertParams] = db.query.mock.calls[3]
     expect(insertParams[4]).toBe('2026-03-02')
 
-    const [, updateParams] = db.query.mock.calls[2]
+    const [, updateParams] = db.query.mock.calls[4]
     expect(updateParams[0]).toBe('2026-04-02')
   })
 
@@ -268,27 +290,26 @@ describe('processUserRecurring', () => {
 
   it('full lifecycle: Jan 5 charge fires, then Feb 5 fires when user logs in on Feb 5', async () => {
     const rule = { ...EXPENSE_RULE, next_date: '2026-01-05', frequency: 'monthly' }
-    db.query
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([rule], 1)
 
     const janCount = await processUserRecurring('uid', '2026-01-05')
     expect(janCount).toBe(1)
-    expect(db.query.mock.calls[1][1][4]).toBe('2026-01-05')
-    expect(db.query.mock.calls[2][1][0]).toBe('2026-02-05')
+    expect(db.query.mock.calls[3][1][4]).toBe('2026-01-05')
+    expect(db.query.mock.calls[4][1][0]).toBe('2026-02-05')
 
     db.query.mockReset()
+    db.connect.mockReset()
+    db.connect.mockImplementation(async () => ({
+      query: db.query,
+      release: jest.fn(),
+    }))
     const advancedRule = { ...rule, next_date: '2026-02-05' }
-    db.query
-      .mockResolvedValueOnce({ rows: [advancedRule] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([advancedRule], 1)
 
     const febCount = await processUserRecurring('uid', '2026-02-05')
     expect(febCount).toBe(1)
-    expect(db.query.mock.calls[1][1][4]).toBe('2026-02-05')
-    expect(db.query.mock.calls[2][1][0]).toBe('2026-03-05')
+    expect(db.query.mock.calls[3][1][4]).toBe('2026-02-05')
+    expect(db.query.mock.calls[4][1][0]).toBe('2026-03-05')
   })
 
   it('full lifecycle: paused rule produces 0 inserts while paused, then charges the next cycle after resume', async () => {
@@ -297,15 +318,17 @@ describe('processUserRecurring', () => {
     expect(whilePaused).toBe(0)
 
     db.query.mockReset()
+    db.connect.mockReset()
+    db.connect.mockImplementation(async () => ({
+      query: db.query,
+      release: jest.fn(),
+    }))
     const ruleAfterResume = { ...EXPENSE_RULE, next_date: '2026-03-05', frequency: 'monthly' }
-    db.query
-      .mockResolvedValueOnce({ rows: [ruleAfterResume] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+    mockTxnForExpenseInserts([ruleAfterResume], 1)
 
     const marCount = await processUserRecurring('uid', '2026-03-05')
     expect(marCount).toBe(1)
-    expect(db.query.mock.calls[1][1][4]).toBe('2026-03-05')
-    expect(db.query.mock.calls[2][1][0]).toBe('2026-04-05')
+    expect(db.query.mock.calls[3][1][4]).toBe('2026-03-05')
+    expect(db.query.mock.calls[4][1][0]).toBe('2026-04-05')
   })
 })

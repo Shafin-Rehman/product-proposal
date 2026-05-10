@@ -93,7 +93,7 @@ export default function AppLayout({ children }) {
   useEffect(() => {
     if (isSampleMode || !session?.accessToken) return
     apiPost('/api/recurring/process', {}, { accessToken: session.accessToken }).catch(() => {})
-  }, [session?.accessToken, isSampleMode])
+  }, [session?.accessToken, isSampleMode, pathname])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />
