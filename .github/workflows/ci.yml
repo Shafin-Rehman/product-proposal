@@ -6,7 +6,7 @@ on:
       - 'nextjs/**'
       - 'supabase/**'
       - '.github/workflows/ci.yml'
-  pull_request_target:
+  pull_request:
     branches: [main]
     paths:
       - 'nextjs/**'
@@ -18,37 +18,69 @@ permissions:
 
 jobs:
   app-test:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: nextjs
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: nextjs/package-lock.json
+
       - run: npm ci
-      - run: node scripts/seed-test-user.js
-        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Create Supabase preview branch
+        id: preview_branch
+        working-directory: ${{ github.workspace }}
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: bash scripts/create-preview-branch.sh
+
+      - name: Push migrations to Supabase preview branch
+        working-directory: ${{ github.workspace }}
+        run: supabase db push --db-url "$PREVIEW_DB_URL" --yes
+
+      - name: Seed test user to preview branch
+        working-directory: ${{ github.workspace }}
+        env:
+          SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
+        run: node scripts/seed-test-user.js "${{ steps.preview_branch.outputs.service_role_file }}"
+
       - run: npm test -- --coverage
+        env:
+          SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ env.PREVIEW_SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ env.PREVIEW_DB_URL }}
+
       - run: npm run build
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ env.PREVIEW_SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ env.PREVIEW_DB_URL }}
+
       - run: npx playwright install chromium --with-deps
-        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+
       - run: npx playwright test
-        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ env.PREVIEW_SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ env.PREVIEW_DB_URL }}
+
+      - name: Delete Supabase preview branch
+        if: always() && steps.preview_branch.outputs.branch_name != ''
+        working-directory: ${{ github.workspace }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PREVIEW_BRANCH_NAME: ${{ steps.preview_branch.outputs.branch_name }}
+          PREVIEW_PROJECT_REF: ${{ steps.preview_branch.outputs.project_ref }}
+        run: bash scripts/delete-preview-branch.sh

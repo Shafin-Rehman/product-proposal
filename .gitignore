@@ -13,5 +13,7 @@ supabase/config.toml
 # Other
 .env
 .env.*
+.secrets
+.actrc
 .DS_Store
 nextjs/.vercel/
