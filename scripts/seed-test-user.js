@@ -35,11 +35,12 @@ const supabase = createClient(url, key, {
 })
 
 ;(async () => {
-  const { data: { users }, error: e1 } = await supabase.auth.admin.listUsers()
+  const { data, error: e1 } = await supabase.auth.admin.listUsers()
   if (e1) {
     console.error(e1.message)
     process.exit(1)
   }
+  const users = data?.users ?? []
   if (users.some(u => u.email === email)) {
     console.log('skip')
     return
