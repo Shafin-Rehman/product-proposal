@@ -19,10 +19,10 @@ suf=${GITHUB_SHA:+${GITHUB_SHA:0:7}}
 suf=${suf:-$(date +%s)-$RANDOM}
 name=budgetbuddy-ci-${rid}-${att}-${suf}
 
-supabase branches create "$name" --project-ref "$ref" --experimental --yes
+supabase branches create "$name" --project-ref "$ref" --experimental --yes >/dev/null
 json=$(supabase branches get "$name" --project-ref "$ref" --experimental -o json)
 
-db=$(jq -r '.POSTGRES_URL_NON_POOLING' <<<"$json")
+db=$(jq -r '.POSTGRES_URL' <<<"$json")
 url=$(jq -r '.SUPABASE_URL' <<<"$json")
 anon=$(jq -r '.SUPABASE_ANON_KEY' <<<"$json")
 sr=$(jq -r '.SUPABASE_SERVICE_ROLE_KEY' <<<"$json")
