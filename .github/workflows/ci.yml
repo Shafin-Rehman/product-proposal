@@ -37,7 +37,7 @@ jobs:
 
       - name: Start local Supabase
         working-directory: ${{ github.workspace }}
-        run: supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,storage-api,supavisor,realtime
+        run: supabase start
 
       - name: Apply migrations on local database
         working-directory: ${{ github.workspace }}
@@ -61,14 +61,7 @@ jobs:
       - run: npm run build
         working-directory: nextjs
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('nextjs/package-lock.json') }}
-
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
+      - run: npx playwright install chromium --with-deps
         working-directory: nextjs
 
       - run: npx playwright test
