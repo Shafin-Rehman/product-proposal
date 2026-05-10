@@ -17,6 +17,7 @@ import {
 } from '@/lib/financeUtils'
 import { validateExpenseDescription, validateIncomeNotes } from '@/lib/transactionText'
 import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
+import CategoryManager from '@/components/category-manager' 
 
 const ENTRY_CATEGORY_OPTIONS = {
   expense: ['Groceries', 'Dining', 'Shopping', 'Housing', 'Travel', 'Fun', 'Bills', 'Health'],
@@ -236,6 +237,7 @@ export default function TransactionsView() {
   const [entryDraft, setEntryDraft] = useState(createEntryDraft)
   const [editingEntry, setEditingEntry] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -580,6 +582,15 @@ export default function TransactionsView() {
           <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
             {isSampleMode ? 'Sample' : 'Live'}
           </span>
+          <button
+            onClick={() => setIsCategoryManagerOpen(true)}
+            className="button-secondary"
+            type="button"
+            style={{ marginLeft: 'auto' }}
+            title="Manage your personal categories"
+          >
+            ⚙️ Manage Categories
+          </button>
         </div>
 
         <div className="search-panel">
@@ -944,6 +955,17 @@ export default function TransactionsView() {
           </div>
         </div>
       ) : null}
+
+      {isCategoryManagerOpen && (
+        <CategoryManager
+          accessToken={session?.accessToken}
+          isOpen={isCategoryManagerOpen}
+          onClose={() => {
+            setIsCategoryManagerOpen(false)
+            setReloadToken((value) => value + 1)
+          }}
+        />
+      )}
     </>
   )
 }

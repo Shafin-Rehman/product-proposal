@@ -103,7 +103,7 @@ export async function getOwnedOrGlobalCategoriesByIds(userId, categoryIds = []) 
   const { rows } = await db.query(
     `SELECT id, name, icon
      FROM public.categories
-     WHERE id = ANY($1::uuid[]) AND (user_id IS NULL OR user_id = $2)`,
+     WHERE id = ANY($1::uuid[]) AND (user_id IS NULL OR user_id = $2) AND archived = FALSE`,
     [uniqueCategoryIds, userId]
   )
 
@@ -119,7 +119,7 @@ export async function getCategoryBudgets(userId, month, queryable = db) {
        c.icon AS category_icon
      FROM public.category_budgets cb
      JOIN public.categories c ON cb.category_id = c.id
-     WHERE cb.user_id = $1 AND cb.month = $2
+     WHERE cb.user_id = $1 AND cb.month = $2 AND c.archived = FALSE
      ORDER BY c.name ASC`,
     [userId, month]
   )
@@ -249,7 +249,7 @@ export async function getMonthlyCategorySpend(userId, month) {
        COALESCE(SUM(e.amount), 0.00)::TEXT AS spent
      FROM public.expenses e
      LEFT JOIN public.categories c ON e.category_id = c.id
-     WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3
+     WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3 AND (c.id IS NULL OR c.archived = FALSE)
      GROUP BY e.category_id, COALESCE(c.name, 'Uncategorized'), c.icon
      ORDER BY category_name ASC`,
     [userId, month, endMonth]
