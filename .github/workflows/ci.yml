@@ -68,7 +68,15 @@ jobs:
           SUPABASE_ANON_KEY: ${{ env.PREVIEW_SUPABASE_ANON_KEY }}
           DATABASE_URL: ${{ env.PREVIEW_DB_URL }}
 
-      - run: npx playwright install chromium --with-deps
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('nextjs/package-lock.json') }}
+
+      - name: Install Playwright
+        run: bash "${{ github.workspace }}/scripts/setup-playwright-ci.sh" "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - run: npx playwright test
         env:
