@@ -430,9 +430,22 @@ export default function TransactionsView() {
     ? entryDraft.note.trim() || entryDraft.category || 'New income'
     : entryDraft.counterparty.trim() || 'New expense'
   const categoryFieldLabel = entryDraft.kind === 'income' ? 'Source' : 'Category'
-  const entryCategories = entryDraft.kind === 'expense'
-    ? (expenseCategories.length ? expenseCategories : ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null })))
-    : (incomeCategories.length ? incomeCategories : ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null })))
+  const entryCategories = (() => {
+    if (entryDraft.kind === 'expense') {
+      if (expenseCategories.length > 0) return expenseCategories
+      if (isSampleMode) return ENTRY_CATEGORY_OPTIONS.expense.map((n) => ({ name: n, icon: null }))
+      if (editingEntry?.kind === 'expense' && entryDraft.category) {
+        return [{ id: editingEntry.raw?.category_id, name: entryDraft.category, icon: null }]
+      }
+      return []
+    }
+    if (incomeCategories.length > 0) return incomeCategories
+    if (isSampleMode) return ENTRY_CATEGORY_OPTIONS.income.map((n) => ({ name: n, icon: null }))
+    if (editingEntry?.kind === 'income' && entryDraft.category) {
+      return [{ id: editingEntry.raw?.source_id, name: entryDraft.category, icon: null }]
+    }
+    return []
+  })()
   const hideFab = isSampleMode || Boolean(selectedEntry) || isEntrySheetOpen || isRecurringSheetOpen
   const draftTextValidation = entryDraft.kind === 'expense'
     ? validateExpenseDescription(entryDraft.counterparty)
@@ -483,6 +496,16 @@ export default function TransactionsView() {
     if (amountError) {
       setSaveError(amountError)
       return
+    }
+    if (!editingEntry) {
+      if (entryDraft.kind === 'expense' && expenseCategories.length === 0) {
+        setSaveError('Could not load categories. Refresh the page or try again later.')
+        return
+      }
+      if (entryDraft.kind === 'income' && incomeCategories.length === 0) {
+        setSaveError('Could not load income sources. Refresh the page or try again later.')
+        return
+      }
     }
     setIsSaving(true)
     setSaveError('')
@@ -921,11 +944,18 @@ export default function TransactionsView() {
                       {entryDraft.kind === 'income' ? 'Select source' : 'Select category'}
                     </option>
                     {entryCategories.map((option) => (
-                      <option key={option.name} value={option.name}>
+                      <option key={`${option.id ?? 'opt'}-${option.name}`} value={option.name}>
                         {option.icon ? `${option.icon} ${option.name}` : option.name}
                       </option>
-                 ))}
-                </select>
+                    ))}
+                  </select>
+                  {!isSampleMode && !editingEntry && entryCategories.length === 0 ? (
+                    <small className="entry-sheet__hint" role="status">
+                      {entryDraft.kind === 'income'
+                        ? 'Could not load income sources. Refresh the page or try again later.'
+                        : 'Could not load categories. Refresh the page or try again later.'}
+                    </small>
+                  ) : null}
                 </label>
 
                 <label className="entry-sheet__field">

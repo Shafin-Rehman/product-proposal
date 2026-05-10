@@ -140,7 +140,11 @@ describe('AppLayout — recurring process trigger', () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-1' } })
     useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
-    expect(apiPost).toHaveBeenCalledWith('/api/recurring/process', {}, { accessToken: 'tok-1' })
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/recurring/process',
+      {},
+      { accessToken: 'tok-1', signal: expect.any(AbortSignal) }
+    )
   })
 
   it('calls POST /api/recurring/process when landing on the planner page', async () => {
@@ -148,7 +152,11 @@ describe('AppLayout — recurring process trigger', () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-2' } })
     useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
-    expect(apiPost).toHaveBeenCalledWith('/api/recurring/process', {}, { accessToken: 'tok-2' })
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/recurring/process',
+      {},
+      { accessToken: 'tok-2', signal: expect.any(AbortSignal) }
+    )
   })
 
   it('calls POST /api/recurring/process when landing on the insights page', async () => {
@@ -156,7 +164,11 @@ describe('AppLayout — recurring process trigger', () => {
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-3' } })
     useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
-    expect(apiPost).toHaveBeenCalledWith('/api/recurring/process', {}, { accessToken: 'tok-3' })
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/recurring/process',
+      {},
+      { accessToken: 'tok-3', signal: expect.any(AbortSignal) }
+    )
   })
 
   it('calls POST /api/recurring/process again when pathname changes (in-app navigation)', async () => {
@@ -174,7 +186,11 @@ describe('AppLayout — recurring process trigger', () => {
       rerender(React.createElement(AppLayout, null, child()))
     })
     expect(apiPost).toHaveBeenCalledTimes(2)
-    expect(apiPost).toHaveBeenLastCalledWith('/api/recurring/process', {}, { accessToken: 'tok-nav' })
+    expect(apiPost).toHaveBeenLastCalledWith(
+      '/api/recurring/process',
+      {},
+      { accessToken: 'tok-nav', signal: expect.any(AbortSignal) }
+    )
   })
 
   it('does NOT call POST /api/recurring/process in sample mode', async () => {

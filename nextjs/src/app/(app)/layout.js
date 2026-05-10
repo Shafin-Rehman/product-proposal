@@ -92,7 +92,11 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (isSampleMode || !session?.accessToken) return
-    apiPost('/api/recurring/process', {}, { accessToken: session.accessToken }).catch(() => {})
+    const controller = new AbortController()
+    apiPost('/api/recurring/process', {}, { accessToken: session.accessToken, signal: controller.signal }).catch(
+      () => {}
+    )
+    return () => controller.abort()
   }, [session?.accessToken, isSampleMode, pathname])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {

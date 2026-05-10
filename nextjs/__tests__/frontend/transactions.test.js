@@ -243,7 +243,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     apiPost.mockResolvedValue({})
   })
 
-  it('falls back to hardcoded category options when API category lists are empty in live mode', async () => {
+  it('disables category select and shows status when API category lists are empty in live mode', async () => {
     apiGet.mockImplementation((url) => {
       if (url === '/api/expenses' || url === '/api/income') return Promise.resolve([])
       if (url === '/api/expenses/categories') return Promise.resolve([])
@@ -256,9 +256,8 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
     })
     const dialog = screen.getByRole('dialog')
     const select = within(dialog).getByRole('combobox')
-    expect(select.disabled).toBe(false)
-    const options = within(select).getAllByRole('option')
-    expect(options.map((o) => o.textContent).join('')).toMatch(/Groceries/)
+    expect(select.disabled).toBe(true)
+    expect(within(dialog).getByRole('status').textContent).toMatch(/Could not load categories/)
   })
 
   it('opens add sheet with the first category pre-selected and a matching preview', async () => {
