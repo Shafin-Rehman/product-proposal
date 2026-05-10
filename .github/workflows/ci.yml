@@ -6,7 +6,7 @@ on:
       - 'nextjs/**'
       - 'supabase/**'
       - '.github/workflows/ci.yml'
-  pull_request:
+  pull_request_target:
     branches: [main]
     paths:
       - 'nextjs/**'
@@ -16,58 +16,39 @@ on:
 permissions:
   contents: read
 
-env:
-  SUPABASE_URL: http://127.0.0.1:54321
-  SUPABASE_ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
-  SUPABASE_SERVICE_ROLE_KEY: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
-  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
-  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-
 jobs:
   app-test:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: nextjs
     steps:
       - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
         with:
-          version: latest
-
-      - name: Start local Supabase
-        working-directory: ${{ github.workspace }}
-        run: supabase start
-
-      - name: Apply migrations on local database
-        working-directory: ${{ github.workspace }}
-        run: supabase db reset --local --yes
-
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: nextjs/package-lock.json
-
       - run: npm ci
-        working-directory: nextjs
-
       - run: node scripts/seed-test-user.js
-        working-directory: nextjs
-
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - run: npm test -- --coverage
-        working-directory: nextjs
-
       - run: npm run build
-        working-directory: nextjs
-
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npx playwright install chromium --with-deps
-        working-directory: nextjs
-
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
       - run: npx playwright test
-        working-directory: nextjs
-
-      - name: Stop local Supabase
-        if: always()
-        working-directory: ${{ github.workspace }}
-        run: supabase stop --no-backup
+        if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
