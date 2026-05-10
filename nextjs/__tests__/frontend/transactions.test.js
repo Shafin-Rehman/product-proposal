@@ -106,6 +106,19 @@ const {
 } = require('@/lib/transactionText')
 const { default: TransactionsView } = require('@/components/transactions-view')
 
+async function renderLiveTransactionsView() {
+  render(React.createElement(TransactionsView))
+  await waitFor(() => {
+    expect(apiGet.mock.calls.some((c) => c[0] === '/api/expenses')).toBe(true)
+    expect(apiGet.mock.calls.some((c) => c[0] === '/api/income')).toBe(true)
+  })
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  })
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
   useRouter.mockReturnValue({ replace: jest.fn() })
@@ -237,10 +250,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       if (url === '/api/income/categories') return Promise.resolve([])
       return Promise.resolve([])
     })
-    render(React.createElement(TransactionsView))
-    await waitFor(() => {
-      expect(screen.queryByText('Loading activity')).toBeNull()
-    })
+    await renderLiveTransactionsView()
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
     })
@@ -252,10 +262,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('opens add sheet with the first category pre-selected and a matching preview', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => {
-      expect(screen.queryByText('Loading activity')).toBeNull()
-    })
+    await renderLiveTransactionsView()
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
     })
@@ -267,8 +274,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('posts a new expense with the pre-selected first category', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const amountInput = dialog.querySelector('input[inputmode="decimal"]')
@@ -281,8 +287,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('prevents negative and over-precision expense amount drafts while accepting cents-only values', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const amountInput = dialog.querySelector('input.input-field[inputmode="decimal"]')
@@ -304,8 +309,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('blocks trailing decimal amount drafts before creating an expense', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const amountInput = dialog.querySelector('input.input-field[inputmode="decimal"]')
@@ -318,8 +322,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('switches to income with the first source pre-selected', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
@@ -328,8 +331,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('posts a new income row with the pre-selected first source', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
@@ -361,8 +363,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       if (url === '/api/income/categories') return Promise.resolve([{ id: 'src-f', name: 'Freelance', icon: null }])
       return Promise.resolve([])
     })
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getAllByText('Freelance')[0]) })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
     const formDialog = screen.getByRole('dialog')
@@ -376,8 +377,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('hides expense notes and validates over-limit merchant text before posting', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).queryByLabelText('Note')).toBeNull()
@@ -394,8 +394,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('uses Note as the only income free-text field and posts it as notes', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
@@ -413,8 +412,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
   })
 
   it('validates over-limit income notes before posting', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     act(() => { fireEvent.click(within(dialog).getByRole('button', { name: 'Income' })) })
@@ -458,8 +456,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       return Promise.resolve([])
     })
 
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
 
     const titles = Array.from(document.querySelectorAll('.transaction-item__title')).map((el) => el.textContent)
     expect(titles).toContain(longMerchant)
@@ -488,8 +485,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-1', name: 'Business', icon: null }])
       return Promise.resolve([])
     })
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByText('Snack')) })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
     const formDialog = screen.getByRole('dialog')
@@ -525,8 +521,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       }
       return Promise.resolve([])
     })
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getAllByText('Freelance')[0]) })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
     const formDialog = screen.getByRole('dialog')
@@ -560,8 +555,7 @@ describe('TransactionsView (live) entry form (Issue #58)', () => {
       if (url === '/api/income/categories') return Promise.resolve([])
       return Promise.resolve([])
     })
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByText('Tea')) })
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Edit' })) })
     const formDialog = screen.getByRole('dialog')
@@ -588,8 +582,8 @@ describe('TransactionsView — Repeat selector', () => {
     financeUtils.buildActivityFeed.mockImplementation(() => [])
   })
 
-  it('renders Weekly / Monthly / Yearly repeat buttons, none active by default', () => {
-    render(React.createElement(TransactionsView))
+  it('renders Weekly / Monthly / Yearly repeat buttons, none active by default', async () => {
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const repeatGroup = screen.getByRole('group', { name: /repeat/i })
     expect(within(repeatGroup).getByRole('button', { name: 'Weekly' })).toBeTruthy()
@@ -600,8 +594,8 @@ describe('TransactionsView — Repeat selector', () => {
     })
   })
 
-  it('clicking a repeat button marks it active', () => {
-    render(React.createElement(TransactionsView))
+  it('clicking a repeat button marks it active', async () => {
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const monthlyBtn = within(dialog).getByRole('button', { name: 'Monthly' })
@@ -609,8 +603,8 @@ describe('TransactionsView — Repeat selector', () => {
     expect(monthlyBtn.className).toContain('segment-control__button--active')
   })
 
-  it('clicking active repeat button again deselects it (toggles back to none)', () => {
-    render(React.createElement(TransactionsView))
+  it('clicking active repeat button again deselects it (toggles back to none)', async () => {
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const monthlyBtn = within(dialog).getByRole('button', { name: 'Monthly' })
@@ -619,8 +613,8 @@ describe('TransactionsView — Repeat selector', () => {
     expect(monthlyBtn.className).not.toContain('segment-control__button--active')
   })
 
-  it('switching kind resets the repeat selection to none', () => {
-    render(React.createElement(TransactionsView))
+  it('switching kind resets the repeat selection to none', async () => {
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     const monthlyBtn = within(dialog).getByRole('button', { name: 'Monthly' })
@@ -634,8 +628,7 @@ describe('TransactionsView — Repeat selector', () => {
   })
 
   it('does not call /api/recurring when no repeat button is active', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     await waitFor(() => { expect(within(dialog).getAllByRole('combobox')[0].value).toBe('Dining') })
@@ -646,8 +639,7 @@ describe('TransactionsView — Repeat selector', () => {
   })
 
   it('calls /api/recurring after creating expense when Monthly is selected', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     await waitFor(() => { expect(within(dialog).getAllByRole('combobox')[0].value).toBe('Dining') })
@@ -663,8 +655,7 @@ describe('TransactionsView — Repeat selector', () => {
   })
 
   it('passes income notes as description when creating income recurring rule', async () => {
-    render(React.createElement(TransactionsView))
-    await waitFor(() => { expect(screen.queryByText('Loading activity')).toBeNull() })
+    await renderLiveTransactionsView()
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add transaction' })) })
     const dialog = screen.getByRole('dialog')
     await waitFor(() => { expect(within(dialog).getAllByRole('combobox')[0].value).toBe('Dining') })
@@ -707,7 +698,7 @@ describe('TransactionsView — recurring detail badge', () => {
   })
 
   it('shows "Recurring transaction" chip for a recurring entry in live mode', async () => {
-    render(React.createElement(TransactionsView))
+    await renderLiveTransactionsView()
     await waitFor(() => expect(screen.getByText('Spotify')).toBeTruthy())
     act(() => { fireEvent.click(screen.getByText('Spotify')) })
     expect(within(screen.getByRole('dialog')).getByText('Recurring transaction')).toBeTruthy()
@@ -718,7 +709,7 @@ describe('TransactionsView — recurring detail badge', () => {
       ...MOCK_REC,
       raw: { ...MOCK_REC.raw, recurring_cancelled_at: '2026-05-01T00:00:00Z' },
     }])
-    render(React.createElement(TransactionsView))
+    await renderLiveTransactionsView()
     await waitFor(() => expect(screen.getByText('Spotify')).toBeTruthy())
     act(() => { fireEvent.click(screen.getByText('Spotify')) })
     const dialog = screen.getByRole('dialog')
