@@ -312,6 +312,36 @@ describe('processUserRecurring', () => {
     expect(db.query.mock.calls[4][1][0]).toBe('2026-03-05')
   })
 
+  it('Date-typed next_date (node-pg): May 10 bills then June 10 bills on 2026-06-11 asOf', async () => {
+    const mayRule = {
+      ...EXPENSE_RULE,
+      next_date: new Date('2026-05-10T00:00:00.000Z'),
+      frequency: 'monthly',
+    }
+    mockTxnForExpenseInserts([mayRule], 1)
+    const mayCount = await processUserRecurring('uid', '2026-05-10')
+    expect(mayCount).toBe(1)
+    expect(db.query.mock.calls[3][1][4]).toBe('2026-05-10')
+    expect(db.query.mock.calls[4][1][0]).toBe('2026-06-10')
+
+    db.query.mockReset()
+    db.connect.mockReset()
+    db.connect.mockImplementation(async () => ({
+      query: db.query,
+      release: jest.fn(),
+    }))
+    const juneRule = {
+      ...EXPENSE_RULE,
+      next_date: new Date('2026-06-10T00:00:00.000Z'),
+      frequency: 'monthly',
+    }
+    mockTxnForExpenseInserts([juneRule], 1)
+    const juneCount = await processUserRecurring('uid', '2026-06-11')
+    expect(juneCount).toBe(1)
+    expect(db.query.mock.calls[3][1][4]).toBe('2026-06-10')
+    expect(db.query.mock.calls[4][1][0]).toBe('2026-07-10')
+  })
+
   it('full lifecycle: paused rule produces 0 inserts while paused, then charges the next cycle after resume', async () => {
     db.query.mockResolvedValueOnce({ rows: [] })
     const whilePaused = await processUserRecurring('uid', '2026-02-10')

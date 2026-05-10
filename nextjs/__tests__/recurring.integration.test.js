@@ -325,30 +325,78 @@ describe('POST /api/recurring — original transaction linking', () => {
 })
 
 describe('POST /api/recurring/process', () => {
-  it('200 - calls processUserRecurring with the authenticated userId', async () => {
-    processUserRecurring.mockResolvedValueOnce(3)
-    await testApiHandler({
-      appHandler: processHandler,
-      async test({ fetch }) {
-        const res = await fetch({ method: 'POST' })
-        expect(res.status).toBe(200)
-        expect((await res.json()).generated).toBe(3)
-        expect(processUserRecurring).toHaveBeenCalledTimes(1)
-        expect(processUserRecurring).toHaveBeenCalledWith('uid')
-      },
-    })
+  it('200 - uses server UTC day when body empty', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-03-15T12:00:00Z'))
+      processUserRecurring.mockResolvedValueOnce(3)
+      await testApiHandler({
+        appHandler: processHandler,
+        async test({ fetch }) {
+          const res = await fetch({ method: 'POST' })
+          expect(res.status).toBe(200)
+          expect((await res.json()).generated).toBe(3)
+          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-03-15')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('200 - uses max(UTC, as_of) when local calendar is one day ahead', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-06-10T12:00:00Z'))
+      processUserRecurring.mockResolvedValueOnce(0)
+      await testApiHandler({
+        appHandler: processHandler,
+        async test({ fetch }) {
+          const res = await fetch(post({ as_of: '2026-06-11' }))
+          expect(res.status).toBe(200)
+          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-06-11')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('200 - ignores far-future as_of (same as resume_day cap)', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-07-12T12:00:00Z'))
+      processUserRecurring.mockResolvedValueOnce(0)
+      await testApiHandler({
+        appHandler: processHandler,
+        async test({ fetch }) {
+          const res = await fetch(post({ as_of: '2099-01-01' }))
+          expect(res.status).toBe(200)
+          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-07-12')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('200 - returns 0 when no rules are due', async () => {
-    processUserRecurring.mockResolvedValueOnce(0)
-    await testApiHandler({
-      appHandler: processHandler,
-      async test({ fetch }) {
-        const res = await fetch({ method: 'POST' })
-        expect(res.status).toBe(200)
-        expect((await res.json()).generated).toBe(0)
-      },
-    })
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-05-01T12:00:00Z'))
+      processUserRecurring.mockResolvedValueOnce(0)
+      await testApiHandler({
+        appHandler: processHandler,
+        async test({ fetch }) {
+          const res = await fetch({ method: 'POST' })
+          expect(res.status).toBe(200)
+          expect((await res.json()).generated).toBe(0)
+          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-05-01')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('401 - unauthenticated request is rejected', async () => {
@@ -437,6 +485,132 @@ describe('POST /api/recurring/update', () => {
           expect(db.query).toHaveBeenCalledTimes(2)
           const [, updateParams] = db.query.mock.calls[1]
           expect(updateParams).toContain('2026-05-09')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('resume advances when next_date is a Date object (node-pg), not a string', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-06-11T12:00:00Z'))
+      const pausedRule = {
+        ...BASE_RULE,
+        paused: true,
+        frequency: 'monthly',
+        next_date: new Date('2026-06-10T00:00:00.000Z'),
+      }
+      const resumed = {
+        ...pausedRule,
+        paused: false,
+        next_date: '2026-07-10',
+      }
+      db.query
+        .mockResolvedValueOnce({ rows: [pausedRule] })
+        .mockResolvedValueOnce({ rows: [resumed] })
+      await testApiHandler({
+        appHandler: updateHandler,
+        async test({ fetch }) {
+          const res = await fetch(post({ rule_id: 'rule-1', paused: false, resume_day: '2026-06-11' }))
+          expect(res.status).toBe(200)
+          const body = await res.json()
+          expect(body.next_date).toBe('2026-07-10')
+          const [, updateParams] = db.query.mock.calls[1]
+          expect(updateParams).toContain('2026-07-10')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('resuming after pause through due day advances past that day (no back-charge window)', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-07-12T12:00:00Z'))
+      const pausedRule = {
+        ...BASE_RULE,
+        paused: true,
+        frequency: 'monthly',
+        next_date: '2026-07-11',
+      }
+      const resumed = { ...pausedRule, paused: false, next_date: '2026-08-11' }
+      db.query
+        .mockResolvedValueOnce({ rows: [pausedRule] })
+        .mockResolvedValueOnce({ rows: [resumed] })
+      await testApiHandler({
+        appHandler: updateHandler,
+        async test({ fetch }) {
+          const res = await fetch(post({ rule_id: 'rule-1', paused: false }))
+          expect(res.status).toBe(200)
+          const body = await res.json()
+          expect(body.next_date).toBe('2026-08-11')
+          const [, updateParams] = db.query.mock.calls[1]
+          expect(updateParams).toContain('2026-08-11')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('resume uses client resume_day within ±1 UTC day so a missed cycle is not left in place', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-06-10T12:00:00Z'))
+      const pausedRule = {
+        ...BASE_RULE,
+        paused: true,
+        frequency: 'monthly',
+        next_date: '2026-06-11',
+      }
+      const resumed = { ...pausedRule, paused: false, next_date: '2026-07-11' }
+      db.query
+        .mockResolvedValueOnce({ rows: [pausedRule] })
+        .mockResolvedValueOnce({ rows: [resumed] })
+      await testApiHandler({
+        appHandler: updateHandler,
+        async test({ fetch }) {
+          const res = await fetch(
+            post({ rule_id: 'rule-1', paused: false, resume_day: '2026-06-11' }),
+          )
+          expect(res.status).toBe(200)
+          const body = await res.json()
+          expect(body.next_date).toBe('2026-07-11')
+          const [, updateParams] = db.query.mock.calls[1]
+          expect(updateParams).toContain('2026-07-11')
+        },
+      })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('resume ignores resume_day beyond UTC today + 1 (production guard)', async () => {
+    jest.useFakeTimers()
+    try {
+      jest.setSystemTime(new Date('2026-07-12T12:00:00Z'))
+      const pausedRule = {
+        ...BASE_RULE,
+        paused: true,
+        frequency: 'monthly',
+        next_date: '2026-07-11',
+      }
+      const resumed = { ...pausedRule, paused: false, next_date: '2026-08-11' }
+      db.query
+        .mockResolvedValueOnce({ rows: [pausedRule] })
+        .mockResolvedValueOnce({ rows: [resumed] })
+      await testApiHandler({
+        appHandler: updateHandler,
+        async test({ fetch }) {
+          const res = await fetch(
+            post({ rule_id: 'rule-1', paused: false, resume_day: '2099-01-01' }),
+          )
+          expect(res.status).toBe(200)
+          const body = await res.json()
+          expect(body.next_date).toBe('2026-08-11')
         },
       })
     } finally {

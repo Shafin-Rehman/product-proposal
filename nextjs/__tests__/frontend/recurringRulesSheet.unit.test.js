@@ -217,7 +217,11 @@ describe('RecurringRulesSheet content', () => {
 
     expect(apiPost).toHaveBeenCalledWith(
       '/api/recurring/update',
-      expect.objectContaining({ rule_id: 'rule-2', paused: false }),
+      expect.objectContaining({
+        rule_id: 'rule-2',
+        paused: false,
+        resume_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      }),
       expect.objectContaining({ accessToken: 'token' }),
     )
   })

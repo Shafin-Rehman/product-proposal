@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth, useDataMode } from '@/components/providers'
+import { useAuth, useDataChanged, useDataMode } from '@/components/providers'
 import { apiPost } from '@/lib/apiClient'
+import { localCalendarYmd } from '@/lib/recurringDates'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -82,6 +83,7 @@ export default function AppLayout({ children }) {
   const router = useRouter()
   const { isReady, isAuthenticated, session } = useAuth()
   const { isSampleMode, isDataModeReady } = useDataMode()
+  const { notifyDataChanged } = useDataChanged()
 
   useEffect(() => {
     if (!isDataModeReady) return
@@ -93,11 +95,22 @@ export default function AppLayout({ children }) {
   useEffect(() => {
     if (isSampleMode || !session?.accessToken) return
     const controller = new AbortController()
-    apiPost('/api/recurring/process', {}, { accessToken: session.accessToken, signal: controller.signal }).catch(
-      () => {}
-    )
-    return () => controller.abort()
-  }, [session?.accessToken, isSampleMode, pathname])
+    let cancelled = false
+    ;(async () => {
+      try {
+        await apiPost(
+          '/api/recurring/process',
+          { as_of: localCalendarYmd() },
+          { accessToken: session.accessToken, signal: controller.signal },
+        )
+        if (!cancelled) notifyDataChanged()
+      } catch {}
+    })()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [session?.accessToken, isSampleMode, pathname, notifyDataChanged])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />

@@ -5,9 +5,12 @@ jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }))
 
+const mockNotifyDataChanged = jest.fn()
+
 jest.mock('@/components/providers', () => ({
   useAuth: jest.fn(),
   useDataMode: jest.fn(),
+  useDataChanged: jest.fn(() => ({ notifyDataChanged: mockNotifyDataChanged })),
 }))
 
 jest.mock('@/lib/apiClient', () => ({
@@ -22,7 +25,7 @@ jest.mock('next/link', () => {
 })
 
 const React = require('react')
-const { render, screen, act } = require('@testing-library/react')
+const { render, screen, act, waitFor } = require('@testing-library/react')
 const { useRouter, usePathname } = require('next/navigation')
 const { useAuth, useDataMode } = require('@/components/providers')
 const { apiPost } = require('@/lib/apiClient')
@@ -32,6 +35,7 @@ let mockReplace
 
 beforeEach(() => {
   mockReplace = jest.fn()
+  mockNotifyDataChanged.mockClear()
   apiPost.mockResolvedValue({})
   useRouter.mockReturnValue({ replace: mockReplace })
   usePathname.mockReturnValue('/dashboard')
@@ -135,6 +139,10 @@ describe('AppLayout — demo / sample mode', () => {
 })
 
 describe('AppLayout — recurring process trigger', () => {
+  const recurringProcessBody = expect.objectContaining({
+    as_of: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+  })
+
   it('calls POST /api/recurring/process when authenticated in live mode', async () => {
     usePathname.mockReturnValue('/dashboard')
     useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-1' } })
@@ -142,9 +150,20 @@ describe('AppLayout — recurring process trigger', () => {
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(apiPost).toHaveBeenCalledWith(
       '/api/recurring/process',
-      {},
+      recurringProcessBody,
       { accessToken: 'tok-1', signal: expect.any(AbortSignal) }
     )
+  })
+
+  it('notifies data changed after recurring process succeeds (dashboard refetch)', async () => {
+    usePathname.mockReturnValue('/dashboard')
+    useAuth.mockReturnValue({ isReady: true, isAuthenticated: true, session: { accessToken: 'tok-notify' } })
+    useDataMode.mockReturnValue({ isSampleMode: false, isDataModeReady: true })
+    apiPost.mockResolvedValueOnce({ ok: true })
+    await act(async () => { render(React.createElement(AppLayout, null, child())) })
+    await waitFor(() => {
+      expect(mockNotifyDataChanged).toHaveBeenCalled()
+    })
   })
 
   it('calls POST /api/recurring/process when landing on the planner page', async () => {
@@ -154,7 +173,7 @@ describe('AppLayout — recurring process trigger', () => {
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(apiPost).toHaveBeenCalledWith(
       '/api/recurring/process',
-      {},
+      recurringProcessBody,
       { accessToken: 'tok-2', signal: expect.any(AbortSignal) }
     )
   })
@@ -166,7 +185,7 @@ describe('AppLayout — recurring process trigger', () => {
     await act(async () => { render(React.createElement(AppLayout, null, child())) })
     expect(apiPost).toHaveBeenCalledWith(
       '/api/recurring/process',
-      {},
+      recurringProcessBody,
       { accessToken: 'tok-3', signal: expect.any(AbortSignal) }
     )
   })
@@ -188,7 +207,7 @@ describe('AppLayout — recurring process trigger', () => {
     expect(apiPost).toHaveBeenCalledTimes(2)
     expect(apiPost).toHaveBeenLastCalledWith(
       '/api/recurring/process',
-      {},
+      recurringProcessBody,
       { accessToken: 'tok-nav', signal: expect.any(AbortSignal) }
     )
   })

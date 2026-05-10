@@ -1,25 +1,17 @@
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/auth'
 import db from '@/lib/db'
-import { addPeriod } from '@/lib/recurringDates'
+import {
+  advanceNextDateOnResume,
+  effectiveBillingDayFromClient,
+  normalizeCalendarYmd,
+} from '@/lib/recurringDates'
 
 const VALID_FREQUENCIES = ['weekly', 'monthly', 'yearly']
 
 function formatRule(row) {
   const { user_id: _uid, ...rest } = row
   return rest
-}
-
-function toDateStr(value) {
-  if (!value) return null
-  return String(value).slice(0, 10)
-}
-
-function advanceToFutureCycle(nextDate, frequency, today) {
-  let current = toDateStr(nextDate)
-  if (!current) return current
-  while (current < today) current = addPeriod(current, frequency)
-  return current
 }
 
 export async function POST(request) {
@@ -29,7 +21,7 @@ export async function POST(request) {
   let body
   try { body = await request.json() } catch { body = {} }
 
-  const { rule_id, amount, frequency, description, next_date, paused } = body
+  const { rule_id, amount, frequency, description, next_date, paused, resume_day: resumeDayRaw } = body
 
   if (!rule_id) {
     return NextResponse.json({ error: 'rule_id is required' }, { status: 400 })
@@ -56,14 +48,15 @@ export async function POST(request) {
     if (!currentRows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const currentRule = currentRows[0]
     if (Boolean(currentRule.paused)) {
-      const today = new Date().toISOString().slice(0, 10)
-      const advancedNextDate = advanceToFutureCycle(currentRule.next_date, currentRule.frequency, today)
-      const prior = toDateStr(currentRule.next_date)
-      if (
-        advancedNextDate &&
-        prior &&
-        advancedNextDate !== prior
-      ) {
+      const utcToday = new Date().toISOString().slice(0, 10)
+      const resumeDay = effectiveBillingDayFromClient(utcToday, resumeDayRaw)
+      const advancedNextDate = advanceNextDateOnResume(
+        currentRule.next_date,
+        currentRule.frequency,
+        resumeDay
+      )
+      const prior = normalizeCalendarYmd(currentRule.next_date)
+      if (advancedNextDate && prior && advancedNextDate !== prior) {
         resolvedNextDate = advancedNextDate
       }
     }

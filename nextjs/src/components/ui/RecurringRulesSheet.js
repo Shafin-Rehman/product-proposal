@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { apiGet, apiPost } from '@/lib/apiClient'
 import { formatCurrency } from '@/lib/financeUtils'
+import { localCalendarYmd } from '@/lib/recurringDates'
 
 const FREQ_LABELS = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' }
 const VALID_FREQUENCIES = ['weekly', 'monthly', 'yearly']
@@ -68,12 +69,17 @@ export default function RecurringRulesSheet({ session, onClose, onChanged, demoR
     if (busyRuleId) return
     setBusyRuleId(rule.id)
     try {
+      const pausing = !rule.paused
+      const body = pausing
+        ? { rule_id: rule.id, paused: true }
+        : { rule_id: rule.id, paused: false, resume_day: localCalendarYmd() }
       const updatedRule = await apiPost(
         '/api/recurring/update',
-        { rule_id: rule.id, paused: !rule.paused },
+        body,
         { accessToken: session.accessToken },
       )
       setRules((prev) => prev.map((r) => r.id === rule.id ? { ...r, ...updatedRule } : r))
+      onChanged?.()
     } finally {
       setBusyRuleId(null)
     }

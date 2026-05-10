@@ -1,4 +1,11 @@
-import { addPeriod, getMissedOccurrences } from '@/lib/recurringDates'
+import {
+  addPeriod,
+  addUtcCalendarDays,
+  advanceNextDateOnResume,
+  effectiveBillingDayFromClient,
+  getMissedOccurrences,
+  maxIsoDate,
+} from '@/lib/recurringDates'
 
 describe('addPeriod', () => {
   test('weekly adds 7 days', () => {
@@ -19,6 +26,54 @@ describe('addPeriod', () => {
 
   test('weekly crossing month boundary', () => {
     expect(addPeriod('2026-04-28', 'weekly')).toBe('2026-05-05')
+  })
+})
+
+describe('maxIsoDate', () => {
+  test('picks the later YYYY-MM-DD', () => {
+    expect(maxIsoDate('2026-06-10', '2026-06-12')).toBe('2026-06-12')
+    expect(maxIsoDate('2026-06-12', '2026-06-10')).toBe('2026-06-12')
+  })
+})
+
+describe('addUtcCalendarDays', () => {
+  test('adds days in UTC without shifting string compare semantics', () => {
+    expect(addUtcCalendarDays('2026-06-10', 1)).toBe('2026-06-11')
+    expect(addUtcCalendarDays('2026-06-30', 1)).toBe('2026-07-01')
+  })
+})
+
+describe('effectiveBillingDayFromClient', () => {
+  test('local day ahead of UTC uses client when within UTC+1', () => {
+    expect(effectiveBillingDayFromClient('2026-06-10', '2026-06-11')).toBe('2026-06-11')
+  })
+
+  test('rejects client beyond UTC+1', () => {
+    expect(effectiveBillingDayFromClient('2026-06-10', '2026-06-12')).toBe('2026-06-10')
+    expect(effectiveBillingDayFromClient('2026-07-12', '2099-01-01')).toBe('2026-07-12')
+  })
+})
+
+describe('advanceNextDateOnResume', () => {
+  test('monthly: next_date as JS Date (node-pg) still advances past resume (May→June scenario)', () => {
+    const june10 = new Date('2026-06-10T00:00:00.000Z')
+    expect(advanceNextDateOnResume(june10, 'monthly', '2026-06-11')).toBe('2026-07-10')
+  })
+
+  test('monthly: due July 11, resume July 12 → next charge Aug 11 (skip missed 11th)', () => {
+    expect(advanceNextDateOnResume('2026-07-11', 'monthly', '2026-07-12')).toBe('2026-08-11')
+  })
+
+  test('monthly: due July 11, resume July 11 → Aug 11 (due on/before resume day is skipped)', () => {
+    expect(advanceNextDateOnResume('2026-07-11', 'monthly', '2026-07-11')).toBe('2026-08-11')
+  })
+
+  test('weekly: due July 11, resume July 12 → July 18', () => {
+    expect(advanceNextDateOnResume('2026-07-11', 'weekly', '2026-07-12')).toBe('2026-07-18')
+  })
+
+  test('next already after resume day is unchanged', () => {
+    expect(advanceNextDateOnResume('2026-08-11', 'monthly', '2026-07-12')).toBe('2026-08-11')
   })
 })
 
