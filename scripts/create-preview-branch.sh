@@ -27,7 +27,7 @@ url=$(jq -r '.SUPABASE_URL' <<<"$json")
 anon=$(jq -r '.SUPABASE_ANON_KEY' <<<"$json")
 sr=$(jq -r '.SUPABASE_SERVICE_ROLE_KEY' <<<"$json")
 
-srfile=${RUNNER_TEMP:-/tmp}/preview-sr-$$
+srfile=$(mktemp "${RUNNER_TEMP:-/tmp}/preview-sr-XXXXXXXXXX")
 printf '%s' "$sr" >"$srfile"
 chmod 600 "$srfile"
 
