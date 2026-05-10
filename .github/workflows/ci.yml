@@ -35,13 +35,18 @@ jobs:
         with:
           version: latest
 
+      - name: Cache Docker images
+        uses: ScribeMD/docker-cache@0.5.0
+        with:
+          key: docker-${{ runner.os }}-supabase-${{ hashFiles('supabase/config.toml', '.github/workflows/ci.yml') }}
+
       - name: Start local Supabase
         working-directory: ${{ github.workspace }}
         run: supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,storage-api,supavisor,realtime
 
       - name: Apply migrations on local database
         working-directory: ${{ github.workspace }}
-        run: supabase db reset --local --yes
+        run: supabase db push --local
 
       - uses: actions/setup-node@v4
         with:
@@ -74,7 +79,3 @@ jobs:
       - run: npx playwright test
         working-directory: nextjs
 
-      - name: Stop local Supabase
-        if: always()
-        working-directory: ${{ github.workspace }}
-        run: supabase stop --no-backup
