@@ -790,7 +790,7 @@ export default function InsightsView() {
                 className="button-secondary insights-v57__budget-cta"
                 href={plannerBudgetHref}
               >
-                Manage this month&apos;s budget
+                Manage selected month&apos;s budget
               </Link>
             </div>
 

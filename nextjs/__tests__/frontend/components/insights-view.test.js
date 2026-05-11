@@ -176,6 +176,7 @@ describe('InsightsView (sample data)', () => {
 
     const link = screen.getByRole('link', { name: 'Manage March 2026 budget in Planner' })
     expect(link.getAttribute('href')).toBe('/planner?month=2026-03')
+    expect(link.textContent).toBe('Manage selected month\'s budget')
     expect(link.closest('.insights-v57__budget-overview')).toBeTruthy()
   })
 

@@ -179,11 +179,16 @@ const GOAL_ICON_PICKER_CLOSE_MS = 140
 function normalizePlannerMonthQuery(value) {
   if (typeof value !== 'string') return null
 
-  const match = value.trim().match(/^(\d{4})-(\d{2})(?:-01)?$/)
+  const match = value.trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/)
   if (!match) return null
 
+  const year = Number(match[1])
   const monthNumber = Number(match[2])
-  if (monthNumber < 1 || monthNumber > 12) return null
+  const dayNumber = match[3] == null ? 1 : Number(match[3])
+  if (year < 1000 || monthNumber < 1 || monthNumber > 12 || dayNumber < 1) return null
+
+  const lastDayOfMonth = new Date(Date.UTC(year, monthNumber, 0, 12)).getUTCDate()
+  if (dayNumber > lastDayOfMonth) return null
 
   return `${match[1]}-${match[2]}-01`
 }
