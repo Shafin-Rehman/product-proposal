@@ -19,8 +19,37 @@ suf=${GITHUB_SHA:+${GITHUB_SHA:0:7}}
 suf=${suf:-$(date +%s)-$RANDOM}
 name=budgetbuddy-ci-${rid}-${att}-${suf}
 
-supabase branches create "$name" --project-ref "$ref" --experimental --yes >/dev/null
-json=$(supabase branches get "$name" --project-ref "$ref" --experimental -o json)
+create_log=$(mktemp "${RUNNER_TEMP:-/tmp}/preview-create-XXXXXXXXXX")
+get_log=$(mktemp "${RUNNER_TEMP:-/tmp}/preview-get-XXXXXXXXXX")
+
+if ! supabase branches create "$name" --project-ref "$ref" --experimental --yes >"$create_log" 2>&1; then
+  if grep -qi 'Preview branch not found\|unexpected find branch status 404' "$create_log"; then
+    echo "Preview branch create reported a transient 404; polling for branch details." >&2
+  else
+    cat "$create_log" >&2
+    exit 1
+  fi
+fi
+
+json=''
+for attempt in {1..30}; do
+  if json=$(supabase branches get "$name" --project-ref "$ref" --experimental -o json 2>"$get_log"); then
+    if jq -e '.POSTGRES_URL and .SUPABASE_URL and .SUPABASE_ANON_KEY and .SUPABASE_SERVICE_ROLE_KEY' <<<"$json" >/dev/null; then
+      break
+    fi
+  elif ! grep -qi 'Preview branch not found\|unexpected find branch status 404' "$get_log"; then
+    cat "$get_log" >&2
+    exit 1
+  fi
+
+  if [[ $attempt -eq 30 ]]; then
+    cat "$get_log" >&2
+    echo "Timed out waiting for preview branch details: $name" >&2
+    exit 1
+  fi
+
+  sleep 3
+done
 
 db=$(jq -r '.POSTGRES_URL' <<<"$json")
 url=$(jq -r '.SUPABASE_URL' <<<"$json")
