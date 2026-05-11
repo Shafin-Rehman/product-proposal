@@ -50,16 +50,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy to Vercel
-        id: deploy
-        run: |
-          deploy_output=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
-          echo "$deploy_output"
-          deploy_url=$(echo "$deploy_output" | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -n 1)
-          if [ -z "$deploy_url" ]; then
-            echo "Failed to determine deployment URL from Vercel output."
-            exit 1
-          fi
-          echo "deploy_url=$deploy_url" >> "$GITHUB_OUTPUT"
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -68,4 +59,5 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Smoke check production deployment
-        run: bash scripts/smoke-check-deployment.sh "${{ steps.deploy.outputs.deploy_url }}"
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/smoke-check-deployment.sh "https://budget-buddy021.vercel.app"
