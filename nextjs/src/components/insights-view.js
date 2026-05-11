@@ -298,6 +298,7 @@ export default function InsightsView() {
   const previousDisabled = isSampleMode || !earliestMonth || activeMonth <= earliestMonth
   const nextDisabled = isSampleMode || activeMonth >= currentLiveMonth
   const activeMonthLabel = formatMonthLabel(activeMonth)
+  const plannerBudgetHref = `/planner?month=${encodeURIComponent(activeMonth.slice(0, 7))}`
   const activeTotal = useMemo(() => (
     activeItems.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
   ), [activeItems])
@@ -784,6 +785,13 @@ export default function InsightsView() {
                 <span>{(budgetHealth.remainingAmount ?? 0) < 0 ? 'Over' : 'Left'} <strong>{budgetHealth.remainingAmount == null ? 'None' : formatCurrency(Math.abs(budgetHealth.remainingAmount))}</strong></span>
                 <span>Budget <strong>{budgetHealth.budgetAmount == null ? 'None' : formatCurrency(budgetHealth.budgetAmount)}</strong></span>
               </div>
+              <Link
+                aria-label={`Manage ${activeMonthLabel} budget in Planner`}
+                className="button-secondary insights-v57__budget-cta"
+                href={plannerBudgetHref}
+              >
+                Manage selected month&apos;s budget
+              </Link>
             </div>
 
             <div className="insights-v57__budget-panels">

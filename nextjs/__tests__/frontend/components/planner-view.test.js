@@ -69,15 +69,17 @@ const { useAuth, useDataChanged, useDataMode } = require('@/components/providers
 const { ApiError, apiDelete, apiGet, apiPost } = require('@/lib/apiClient')
 const PlannerView = require('@/components/planner-view').default
 
+let routerReplace
+
 async function flushAsyncUpdates() {
   await Promise.resolve()
   await Promise.resolve()
 }
 
-async function renderPlanner() {
+async function renderPlanner(props = {}) {
   let result
   await act(async () => {
-    result = render(React.createElement(PlannerView))
+    result = render(React.createElement(PlannerView, props))
     await flushAsyncUpdates()
   })
   return result
@@ -85,7 +87,8 @@ async function renderPlanner() {
 
 beforeEach(() => {
   jest.clearAllMocks()
-  useRouter.mockReturnValue({ replace: jest.fn() })
+  routerReplace = jest.fn()
+  useRouter.mockReturnValue({ replace: routerReplace })
   useAuth.mockReturnValue({
     isReady: true,
     logout: jest.fn(),
@@ -140,6 +143,174 @@ describe('PlannerView', () => {
         },
       })
   }
+
+  it('loads the default current month when opened without a month query', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner()
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget/summary?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(routerReplace).not.toHaveBeenCalled()
+    expect(screen.getByText('Selected month')).toBeTruthy()
+    expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
+  })
+
+  it('initializes to a valid month query param and removes the consumed query from the URL', async () => {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        total_budget: '800.00',
+        total_expenses: '120.00',
+        total_income: '900.00',
+        remaining_budget: '680.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-01-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+
+    await renderPlanner({ initialMonth: '2026-02' })
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-02-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget/summary?month=2026-02-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-01-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/savings-goals?month=2026-02-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+    expect(screen.getByText('Selected month')).toBeTruthy()
+    expect(screen.getAllByText('2026-02-01').length).toBeGreaterThan(0)
+  })
+
+  it('normalizes a valid full-date month query param to that month start', async () => {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        total_budget: '800.00',
+        total_expenses: '120.00',
+        total_income: '900.00',
+        remaining_budget: '680.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-01-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: {
+          active_count: 0,
+          current_total: '0.00',
+          remaining_total: '0.00',
+          monthly_required_total: '0.00',
+          available_after_goal_contributions: null,
+          pressure_level: 'none',
+        },
+      })
+
+    await renderPlanner({ initialMonth: '2026-02-14' })
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-02-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/savings-goals?month=2026-02-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+    expect(screen.getAllByText('2026-02-01').length).toBeGreaterThan(0)
+  })
+
+  it('ignores invalid month query params and keeps the default month behavior', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner({ initialMonth: '2026-13' })
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/savings-goals?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+    expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
+  })
+
+  it('rejects invalid full-date month query params and falls back to the default month', async () => {
+    mockPlannerResponses()
+
+    await renderPlanner({ initialMonth: '2026-02-30' })
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/budget?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(apiGet).toHaveBeenCalledWith(
+      '/api/savings-goals?month=2026-03-01',
+      expect.objectContaining({ accessToken: 'test-token' })
+    )
+    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+    expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
+  })
 
   it('renders monthly health from category budgets when no explicit overall cap exists', async () => {
     apiGet
