@@ -8301,6 +8301,17 @@ html[data-theme='dark'] .insights-screen--issue57 {
   font-size: 0.98rem;
 }
 
+.insights-screen--issue57 .insights-v57__budget-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: min(100%, 18rem);
+  padding: 0 1rem;
+  text-align: center;
+  text-decoration: none;
+}
+
 .insights-screen--issue57 .insights-v57__budget-panels {
   display: grid;
   grid-template-columns: 1fr;

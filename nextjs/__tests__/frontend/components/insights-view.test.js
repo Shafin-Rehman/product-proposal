@@ -171,6 +171,14 @@ describe('InsightsView (sample data)', () => {
     expect(container.querySelector('.insights-v57__cashflow-peak')).toBeTruthy()
   })
 
+  it('renders the budget management CTA in the budget health area', () => {
+    render(React.createElement(InsightsView))
+
+    const link = screen.getByRole('link', { name: 'Manage March 2026 budget in Planner' })
+    expect(link.getAttribute('href')).toBe('/planner?month=2026-03')
+    expect(link.closest('.insights-v57__budget-overview')).toBeTruthy()
+  })
+
   it('renders the new Category detail section with CategoryProgressRow items and a pace-vs-last-month chart', () => {
     const { container } = render(React.createElement(InsightsView))
 
@@ -290,6 +298,33 @@ describe('InsightsView CSV export', () => {
       expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
     }, { timeout: 3000 })
     await waitFor(() => expect(screen.getByText('CSV export downloaded.')).toBeTruthy())
+  })
+
+  it('points the no-budget CTA to Planner with the selected month', async () => {
+    render(React.createElement(InsightsView))
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/insights?month=2026-03-01',
+        expect.objectContaining({ accessToken: 'live-token' })
+      )
+    })
+
+    const marchLink = screen.getByRole('link', { name: 'Manage March 2026 budget in Planner' })
+    expect(marchLink.getAttribute('href')).toBe('/planner?month=2026-03')
+    expect(marchLink.closest('.insights-v57__budget-overview')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to February 2026' }))
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/insights?month=2026-02-01',
+        expect.objectContaining({ accessToken: 'live-token' })
+      )
+    })
+
+    const februaryLink = screen.getByRole('link', { name: 'Manage February 2026 budget in Planner' })
+    expect(februaryLink.getAttribute('href')).toBe('/planner?month=2026-02')
   })
 
   it('uses sanitized filenames from Content-Disposition before downloading', async () => {

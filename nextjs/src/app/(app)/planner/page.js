@@ -4,6 +4,6 @@ export const metadata = {
   title: 'Planner',
 }
 
-export default function PlannerPage() {
-  return <PlannerView />
+export default function PlannerPage({ searchParams }) {
+  return <PlannerView initialMonth={searchParams?.month} />
 }
