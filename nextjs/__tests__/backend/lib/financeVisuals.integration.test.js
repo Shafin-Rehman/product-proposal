@@ -7,55 +7,74 @@ const {
 
 const { getEntryVisual, getCategoryVisual } = require('@/lib/financeVisuals')
 
-const EXPENSE = { id: 'e1', amount: '45.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: 'Groceries run', category_name: 'grocery store' }
-const INCOME = { id: 'i1', amount: '2000.00', date: '2026-03-01', created_at: '2026-03-20T00:00:00Z', source_name: 'Payroll' }
+const EXPENSE = {
+  id: 'e1',
+  amount: '45.00',
+  date: '2026-03-10',
+  created_at: '2026-03-10T00:00:00Z',
+  description: 'Groceries run',
+  category_name: 'grocery store',
+}
 
-describe('buildActivityFeed -> getEntryVisual', () => {
-  it('entry produced by buildActivityFeed is a valid input to getEntryVisual', () => {
-    const [entry] = buildActivityFeed([EXPENSE], [])
-    const visual = getEntryVisual(entry)
-    expect(visual).toHaveProperty('color')
-    expect(visual).toHaveProperty('label')
-    expect(typeof visual.color).toBe('string')
+const INCOME = {
+  id: 'i1',
+  amount: '2000.00',
+  date: '2026-03-01',
+  created_at: '2026-03-20T00:00:00Z',
+  source_name: 'Payroll',
+}
+
+describe('financeVisuals specification', () => {
+  describe('financeUtils buildActivityFeed with financeVisuals', () => {
+    it('maps a grocery-line expense feed row to the groceries palette', () => {
+      const [entry] = buildActivityFeed([EXPENSE], [])
+
+      const visual = getEntryVisual(entry)
+
+      expect(visual).toMatchObject({
+        label: 'grocery store',
+        color: '#4d9a6a',
+      })
+    })
+
+    it('maps a payroll income feed row to the keyword income palette', () => {
+      const [entry] = buildActivityFeed([], [INCOME])
+
+      const visual = getEntryVisual(entry)
+
+      expect(visual).toMatchObject({
+        label: 'Payroll',
+        color: '#2f8f55',
+      })
+    })
   })
 
-  it('income entry from buildActivityFeed also produces a valid visual', () => {
-    const visual = getEntryVisual(buildActivityFeed([], [INCOME])[0])
-    expect(visual).toHaveProperty('color')
-    expect(typeof visual.label).toBe('string')
+  describe('groupActivityByDate with financeVisuals', () => {
+    it('keeps stable visuals after grouping by date', () => {
+      const groups = groupActivityByDate(buildActivityFeed([EXPENSE], [INCOME]))
+
+      expect(getEntryVisual(groups[0].entries[0])).toMatchObject({
+        label: 'grocery store',
+        color: '#4d9a6a',
+      })
+      expect(getEntryVisual(groups[1].entries[0])).toMatchObject({
+        label: 'Payroll',
+        color: '#2f8f55',
+      })
+    })
   })
 
-  it('chip and kind on feed entries map to the correct category color', () => {
-    const [entry] = buildActivityFeed([EXPENSE], [])
-    const visual = getCategoryVisual(entry.chip, entry.kind)
-    expect(visual.color).toBe('#4d9a6a')
-  })
-})
+  describe('buildIncomeSourceBreakdown with formatCurrency', () => {
+    it('formats breakdown amounts as stable currency strings', () => {
+      const income = [
+        { id: 1, source_name: 'Payroll', amount: '2000.00', date: '2026-03-03' },
+        { id: 2, source_name: 'Freelance', amount: '850.50', date: '2026-03-19' },
+      ]
 
-describe('buildActivityFeed -> groupActivityByDate -> getEntryVisual', () => {
-  it('expense entry inside its date group produces a valid visual', () => {
-    const groups = groupActivityByDate(buildActivityFeed([EXPENSE], [INCOME]))
-    const visual = getEntryVisual(groups[0].entries[0])
-    expect(visual).toHaveProperty('color')
-    expect(visual).toHaveProperty('label')
-  })
+      const [payroll, freelance] = buildIncomeSourceBreakdown(income, '2026-03-01')
 
-  it('income entry inside its exact-date group produces a valid visual', () => {
-    const groups = groupActivityByDate(buildActivityFeed([EXPENSE], [INCOME]))
-    const visual = getEntryVisual(groups[1].entries[0])
-    expect(visual).toHaveProperty('color')
-    expect(visual).toHaveProperty('label')
-  })
-})
-
-describe('buildIncomeSourceBreakdown -> formatCurrency', () => {
-  it('breakdown amounts format correctly into display strings', () => {
-    const income = [
-      { id: 1, source_name: 'Payroll', amount: '2000.00', date: '2026-03-03' },
-      { id: 2, source_name: 'Freelance', amount: '850.50', date: '2026-03-19' },
-    ]
-    const [payroll, freelance] = buildIncomeSourceBreakdown(income, '2026-03-01')
-    expect(formatCurrency(payroll.amount)).toBe('$2,000.00')
-    expect(formatCurrency(freelance.amount)).toBe('$850.50')
+      expect(formatCurrency(payroll.amount)).toBe('$2,000.00')
+      expect(formatCurrency(freelance.amount)).toBe('$850.50')
+    })
   })
 })

@@ -10,72 +10,62 @@ const pool = require('@/lib/db')
 const { getSupabaseClient } = require('@/lib/supabaseClient')
 const { runHealthChecks } = require('@/lib/healthChecks')
 
-describe('runHealthChecks - database check', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
+describe('healthChecks specification', () => {
+  describe('runHealthChecks database probe', () => {
+    beforeEach(() => {
+      jest.clearAllMocks()
+      getSupabaseClient.mockReturnValue({
+        from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
+      })
+    })
+
+    it('marks the database check healthy when the pool responds', async () => {
+      pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
+
+      const results = await runHealthChecks()
+
+      expect(results[0]).toEqual({ name: 'database', status: 'ok', message: undefined })
+    })
+
+    it.each([
+      new Error('connection refused'),
+      new Error(),
+    ])('reports database check as error when the pool rejects (%#)', async (error) => {
+      pool.query.mockRejectedValue(error)
+
+      const results = await runHealthChecks()
+
+      expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'Database unreachable' })
     })
   })
 
-  it('reports ok with no error message when the query succeeds', async () => {
-    pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'ok', message: undefined })
-  })
-
-  it('reports error with the default message when the query throws', async () => {
-    pool.query.mockRejectedValue(new Error('connection refused'))
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'Database unreachable' })
-  })
-
-  it('reports fallback error message when the query throws with no message', async () => {
-    pool.query.mockRejectedValue(new Error())
-
-    const results = await runHealthChecks()
-
-    expect(results[0]).toEqual({ name: 'database', status: 'error', message: 'Database unreachable' })
-  })
-})
-
-describe('runHealthChecks - supabase check', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
-  })
-
-  it('reports ok with no error message when the Supabase query succeeds', async () => {
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
+  describe('runHealthChecks Supabase probe', () => {
+    beforeEach(() => {
+      jest.clearAllMocks()
+      pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] })
     })
 
-    const results = await runHealthChecks()
+    it('marks the Supabase check healthy when the client responds without an error', async () => {
+      getSupabaseClient.mockReturnValue({
+        from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: null }) }) }),
+      })
 
-    expect(results[1]).toEqual({ name: 'supabase', status: 'ok', message: undefined })
-  })
+      const results = await runHealthChecks()
 
-  it('reports error with the default message when the Supabase query fails', async () => {
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message: 'service unavailable' } }) }) }),
+      expect(results[1]).toEqual({ name: 'supabase', status: 'ok', message: undefined })
     })
 
-    const results = await runHealthChecks()
+    it.each([
+      { message: 'service unavailable' },
+      { message: '' },
+    ])('reports supabase check as error when the client returns an error object (%#)', async ({ message }) => {
+      getSupabaseClient.mockReturnValue({
+        from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message } }) }) }),
+      })
 
-    expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'Supabase unreachable' })
-  })
+      const results = await runHealthChecks()
 
-  it('reports fallback error message when Supabase error has no message', async () => {
-    getSupabaseClient.mockReturnValue({
-      from: () => ({ select: () => ({ limit: () => Promise.resolve({ error: { message: '' } }) }) }),
+      expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'Supabase unreachable' })
     })
-
-    const results = await runHealthChecks()
-
-    expect(results[1]).toEqual({ name: 'supabase', status: 'error', message: 'Supabase unreachable' })
   })
 })
