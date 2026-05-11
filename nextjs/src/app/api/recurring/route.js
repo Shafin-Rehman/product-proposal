@@ -59,48 +59,76 @@ export async function POST(request) {
   }
 
   const next_date = addPeriod(start_date, frequency)
+  const insertValues = [
+    user.id, type, parsedAmount.toFixed(2), category_id ?? null, source_id ?? null,
+    description ?? null, frequency, start_date, next_date,
+  ]
+
+  if (expense_id || income_id) {
+    let client
+    try {
+      client = await db.connect()
+      await client.query('BEGIN')
+      const { rows } = await client.query(
+        `INSERT INTO public.recurring_rules
+           (user_id, type, amount, category_id, source_id, description, frequency, start_date, next_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         RETURNING *`,
+        insertValues
+      )
+      const rule = rows[0]
+
+      if (expense_id) {
+        const upd = await client.query(
+          `UPDATE public.expenses SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
+          [rule.id, expense_id, user.id]
+        )
+        if (!upd.rowCount) {
+          await client.query('ROLLBACK')
+          return NextResponse.json(
+            { error: 'Expense not found or could not be linked' },
+            { status: 400 }
+          )
+        }
+      } else {
+        const upd = await client.query(
+          `UPDATE public.income SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
+          [rule.id, income_id, user.id]
+        )
+        if (!upd.rowCount) {
+          await client.query('ROLLBACK')
+          return NextResponse.json(
+            { error: 'Income not found or could not be linked' },
+            { status: 400 }
+          )
+        }
+      }
+
+      await client.query('COMMIT')
+      await processUserRecurring(user.id)
+      return NextResponse.json(formatRule(rule), { status: 201 })
+    } catch (err) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK')
+        } catch {
+          // ignore
+        }
+      }
+      throw err
+    } finally {
+      if (client) client.release()
+    }
+  }
 
   const { rows } = await db.query(
     `INSERT INTO public.recurring_rules
        (user_id, type, amount, category_id, source_id, description, frequency, start_date, next_date)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING *`,
-    [user.id, type, parsedAmount.toFixed(2), category_id ?? null, source_id ?? null,
-     description ?? null, frequency, start_date, next_date]
+    insertValues
   )
   const rule = rows[0]
-
-  if (expense_id) {
-    const upd = await db.query(
-      `UPDATE public.expenses SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
-      [rule.id, expense_id, user.id]
-    )
-    if (!upd.rowCount) {
-      await db.query(
-        `DELETE FROM public.recurring_rules WHERE id = $1 AND user_id = $2`,
-        [rule.id, user.id]
-      )
-      return NextResponse.json(
-        { error: 'Expense not found or could not be linked' },
-        { status: 400 }
-      )
-    }
-  } else if (income_id) {
-    const upd = await db.query(
-      `UPDATE public.income SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
-      [rule.id, income_id, user.id]
-    )
-    if (!upd.rowCount) {
-      await db.query(
-        `DELETE FROM public.recurring_rules WHERE id = $1 AND user_id = $2`,
-        [rule.id, user.id]
-      )
-      return NextResponse.json(
-        { error: 'Income not found or could not be linked' },
-        { status: 400 }
-      )
-    }
-  }
 
   await processUserRecurring(user.id)
 

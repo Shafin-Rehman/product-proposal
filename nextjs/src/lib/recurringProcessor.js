@@ -19,8 +19,9 @@ export async function processUserRecurring(userId, asOf = new Date().toISOString
     const dates = getMissedOccurrences(toDateStr(rule.next_date), rule.frequency, asOf)
     if (dates.length === 0) continue
 
-    const client = await db.connect()
+    let client
     try {
+      client = await db.connect()
       await client.query('BEGIN')
       let insertsThisRule = 0
       for (const date of dates) {
@@ -51,14 +52,16 @@ export async function processUserRecurring(userId, asOf = new Date().toISOString
       await client.query('COMMIT')
       generated += insertsThisRule
     } catch (err) {
-      try {
-        await client.query('ROLLBACK')
-      } catch {
-        // ignore rollback failures
+      if (client) {
+        try {
+          await client.query('ROLLBACK')
+        } catch {
+          // ignore rollback failures
+        }
       }
       throw err
     } finally {
-      client.release()
+      if (client) client.release()
     }
   }
 

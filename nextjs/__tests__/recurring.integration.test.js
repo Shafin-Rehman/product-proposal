@@ -1,4 +1,4 @@
-jest.mock('@/lib/db', () => ({ query: jest.fn() }))
+jest.mock('@/lib/db', () => ({ query: jest.fn(), connect: jest.fn() }))
 jest.mock('@/lib/supabaseClient', () => ({}))
 jest.mock('@/lib/auth', () => ({ authenticate: jest.fn() }))
 jest.mock('@/lib/recurringProcessor', () => ({ processUserRecurring: jest.fn() }))
@@ -37,6 +37,11 @@ const BASE_RULE = {
 
 beforeEach(() => {
   db.query.mockReset()
+  db.connect.mockReset()
+  db.connect.mockImplementation(async () => ({
+    query: (...args) => db.query(...args),
+    release: jest.fn(),
+  }))
   authenticate.mockReset()
   processUserRecurring.mockReset()
   authenticate.mockResolvedValue({ user: { id: 'uid', email: 'a@b.com' } })
@@ -265,12 +270,15 @@ describe('POST /api/recurring', () => {
   })
 })
 
-describe('POST /api/recurring — original transaction linking', () => {
+describe('POST /api/recurring — linked create (transactional)', () => {
   it('expense_id causes an UPDATE on expenses to set recurring_rule_id', async () => {
     const rule = { ...BASE_RULE, id: 'rule-x' }
+    const empty = { rows: [], rowCount: 0 }
     db.query
+      .mockResolvedValueOnce(empty)
       .mockResolvedValueOnce({ rows: [rule] })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce(empty)
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -279,7 +287,8 @@ describe('POST /api/recurring — original transaction linking', () => {
           start_date: '2026-05-09', expense_id: 'exp-99',
         }))
         expect(res.status).toBe(201)
-        const updateCall = db.query.mock.calls[1]
+        expect(db.connect).toHaveBeenCalled()
+        const updateCall = db.query.mock.calls[2]
         expect(updateCall[0].toUpperCase()).toContain('UPDATE')
         expect(updateCall[0].toUpperCase()).toContain('EXPENSES')
         expect(updateCall[1]).toContain('rule-x')
@@ -290,9 +299,12 @@ describe('POST /api/recurring — original transaction linking', () => {
 
   it('income_id causes an UPDATE on income to set recurring_rule_id', async () => {
     const rule = { ...BASE_RULE, id: 'rule-y', type: 'income' }
+    const empty = { rows: [], rowCount: 0 }
     db.query
+      .mockResolvedValueOnce(empty)
       .mockResolvedValueOnce({ rows: [rule] })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce(empty)
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -300,11 +312,34 @@ describe('POST /api/recurring — original transaction linking', () => {
           type: 'income', amount: 500, frequency: 'monthly',
           start_date: '2026-05-09', income_id: 'inc-77',
         }))
-        const updateCall = db.query.mock.calls[1]
+        const updateCall = db.query.mock.calls[2]
         expect(updateCall[0].toUpperCase()).toContain('UPDATE')
         expect(updateCall[0].toUpperCase()).toContain('INCOME')
         expect(updateCall[1]).toContain('rule-y')
         expect(updateCall[1]).toContain('inc-77')
+      },
+    })
+  })
+
+  it('linked expense create runs BEGIN, INSERT, UPDATE, COMMIT (in that order)', async () => {
+    const rule = { ...BASE_RULE, id: 'rule-seq' }
+    const empty = { rows: [], rowCount: 0 }
+    db.query
+      .mockResolvedValueOnce(empty)
+      .mockResolvedValueOnce({ rows: [rule] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce(empty)
+    await testApiHandler({
+      appHandler: recurringHandler,
+      async test({ fetch }) {
+        await fetch(post({
+          type: 'expense', amount: 11.99, frequency: 'monthly',
+          start_date: '2026-05-09', expense_id: 'exp-seq',
+        }))
+        expect(db.query.mock.calls[0][0]).toBe('BEGIN')
+        expect(String(db.query.mock.calls[1][0]).toUpperCase()).toContain('INSERT')
+        expect(String(db.query.mock.calls[2][0]).toUpperCase()).toContain('UPDATE')
+        expect(db.query.mock.calls[3][0]).toBe('COMMIT')
       },
     })
   })
@@ -325,10 +360,12 @@ describe('POST /api/recurring — original transaction linking', () => {
 
   it('400 - unknown expense_id rolls back rule and does not run process', async () => {
     const rule = { ...BASE_RULE, id: 'rule-z' }
+    const empty = { rows: [], rowCount: 0 }
     db.query
+      .mockResolvedValueOnce(empty)
       .mockResolvedValueOnce({ rows: [rule] })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce(empty)
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -342,19 +379,23 @@ describe('POST /api/recurring — original transaction linking', () => {
         expect(res.status).toBe(400)
         expect((await res.json()).error).toMatch(/expense/i)
         expect(processUserRecurring).not.toHaveBeenCalled()
-        const deleteCall = db.query.mock.calls[2]
-        expect(deleteCall[0].toUpperCase()).toContain('DELETE')
-        expect(deleteCall[1]).toContain('rule-z')
+        const rollbackCall = db.query.mock.calls[3]
+        expect(rollbackCall[0].toUpperCase()).toContain('ROLLBACK')
+        const anyDelete = db.query.mock.calls.some((c) =>
+          String(c[0]).toUpperCase().includes('DELETE'))
+        expect(anyDelete).toBe(false)
       },
     })
   })
 
   it('400 - unknown income_id rolls back rule', async () => {
     const rule = { ...BASE_RULE, id: 'rule-w', type: 'income' }
+    const empty = { rows: [], rowCount: 0 }
     db.query
+      .mockResolvedValueOnce(empty)
       .mockResolvedValueOnce({ rows: [rule] })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce(empty)
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -368,8 +409,43 @@ describe('POST /api/recurring — original transaction linking', () => {
         }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toMatch(/income/i)
+        expect(processUserRecurring).not.toHaveBeenCalled()
+        expect(db.query.mock.calls[3][0].toUpperCase()).toContain('ROLLBACK')
+        const anyDelete = db.query.mock.calls.some((c) =>
+          String(c[0]).toUpperCase().includes('DELETE'))
+        expect(anyDelete).toBe(false)
       },
     })
+  })
+
+  it('linked create rolls back and releases client when INSERT throws', async () => {
+    const logErr = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const release = jest.fn()
+    db.connect.mockImplementationOnce(async () => ({
+      query: (...args) => db.query(...args),
+      release,
+    }))
+    const empty = { rows: [], rowCount: 0 }
+    db.query
+      .mockResolvedValueOnce(empty)
+      .mockRejectedValueOnce(new Error('insert failed'))
+      .mockResolvedValueOnce(empty)
+    try {
+      await testApiHandler({
+        appHandler: recurringHandler,
+        async test({ fetch }) {
+          const res = await fetch(post({
+            type: 'expense', amount: 11.99, frequency: 'monthly',
+            start_date: '2026-05-09', expense_id: 'exp-err',
+          }))
+          expect(res.status).toBe(500)
+        },
+      })
+      expect(db.query.mock.calls.some((c) => String(c[0]).toUpperCase() === 'ROLLBACK')).toBe(true)
+      expect(release).toHaveBeenCalled()
+    } finally {
+      logErr.mockRestore()
+    }
   })
 })
 
