@@ -270,7 +270,7 @@ describe('POST /api/recurring — original transaction linking', () => {
     const rule = { ...BASE_RULE, id: 'rule-x' }
     db.query
       .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -292,7 +292,7 @@ describe('POST /api/recurring — original transaction linking', () => {
     const rule = { ...BASE_RULE, id: 'rule-y', type: 'income' }
     db.query
       .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
@@ -319,6 +319,55 @@ describe('POST /api/recurring — original transaction linking', () => {
         }))
         expect(res.status).toBe(201)
         expect(db.query.mock.calls).toHaveLength(1)
+      },
+    })
+  })
+
+  it('400 - unknown expense_id rolls back rule and does not run process', async () => {
+    const rule = { ...BASE_RULE, id: 'rule-z' }
+    db.query
+      .mockResolvedValueOnce({ rows: [rule] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+    await testApiHandler({
+      appHandler: recurringHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          type: 'expense',
+          amount: 11.99,
+          frequency: 'monthly',
+          start_date: '2026-05-09',
+          expense_id: 'missing-exp',
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toMatch(/expense/i)
+        expect(processUserRecurring).not.toHaveBeenCalled()
+        const deleteCall = db.query.mock.calls[2]
+        expect(deleteCall[0].toUpperCase()).toContain('DELETE')
+        expect(deleteCall[1]).toContain('rule-z')
+      },
+    })
+  })
+
+  it('400 - unknown income_id rolls back rule', async () => {
+    const rule = { ...BASE_RULE, id: 'rule-w', type: 'income' }
+    db.query
+      .mockResolvedValueOnce({ rows: [rule] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+    await testApiHandler({
+      appHandler: recurringHandler,
+      async test({ fetch }) {
+        const res = await fetch(post({
+          type: 'income',
+          amount: 500,
+          frequency: 'monthly',
+          start_date: '2026-05-09',
+          source_id: 'src-1',
+          income_id: 'missing-inc',
+        }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toMatch(/income/i)
       },
     })
   })

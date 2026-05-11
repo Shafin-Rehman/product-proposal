@@ -71,15 +71,35 @@ export async function POST(request) {
   const rule = rows[0]
 
   if (expense_id) {
-    await db.query(
+    const upd = await db.query(
       `UPDATE public.expenses SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
       [rule.id, expense_id, user.id]
     )
+    if (!upd.rowCount) {
+      await db.query(
+        `DELETE FROM public.recurring_rules WHERE id = $1 AND user_id = $2`,
+        [rule.id, user.id]
+      )
+      return NextResponse.json(
+        { error: 'Expense not found or could not be linked' },
+        { status: 400 }
+      )
+    }
   } else if (income_id) {
-    await db.query(
+    const upd = await db.query(
       `UPDATE public.income SET recurring_rule_id = $1 WHERE id = $2 AND user_id = $3`,
       [rule.id, income_id, user.id]
     )
+    if (!upd.rowCount) {
+      await db.query(
+        `DELETE FROM public.recurring_rules WHERE id = $1 AND user_id = $2`,
+        [rule.id, user.id]
+      )
+      return NextResponse.json(
+        { error: 'Income not found or could not be linked' },
+        { status: 400 }
+      )
+    }
   }
 
   await processUserRecurring(user.id)

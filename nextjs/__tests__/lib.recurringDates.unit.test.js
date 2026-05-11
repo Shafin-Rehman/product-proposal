@@ -27,6 +27,22 @@ describe('addPeriod', () => {
   test('weekly crossing month boundary', () => {
     expect(addPeriod('2026-04-28', 'weekly')).toBe('2026-05-05')
   })
+
+  test('monthly clamps day when target month is shorter (Jan 31 → Feb 28)', () => {
+    expect(addPeriod('2026-01-31', 'monthly')).toBe('2026-02-28')
+  })
+
+  test('monthly clamps to Feb 29 in leap years', () => {
+    expect(addPeriod('2024-01-31', 'monthly')).toBe('2024-02-29')
+  })
+
+  test('monthly Mar 31 → Apr 30', () => {
+    expect(addPeriod('2026-03-31', 'monthly')).toBe('2026-04-30')
+  })
+
+  test('yearly clamps Feb 29 across non-leap year', () => {
+    expect(addPeriod('2024-02-29', 'yearly')).toBe('2025-02-28')
+  })
 })
 
 describe('maxIsoDate', () => {

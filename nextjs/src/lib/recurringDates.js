@@ -37,12 +37,32 @@ export function addUtcCalendarDays(dateStr, deltaDays) {
   return toDateStr(d)
 }
 
+function daysInUtcMonth(year, monthIndex0) {
+  return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate()
+}
+
 export function addPeriod(dateStr, frequency) {
   const d = toUTCDate(dateStr)
   const f = String(frequency ?? '').toLowerCase()
-  if (f === 'weekly') d.setUTCDate(d.getUTCDate() + 7)
-  else if (f === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1)
-  else if (f === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1)
+  if (f === 'weekly') {
+    d.setUTCDate(d.getUTCDate() + 7)
+  } else if (f === 'monthly') {
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth()
+    const day = d.getUTCDate()
+    const firstOfNext = new Date(Date.UTC(y, m + 1, 1))
+    const ny = firstOfNext.getUTCFullYear()
+    const nm = firstOfNext.getUTCMonth()
+    const dim = daysInUtcMonth(ny, nm)
+    d.setUTCFullYear(ny, nm, Math.min(day, dim))
+  } else if (f === 'yearly') {
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth()
+    const day = d.getUTCDate()
+    const ny = y + 1
+    const dim = daysInUtcMonth(ny, m)
+    d.setUTCFullYear(ny, m, Math.min(day, dim))
+  }
   return toDateStr(d)
 }
 
