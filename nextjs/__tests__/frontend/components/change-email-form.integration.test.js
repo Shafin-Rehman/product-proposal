@@ -102,4 +102,27 @@ it('disables the Change email button when there is no access token', async () =>
   expect(screen.getByRole('button', { name: /change email/i }).disabled).toBe(true)
 })
 
+it('blocks submit with a session-expired message when the session loses its access token', async () => {
+  const { useAuth } = require('@/components/providers')
+  useAuth.mockReturnValue({ session: { accessToken: 'valid-token' } })
+  const view = render(React.createElement(ChangeEmailForm))
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /change email/i }))
+  })
+
+  useAuth.mockReturnValue({ session: { user: { email: 'a@b.com' } } })
+  await act(async () => {
+    view.rerender(React.createElement(ChangeEmailForm))
+  })
+
+  fireEvent.change(screen.getByPlaceholderText(/you@example\.com/i), { target: { value: 'new@example.com' } })
+  const form = screen.getByRole('button', { name: /update email/i }).closest('form')
+  await act(async () => {
+    fireEvent.submit(form)
+  })
+
+  expect(screen.getByRole('alert').textContent).toMatch(/session has expired/i)
+  expect(global.fetch).not.toHaveBeenCalled()
+})
+
 

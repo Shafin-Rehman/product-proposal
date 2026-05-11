@@ -110,4 +110,93 @@ describe('CategoryTransactionsModal', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('shows an empty current-month state including the month label when the category has no rows', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [{ id: 'other', amount: 5, title: 'X', categoryName: 'Groceries', occurredOn: '2026-03-01' }],
+      currentMonthLabel: 'March 2026',
+    }))
+    expect(screen.getByText(/No transactions in March 2026/i)).toBeTruthy()
+  })
+
+  it('uses the positive delta tone when current month spend is lower than last month', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [{ id: 'a', amount: 40, title: 'Small', categoryName: 'Shopping', occurredOn: '2026-03-02' }],
+      previousMonthDetails: [{ id: 'b', amount: 120, title: 'Big', categoryName: 'Shopping', occurredOn: '2026-02-02' }],
+      currentMonthLabel: 'March 2026',
+      previousMonthLabel: 'February 2026',
+    }))
+    expect(document.querySelector('.category-modal__totals-delta--positive')).toBeTruthy()
+  })
+
+  it('shows No change in compare mode when category totals match across months', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [{ id: 'c1', amount: 75, title: 'A', categoryName: 'Shopping', occurredOn: '2026-03-02' }],
+      previousMonthDetails: [{ id: 'c2', amount: 75, title: 'B', categoryName: 'Shopping', occurredOn: '2026-02-02' }],
+      currentMonthLabel: 'March 2026',
+      previousMonthLabel: 'February 2026',
+    }))
+    expect(screen.getByText('No change')).toBeTruthy()
+    expect(document.querySelector('.category-modal__totals-delta--neutral')).toBeTruthy()
+  })
+
+  it('formats row dates from entry.key when occurredOn is absent', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [
+        { id: 'k1', amount: 10, title: 'Keyed', categoryName: 'Shopping', key: '2026-03-20', color: '#c9869e', soft: 'rgba(0,0,0,0.1)', symbol: 'S' },
+      ],
+      currentMonthLabel: 'March 2026',
+    }))
+    expect(screen.getByText('Short 2026-03-20')).toBeTruthy()
+  })
+
+  it('omits the subtitle when there is no currentMonthLabel in single-column mode', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: CURRENT_DETAILS,
+    }))
+    const subtitles = document.querySelectorAll('.category-modal__subtitle')
+    expect(subtitles.length).toBe(0)
+  })
+
+  it('falls back to This month and Last month headings when compare labels are omitted', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [{ id: 'x', amount: 10, title: 'A', categoryName: 'Shopping', occurredOn: '2026-03-01' }],
+      previousMonthDetails: [{ id: 'y', amount: 5, title: 'B', categoryName: 'Shopping', occurredOn: '2026-02-01' }],
+    }))
+    expect(screen.getByRole('heading', { name: 'This month' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Last month' })).toBeTruthy()
+    expect(screen.getAllByText('This month').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Last month').length).toBeGreaterThan(0)
+  })
+
+  it('shows custom empty copy for the previous column when compare mode has no prior-month rows', () => {
+    render(React.createElement(CategoryTransactionsModal, {
+      isOpen: true,
+      onClose: jest.fn(),
+      category: SAMPLE_CATEGORY,
+      currentMonthDetails: [{ id: 'z', amount: 20, title: 'Z', categoryName: 'Shopping', occurredOn: '2026-03-01' }],
+      previousMonthDetails: [],
+      currentMonthLabel: 'March 2026',
+      previousMonthLabel: 'February 2026',
+    }))
+    expect(screen.getByText(/No spending in this category last month/i)).toBeTruthy()
+  })
 })

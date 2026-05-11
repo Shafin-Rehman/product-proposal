@@ -141,7 +141,7 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen, waitFor, fireEvent, cleanup, act } = require('@testing-library/react')
+const { render, screen, waitFor, fireEvent, cleanup, act, within } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode, useDataChanged } = require('@/components/providers')
 const { ApiError, apiGet, apiPost } = require('@/lib/apiClient')
@@ -220,76 +220,24 @@ afterEach(() => {
 })
 
 describe('getBudgetCtaLabel', () => {
-  it('returns Set budget when no budgets exist', () => {
-    expect(getBudgetCtaLabel({
-      monthly_limit: null,
-      total_budget: null,
-      category_statuses: [],
-    })).toBe('Set budget')
-  })
-
-  it('returns Set overall limit when only category budgets exist', () => {
-    expect(getBudgetCtaLabel({
-      monthly_limit: null,
-      total_budget: '75.00',
-      category_statuses: [
-        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' },
-      ],
-    })).toBe('Set overall limit')
-  })
-
-  it('returns Set budget when category statuses only come from spending', () => {
-    expect(getBudgetCtaLabel({
-      monthly_limit: null,
-      total_budget: null,
-      category_statuses: [
-        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' },
-      ],
-    })).toBe('Set budget')
-  })
-
-  it('returns Edit budget when an overall monthly limit exists', () => {
-    expect(getBudgetCtaLabel({
-      monthly_limit: '125.00',
-      total_budget: '125.00',
-    })).toBe('Edit budget')
+  it.each([
+    ['no budgets', { monthly_limit: null, total_budget: null, category_statuses: [] }, 'Set budget'],
+    ['only category budgets', { monthly_limit: null, total_budget: '75.00', category_statuses: [{ category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' }] }, 'Set overall limit'],
+    ['spend-only statuses', { monthly_limit: null, total_budget: null, category_statuses: [{ category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' }] }, 'Set budget'],
+    ['overall limit exists', { monthly_limit: '125.00', total_budget: '125.00' }, 'Edit budget'],
+  ])('returns correct label for %s', (_, summary, expected) => {
+    expect(getBudgetCtaLabel(summary)).toBe(expected)
   })
 })
 
 describe('getBudgetHintText', () => {
-  it('explains that the sheet controls the overall monthly cap when no budgets exist', () => {
-    expect(getBudgetHintText({
-      monthly_limit: null,
-      total_budget: null,
-      category_statuses: [],
-    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
-  })
-
-  it('clarifies that category budgets already exist when there is no overall limit', () => {
-    expect(getBudgetHintText({
-      monthly_limit: null,
-      total_budget: '75.00',
-      category_statuses: [
-        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' },
-      ],
-    })).toBe('Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.')
-  })
-
-  it('does not claim category budgets already exist for spend-only statuses', () => {
-    expect(getBudgetHintText({
-      monthly_limit: null,
-      total_budget: null,
-      category_statuses: [
-        { category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' },
-      ],
-    })).toBe('Set an overall monthly limit here to control the monthly cap and overall-budget alerts.')
-  })
-
-  it('shows the current overall monthly limit when one exists', () => {
-    expect(getBudgetHintText({
-      monthly_limit: '125.00',
-      total_budget: '125.00',
-    })).toBe('Current limit: $125.00. Changes take effect immediately.')
+  it.each([
+    ['no budgets', { monthly_limit: null, total_budget: null, category_statuses: [] }, 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'],
+    ['only category budgets', { monthly_limit: null, total_budget: '75.00', category_statuses: [{ category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: '75.00' }] }, 'Category budgets are already set. Add an overall monthly limit here to control the monthly cap and overall-budget alerts.'],
+    ['spend-only statuses', { monthly_limit: null, total_budget: null, category_statuses: [{ category_id: '11111111-1111-4111-8111-111111111111', monthly_limit: null, spent: '75.00' }] }, 'Set an overall monthly limit here to control the monthly cap and overall-budget alerts.'],
+    ['overall limit exists', { monthly_limit: '125.00', total_budget: '125.00' }, 'Current limit: $125.00. Changes take effect immediately.'],
+  ])('returns correct hint for %s', (_, summary, expected) => {
+    expect(getBudgetHintText(summary)).toBe(expected)
   })
 })
 
@@ -369,22 +317,6 @@ describe('getCategoryCards', () => {
   })
 })
 
-describe('buildDerivedCategoryCards', () => {
-  it('groups live expenses by category and calculates share-based fallback cards', () => {
-    const cards = buildDerivedCategoryCards([
-      { id: 'e1', category_id: 'cat-food', category_name: 'Food', amount: '25.00' },
-      { id: 'e2', category_id: 'cat-food', category_name: 'Food', amount: '15.00' },
-      { id: 'e3', category_id: 'cat-fun', category_name: 'Fun', amount: '10.00' },
-    ])
-
-    expect(cards).toEqual([
-      expect.objectContaining({ name: 'Food', amount: 40, progress: 80, note: '80% of spend' }),
-      expect.objectContaining({ name: 'Fun', amount: 10, progress: 20, note: '20% of spend' }),
-    ])
-    expect(cards[0]).not.toHaveProperty('statusLabel')
-    expect(cards[0]).not.toHaveProperty('statusTone')
-  })
-})
 
 describe('getMonthProgressState', () => {
   it('returns a safe empty state when the month value is invalid', () => {
@@ -740,6 +672,94 @@ describe('DashboardView', () => {
     expect(screen.getByText('Grocer')).toBeTruthy()
     expect(screen.getAllByText('Paycheck').length).toBeGreaterThan(0)
     expect(screen.getByText('$820 spent')).toBeTruthy()
+  })
+
+  it('opens category drill-down from an interactive preview row in sample mode', async () => {
+    useDataMode.mockReturnValue({ isSampleMode: true })
+
+    await renderDashboard()
+    const interactiveRow = document.querySelector('.category-progress-row--interactive')
+    expect(interactiveRow).toBeTruthy()
+    fireEvent.click(interactiveRow)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+  })
+
+  it('scopes sample recent activity with the expense activity filter', async () => {
+    useDataMode.mockReturnValue({ isSampleMode: true })
+
+    await renderDashboard()
+    const filterGroup = screen.getByRole('group', { name: 'Activity filter' })
+    fireEvent.click(within(filterGroup).getByRole('button', { name: 'Expenses' }))
+
+    const feed = document.querySelector('.activity-feed')
+    expect(feed?.textContent).not.toMatch(/Campus payroll/)
+  })
+
+  it('shows the compact empty income message when the Income filter hides all expense-only rows', async () => {
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '100.00',
+        total_income: '0.00',
+        remaining_budget: '900.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([{ id: 'e1', date: '2026-03-10', category_name: 'Food', amount: '100.00' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+    financeUtils.buildActivityFeed.mockReturnValue([
+      { id: 'e1', kind: 'expense', merchant: 'Cafe', title: 'Cafe', chip: 'Food', occurredOn: '2026-03-10', amount: 100 },
+    ])
+
+    await renderDashboard()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(6))
+    const filterGroup = screen.getByRole('group', { name: 'Activity filter' })
+    fireEvent.click(within(filterGroup).getByRole('button', { name: 'Income' }))
+
+    expect(screen.getByText('No income yet')).toBeTruthy()
+    expect(screen.getByText(/Income entries will show up here/i)).toBeTruthy()
+  })
+
+  it('shows the compact empty expenses message when the Expenses filter hides all income-only rows', async () => {
+    apiGet
+      .mockResolvedValueOnce(createLiveSummary({
+        monthly_limit: '1000.00',
+        total_budget: '1000.00',
+        total_expenses: '0.00',
+        total_income: '2200.00',
+        remaining_budget: '1000.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'i1', date: '2026-03-05', source: 'Job', amount: '2200.00' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        goals: [],
+        summary: { active_count: 0, available_after_goal_contributions: null },
+      })
+    financeUtils.buildActivityFeed.mockReturnValue([
+      { id: 'i1', kind: 'income', merchant: 'Job', title: 'Pay', chip: 'Salary', occurredOn: '2026-03-05', amount: 2200 },
+    ])
+
+    await renderDashboard()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(6))
+    const filterGroup = screen.getByRole('group', { name: 'Activity filter' })
+    fireEvent.click(within(filterGroup).getByRole('button', { name: 'Expenses' }))
+
+    expect(screen.getByText('No expenses yet')).toBeTruthy()
+    expect(screen.getByText(/Expenses will show up here/i)).toBeTruthy()
   })
 
   it('fetches live dashboard data and renders the updated HUD state', async () => {

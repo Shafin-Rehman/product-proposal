@@ -732,3 +732,142 @@ describe('TransactionsView — recurring detail badge', () => {
     expect(within(screen.getByRole('dialog')).getByText('Recurring transaction')).toBeTruthy()
   })
 })
+
+describe('TransactionsView (live) feed resilience', () => {
+  const { ApiError } = require('@/lib/apiClient')
+
+  function mockEmptyFeedApiGet() {
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses' || url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') return Promise.resolve([{ id: 'c-food', name: 'Food', icon: null }])
+      if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-1', name: 'Salary', icon: null }])
+      return Promise.resolve([])
+    })
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({ isReady: true, logout: jest.fn(), session: { accessToken: 'live-token' } })
+    useDataMode.mockReturnValue({ isSampleMode: false })
+    useDataChanged.mockReturnValue({ notifyDataChanged: jest.fn() })
+    financeUtils.buildActivityFeed.mockReturnValue([])
+  })
+
+  it('shows a partial-feed notice when only the expenses request fails', async () => {
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') return Promise.reject(new ApiError('expenses unavailable', { status: 503 }))
+      if (url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') return Promise.resolve([{ id: 'c-edu', name: 'Education', icon: null }])
+      if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-bus', name: 'Business', icon: null }])
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => expect(screen.getByText(/Part of the feed is missing/i)).toBeTruthy())
+  })
+
+  it('clears a full feed error after Retry succeeds', async () => {
+    let allowLoads = false
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses/categories') return Promise.resolve([{ id: 'c-edu', name: 'Education', icon: null }])
+      if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-bus', name: 'Business', icon: null }])
+      if (url === '/api/expenses' || url === '/api/income') {
+        return allowLoads ? Promise.resolve([]) : Promise.reject(new ApiError('offline', { status: 500 }))
+      }
+      return Promise.resolve([])
+    })
+    render(React.createElement(TransactionsView))
+    await waitFor(() => expect(screen.getByText(/We could not load the live transactions feed/i)).toBeTruthy())
+    allowLoads = true
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.queryByText(/We could not load the live transactions feed/i)).toBeNull())
+  })
+
+  it('logs out when the live feed requests return 401', async () => {
+    const logout = jest.fn()
+    const replace = jest.fn()
+    useRouter.mockReturnValue({ replace })
+    useAuth.mockReturnValue({ isReady: true, logout, session: { accessToken: 'live-token' } })
+    apiGet.mockImplementation(() => Promise.reject(new ApiError('Unauthorized', 401)))
+    render(React.createElement(TransactionsView))
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalled()
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
+  })
+
+  it('renders nothing while auth is not ready in live mode', () => {
+    useAuth.mockReturnValue({ isReady: false, logout: jest.fn(), session: { accessToken: 'x' } })
+    const { container } = render(React.createElement(TransactionsView))
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('logs out when confirming delete returns 401', async () => {
+    const logout = jest.fn()
+    const replace = jest.fn()
+    useRouter.mockReturnValue({ replace })
+    useAuth.mockReturnValue({ isReady: true, logout, session: { accessToken: 'live-token' } })
+    financeUtils.buildActivityFeed.mockReturnValue([
+      { id: 'exp-del', kind: 'expense', merchant: 'Del Cafe', title: 'Del Cafe', chip: 'Dining', occurredOn: '2026-03-12', amount: 5, raw: { id: 'exp-del' } },
+    ])
+    mockEmptyFeedApiGet()
+    apiPost.mockRejectedValueOnce(new ApiError('Unauthorized', 401))
+    render(React.createElement(TransactionsView))
+    await waitFor(() => expect(screen.getByText('Del Cafe')).toBeTruthy())
+    fireEvent.click(screen.getByText('Del Cafe'))
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^confirm delete$/i }))
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalled()
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
+  })
+
+  it('logs out when saving an edited expense returns 401', async () => {
+    const logout = jest.fn()
+    const replace = jest.fn()
+    useRouter.mockReturnValue({ replace })
+    useAuth.mockReturnValue({ isReady: true, logout, session: { accessToken: 'live-token' } })
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    apiGet.mockImplementation((url) => {
+      if (url === '/api/expenses') return Promise.resolve([{ id: 77, amount: '12.00', date: '2026-03-20', description: 'Snack edit', category_name: 'Food', category_id: 'c-food' }])
+      if (url === '/api/income') return Promise.resolve([])
+      if (url === '/api/expenses/categories') return Promise.resolve([{ id: 'c-food', name: 'Food', icon: null }])
+      if (url === '/api/income/categories') return Promise.resolve([{ id: 'i-1', name: 'Salary', icon: null }])
+      return Promise.resolve([])
+    })
+    apiPost.mockRejectedValueOnce(new ApiError('Unauthorized', 401))
+    render(React.createElement(TransactionsView))
+    await waitFor(() => expect(screen.getByText('Snack edit')).toBeTruthy())
+    fireEvent.click(screen.getByText('Snack edit'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save changes' }))
+    })
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalled()
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
+  })
+
+  it.each([
+    [new ApiError('Monthly category cap reached', 422), 'Monthly category cap reached'],
+    [new Error('Unexpected'), 'Something went wrong. Please try again.'],
+  ])('shows the correct error when creating an expense fails: %s', async (error, expectedMessage) => {
+    financeUtils.buildActivityFeed.mockImplementation((expenses, income) =>
+      actualFinanceUtils.buildActivityFeed(expenses, income))
+    mockEmptyFeedApiGet()
+    apiPost.mockRejectedValueOnce(error)
+
+    await renderLiveTransactionsView()
+    fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Merchant'), { target: { value: 'Bookstore' } })
+    fireEvent.change(dialog.querySelector('input.input-field[inputmode="decimal"]'), { target: { value: '20' } })
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: /Add transaction/i }))
+    })
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(expectedMessage))
+  })
+})

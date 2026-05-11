@@ -1,5 +1,5 @@
 const { readSession, writeSession, clearSession } = require('@/lib/session')
-const { apiGet, apiPost } = require('@/lib/apiClient')
+const { apiGet, apiPost, apiDelete } = require('@/lib/apiClient')
 
 const SESSION_KEY = 'budgetbuddy.session'
 
@@ -24,6 +24,22 @@ describe('apiClient specification', () => {
   })
 
   describe('session → apiGet', () => {
+    it('throws ApiError on a non-ok response using the server error when present', async () => {
+      writeSession({ accessToken: 'tok-abc', user: { id: 'u1', email: 'a@b.com' } })
+      const { accessToken } = readSession()
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: jest.fn().mockResolvedValueOnce({ error: 'Upstream unavailable' }),
+      })
+
+      await expect(apiGet('/api/health', { accessToken })).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 503,
+        message: 'Upstream unavailable',
+      })
+    })
+
     it('token written by writeSession is forwarded as the Authorization header', async () => {
       writeSession({ accessToken: 'tok-abc', user: { id: 'u1', email: 'a@b.com' } })
       const { accessToken } = readSession()
@@ -81,6 +97,48 @@ describe('apiClient specification', () => {
 
       await expect(apiPost('/api/expenses', {}, { accessToken }))
         .rejects.toMatchObject({ name: 'ApiError', status: 422, message: 'Validation failed' })
+    })
+  })
+
+  describe('session → apiDelete', () => {
+    it('rejects with 401 when no access token is provided', async () => {
+      await expect(apiDelete('/api/expenses/delete?id=1', { accessToken: '' }))
+        .rejects.toMatchObject({ name: 'ApiError', status: 401, message: 'Missing access token' })
+    })
+
+    it('returns undefined for a 204 response without parsing JSON', async () => {
+      writeSession({ accessToken: 'tok-del', user: { id: 'u1', email: 'a@b.com' } })
+      const { accessToken } = readSession()
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+        json: jest.fn(),
+      })
+
+      const result = await apiDelete('/api/expenses/delete?id=e1', { accessToken })
+
+      expect(result).toBeNull()
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/expenses/delete?id=e1',
+        expect.objectContaining({ method: 'DELETE' })
+      )
+      expect(global.fetch.mock.calls[0][1].headers.authorization).toBe('Bearer tok-del')
+    })
+
+    it('throws ApiError when the server rejects the delete', async () => {
+      writeSession({ accessToken: 'tok-del', user: { id: 'u1', email: 'a@b.com' } })
+      const { accessToken } = readSession()
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: jest.fn().mockResolvedValueOnce({ error: 'Expense is locked' }),
+      })
+
+      await expect(apiDelete('/api/expenses/delete?id=e1', { accessToken })).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 409,
+        message: 'Expense is locked',
+      })
     })
   })
 })

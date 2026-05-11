@@ -43,4 +43,15 @@ describe('TrendChartAxes', () => {
     expect(group.querySelector('.trend-chart__budget-line')).toBeTruthy()
     expect(group.querySelector('.trend-chart__pace-line')).toBeNull()
   })
+
+  it('renders the axes group without lines when budgetLineY is null and pace is absent', () => {
+    const { container } = renderInSvg(React.createElement(TrendChartAxes, {
+      axes: { budgetLineY: null, plotLeft: 0, plotRight: 200, paceLine: null },
+    }))
+
+    const group = container.querySelector('g.trend-chart__axes')
+    expect(group).toBeTruthy()
+    expect(group.querySelector('.trend-chart__budget-line')).toBeNull()
+    expect(group.querySelector('.trend-chart__pace-line')).toBeNull()
+  })
 })

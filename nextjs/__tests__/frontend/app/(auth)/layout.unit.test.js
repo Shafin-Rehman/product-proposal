@@ -141,7 +141,6 @@ describe('AuthLayout — navigation regression', () => {
     const { rerender } = render(
       React.createElement(AuthLayout, null, React.createElement('div', null, 'reset form'))
     )
-    await act(async () => {})
     expect(mockReplace).not.toHaveBeenCalled()
 
     // Simulate navigation to /login (hash is gone, pathname changed)

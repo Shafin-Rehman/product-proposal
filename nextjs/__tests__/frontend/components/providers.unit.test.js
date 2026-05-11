@@ -338,6 +338,10 @@ describe('AppProviders shared app contexts', () => {
     document.documentElement.style.colorScheme = ''
   })
 
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   it('hydrates and updates theme, data mode, and data changed context state', async () => {
     window.localStorage.setItem('budgetbuddy.theme', 'dark')
     window.localStorage.setItem('budgetbuddy.data-mode', 'sample')
@@ -423,5 +427,62 @@ describe('AppProviders shared app contexts', () => {
     } finally {
       console.error = originalConsoleError
     }
+  })
+
+  it.each([
+    ['theme', 'budgetbuddy.theme', () => ({ testId: 'theme', expected: 'light' })],
+    ['data mode', 'budgetbuddy.data-mode', () => ({ testId: 'mode', expected: 'live' })],
+  ])('defaults %s to its safe value when localStorage read throws', async (_, storageKey, getExpect) => {
+    const origGet = Storage.prototype.getItem
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key) {
+      if (key === storageKey) throw new Error('denied')
+      return origGet.call(this, key)
+    })
+
+    renderProviderControls()
+
+    const { testId, expected } = getExpect()
+    await waitFor(() => expect(screen.getByTestId(testId).textContent).toBe(expected))
+  })
+
+  it('still applies changes when localStorage write throws', async () => {
+    renderProviderControls()
+    await waitFor(() => expect(screen.getByTestId('mode-ready').textContent).toBe('ready'))
+
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+
+    act(() => {
+      screen.getByRole('button', { name: /dark theme/i }).click()
+      screen.getByRole('button', { name: /sample mode/i }).click()
+    })
+
+    expect(screen.getByTestId('theme').textContent).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(screen.getByTestId('mode').textContent).toBe('sample')
+  })
+})
+
+describe('AppProviders refreshProfile', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+    global.fetch = jest.fn()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('clears session when profile refresh returns 401', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, createStoredSession('tok-401', { id: 'u1', email: 'a@b.com' }))
+    global.fetch.mockResolvedValue({ ok: false, status: 401 })
+
+    renderWithProviders()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state').textContent).toBe('signed-out')
+      expect(screen.getByTestId('token').textContent).toBe('none')
+    })
+    expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
   })
 })

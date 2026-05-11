@@ -75,8 +75,43 @@ describe('PaceVsLastMonthChart', () => {
     fireEvent.keyDown(svg, { key: 'Home' })
     expect(screen.getAllByText(/Day 1/).length).toBeGreaterThan(0)
 
+    fireEvent.keyDown(svg, { key: 'ArrowRight' })
+    expect(screen.getAllByText(/Day 2/).length).toBeGreaterThan(0)
+
+    fireEvent.keyDown(svg, { key: 'ArrowUp' })
+    expect(screen.getAllByText(/Day 3/).length).toBeGreaterThan(0)
+
     fireEvent.keyDown(svg, { key: 'End' })
     expect(screen.getAllByText(/Day 5/).length).toBeGreaterThan(0)
+  })
+
+  it('clears inspection when leaving the plot or blurring the chart svg', () => {
+    const currentSeries = buildCumulative([20, 40, 60])
+    const previousSeries = buildCumulative([10, 20, 30])
+
+    const { container } = render(React.createElement(PaceVsLastMonthChart, {
+      currentMonthSeries: currentSeries,
+      previousMonthSeries: previousSeries,
+    }))
+
+    const root = container.querySelector('.pace-chart')
+    const plot = container.querySelector('.pace-chart__plot')
+    const svg = screen.getByRole('img')
+
+    fireEvent.mouseEnter(plot)
+    fireEvent.keyDown(svg, { key: 'End' })
+
+    expect(root.classList.contains('pace-chart--inspecting')).toBe(true)
+
+    fireEvent.mouseLeave(plot)
+
+    expect(root.classList.contains('pace-chart--inspecting')).toBe(false)
+
+    fireEvent.mouseEnter(plot)
+    fireEvent.focus(svg)
+    fireEvent.blur(svg)
+
+    expect(root.classList.contains('pace-chart--inspecting')).toBe(false)
   })
 
   it('labels the delta as faster or slower than last month based on the current vs previous endpoint', () => {

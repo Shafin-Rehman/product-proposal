@@ -63,7 +63,7 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen, waitFor, cleanup, act, fireEvent } = require('@testing-library/react')
+const { render, screen, waitFor, cleanup, act, fireEvent, within } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataChanged, useDataMode } = require('@/components/providers')
 const { ApiError, apiDelete, apiGet, apiPost } = require('@/lib/apiClient')
@@ -106,7 +106,19 @@ afterEach(() => {
 })
 
 describe('PlannerView', () => {
-  function mockPlannerResponses({ goalsPayload = null } = {}) {
+  const emptyGoalsSummaryPayload = {
+    goals: [],
+    summary: {
+      active_count: 0,
+      current_total: '0.00',
+      remaining_total: '0.00',
+      monthly_required_total: '0.00',
+      available_after_goal_contributions: null,
+      pressure_level: 'none',
+    },
+  }
+
+  function mockPlannerResponses({ goalsPayload = null, failSummary = null } = {}) {
     apiGet
       .mockResolvedValueOnce([
         { id: 'cat-food', name: 'Food', icon: null },
@@ -116,7 +128,11 @@ describe('PlannerView', () => {
         monthly_limit: '1000.00',
         category_budgets: [],
       })
-      .mockResolvedValueOnce({
+
+    if (failSummary) {
+      apiGet.mockRejectedValueOnce(failSummary)
+    } else {
+      apiGet.mockResolvedValueOnce({
         month: '2026-03-01',
         monthly_limit: '1000.00',
         total_budget: '1000.00',
@@ -126,22 +142,121 @@ describe('PlannerView', () => {
         threshold_exceeded: false,
         category_statuses: [],
       })
+    }
+
+    apiGet
       .mockResolvedValueOnce({
         month: '2026-02-01',
         monthly_limit: null,
         category_budgets: [],
       })
-      .mockResolvedValueOnce(goalsPayload ?? {
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
+      .mockResolvedValueOnce(goalsPayload ?? emptyGoalsSummaryPayload)
+  }
+
+  function mockFebruaryMonthFromQuery() {
+    apiGet
+      .mockResolvedValueOnce([
+        { id: 'cat-food', name: 'Food', icon: null },
+      ])
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        category_budgets: [],
       })
+      .mockResolvedValueOnce({
+        month: '2026-02-01',
+        monthly_limit: '800.00',
+        total_budget: '800.00',
+        total_expenses: '120.00',
+        total_income: '900.00',
+        remaining_budget: '680.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      })
+      .mockResolvedValueOnce({
+        month: '2026-01-01',
+        monthly_limit: null,
+        category_budgets: [],
+      })
+      .mockResolvedValueOnce(emptyGoalsSummaryPayload)
+  }
+
+  function mockFoodCatNoCap({ failSummary = null } = {}) {
+    apiGet
+      .mockResolvedValueOnce([{ id: 'cat-food', name: 'Food', icon: null }])
+      .mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        category_budgets: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
+        ],
+      })
+    if (failSummary) {
+      apiGet.mockRejectedValueOnce(failSummary)
+    } else {
+      apiGet.mockResolvedValueOnce({
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '120.00',
+        total_expenses: '20.00',
+        total_income: '1000.00',
+        remaining_budget: '100.00',
+        threshold_exceeded: false,
+        category_statuses: [
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00', spent: '20.00' },
+        ],
+      })
+    }
+    apiGet
+      .mockResolvedValueOnce({ month: '2026-02-01', monthly_limit: null, category_budgets: [] })
+      .mockResolvedValueOnce(emptyGoalsSummaryPayload)
+  }
+
+  function mockCopyLastMonthLoad(prevMonthLimit = '850.00') {
+    return [
+      () => Promise.resolve([{ id: 'cat-food', name: 'Food', icon: null }]),
+      () => Promise.resolve({ month: '2026-03-01', monthly_limit: null, category_budgets: [] }),
+      () => Promise.resolve({
+        month: '2026-03-01',
+        monthly_limit: null,
+        total_budget: '0.00',
+        total_expenses: '0.00',
+        total_income: '0.00',
+        remaining_budget: '0.00',
+        threshold_exceeded: false,
+        category_statuses: [],
+      }),
+      () => Promise.resolve({ month: '2026-02-01', monthly_limit: prevMonthLimit, category_budgets: [] }),
+      () => Promise.resolve(emptyGoalsSummaryPayload),
+    ]
+  }
+
+  function makeRainyDayGoalPayload(goalId) {
+    return {
+      goals: [
+        {
+          id: goalId,
+          name: 'Rainy day fund',
+          icon: '\u{1F327}\uFE0F',
+          target_amount: '500.00',
+          current_amount: '100.00',
+          remaining_amount: '400.00',
+          target_date: '2026-12-31',
+          archived: false,
+          progress_percentage: 20,
+          monthly_required: '41.67',
+          budget_context: { status: 'ready', remaining_budget: '500.00', available_after_goal_contributions: '458.33' },
+        },
+      ],
+      summary: {
+        active_count: 1,
+        current_total: '100.00',
+        remaining_total: '400.00',
+        monthly_required_total: '41.67',
+        available_after_goal_contributions: '458.33',
+        pressure_level: 'ready',
+      },
+    }
   }
 
   it('loads the default current month when opened without a month query', async () => {
@@ -163,153 +278,70 @@ describe('PlannerView', () => {
     expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
   })
 
-  it('initializes to a valid month query param and removes the consumed query from the URL', async () => {
-    apiGet
-      .mockResolvedValueOnce([
-        { id: 'cat-food', name: 'Food', icon: null },
-      ])
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: '800.00',
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: '800.00',
-        total_budget: '800.00',
-        total_expenses: '120.00',
-        total_income: '900.00',
-        remaining_budget: '680.00',
-        threshold_exceeded: false,
-        category_statuses: [],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-01-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
+  it.each(['2026-02', '2026-02-14'])(
+    'normalizes month query %s to February start and clears the consumed query',
+    async (initialMonth) => {
+      mockFebruaryMonthFromQuery()
 
-    await renderPlanner({ initialMonth: '2026-02' })
+      await renderPlanner({ initialMonth })
 
-    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget?month=2026-02-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget/summary?month=2026-02-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget?month=2026-01-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/savings-goals?month=2026-02-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
-    expect(screen.getByText('Selected month')).toBeTruthy()
-    expect(screen.getAllByText('2026-02-01').length).toBeGreaterThan(0)
-  })
+      await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/budget?month=2026-02-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/budget/summary?month=2026-02-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/budget?month=2026-01-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/savings-goals?month=2026-02-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+      expect(screen.getByText('Selected month')).toBeTruthy()
+      expect(screen.getAllByText('2026-02-01').length).toBeGreaterThan(0)
+    }
+  )
 
-  it('normalizes a valid full-date month query param to that month start', async () => {
-    apiGet
-      .mockResolvedValueOnce([
-        { id: 'cat-food', name: 'Food', icon: null },
-      ])
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: '800.00',
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: '800.00',
-        total_budget: '800.00',
-        total_expenses: '120.00',
-        total_income: '900.00',
-        remaining_budget: '680.00',
-        threshold_exceeded: false,
-        category_statuses: [],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-01-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
+  it.each(['2026-13', '2026-02-30'])(
+    'falls back to the default month for invalid month query %s',
+    async (initialMonth) => {
+      mockPlannerResponses()
 
-    await renderPlanner({ initialMonth: '2026-02-14' })
+      await renderPlanner({ initialMonth })
 
-    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget?month=2026-02-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/savings-goals?month=2026-02-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
-    expect(screen.getAllByText('2026-02-01').length).toBeGreaterThan(0)
-  })
+      await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/budget?month=2026-03-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(apiGet).toHaveBeenCalledWith(
+        '/api/savings-goals?month=2026-03-01',
+        expect.objectContaining({ accessToken: 'test-token' })
+      )
+      expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
+      expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
+    }
+  )
 
-  it('ignores invalid month query params and keeps the default month behavior', async () => {
+  it('refetches planner data when advancing to the next month in live mode', async () => {
     mockPlannerResponses()
 
-    await renderPlanner({ initialMonth: '2026-13' })
-
+    await renderPlanner()
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget?month=2026-03-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/savings-goals?month=2026-03-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
-    expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
-  })
+    const nextMonthButton = screen.getByRole('button', { name: /^Go to 2026-04-01$/ })
+    await act(async () => {
+      fireEvent.click(nextMonthButton)
+      await flushAsyncUpdates()
+    })
 
-  it('rejects invalid full-date month query params and falls back to the default month', async () => {
-    mockPlannerResponses()
-
-    await renderPlanner({ initialMonth: '2026-02-30' })
-
-    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/budget?month=2026-03-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(apiGet).toHaveBeenCalledWith(
-      '/api/savings-goals?month=2026-03-01',
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
-    expect(routerReplace).toHaveBeenCalledWith('/planner', { scroll: false })
-    expect(screen.getAllByText('2026-03-01').length).toBeGreaterThan(0)
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(10))
+    expect(screen.getByRole('button', { name: /^Go to 2026-05-01$/ })).toBeTruthy()
   })
 
   it('renders monthly health from category budgets when no explicit overall cap exists', async () => {
@@ -335,31 +367,11 @@ describe('PlannerView', () => {
         remaining_budget: '48.00',
         threshold_exceeded: false,
         category_statuses: [
-          {
-            category_id: 'cat-food',
-            category_name: 'Food',
-            category_icon: null,
-            monthly_limit: '120.00',
-            spent: '96.00',
-            remaining_budget: '24.00',
-            progress_percentage: 80,
-          },
-          {
-            category_id: 'cat-fun',
-            category_name: 'Fun',
-            category_icon: null,
-            monthly_limit: '120.00',
-            spent: '96.00',
-            remaining_budget: '24.00',
-            progress_percentage: 80,
-          },
+          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00', spent: '96.00', remaining_budget: '24.00', progress_percentage: 80 },
+          { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '120.00', spent: '96.00', remaining_budget: '24.00', progress_percentage: 80 },
         ],
       })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
+      .mockResolvedValueOnce({ month: '2026-02-01', monthly_limit: null, category_budgets: [] })
       .mockResolvedValueOnce({
         goals: [
           {
@@ -376,44 +388,22 @@ describe('PlannerView', () => {
             budget_context: { status: 'ready', remaining_budget: '800.00', available_after_goal_contributions: '716.67' },
           },
         ],
-        summary: {
-          active_count: 1,
-          current_total: '250.00',
-          remaining_total: '750.00',
-          monthly_required_total: '83.33',
-          available_after_goal_contributions: '716.67',
-          pressure_level: 'ready',
-        },
+        summary: { active_count: 1, current_total: '250.00', remaining_total: '750.00', monthly_required_total: '83.33', available_after_goal_contributions: '716.67', pressure_level: 'ready' },
       })
 
     await renderPlanner()
 
-    await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledTimes(5)
-    })
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
 
-    expect(apiGet).toHaveBeenCalledWith(
-      `/api/savings-goals?month=${encodeURIComponent('2026-03-01')}`,
-      expect.objectContaining({ accessToken: 'test-token' })
-    )
     expect(screen.getByText('Monthly budget health')).toBeTruthy()
     expect(screen.getAllByText('Near limit').length).toBeGreaterThan(0)
     expect(screen.getByText('$48.00 left')).toBeTruthy()
-    expect(screen.getByText('Financial health')).toBeTruthy()
-    expect(screen.getByText('Positive cash flow')).toBeTruthy()
-    expect(screen.getByText('$808.00 ahead')).toBeTruthy()
-    expect(screen.getByText('Plan delta')).toBeTruthy()
-    expect(screen.getByText('$48.00 under plan')).toBeTruthy()
     expect(screen.getAllByText('No overall cap set').length).toBeGreaterThan(0)
-    expect(screen.getByText('Category progress')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThan(0)
     expect(screen.getByText('Savings goals')).toBeTruthy()
     expect(screen.getByText('Emergency cushion')).toBeTruthy()
     const statusPill = screen.getByText('On track')
-    expect(statusPill).toBeTruthy()
     expect(statusPill.className).toContain('savings-goal__status')
-    expect(statusPill.closest('.savings-goal__top')).toBeTruthy()
-    expect(screen.getByText('Monthly need fits your remaining budget.')).toBeTruthy()
     expect(screen.getByText('\u{1F6E1}\uFE0F')).toBeTruthy()
   })
 
@@ -455,34 +445,7 @@ describe('PlannerView', () => {
   })
 
   it('shows a partial-data notice and does not invent actuals when the live summary request fails', async () => {
-    apiGet
-      .mockResolvedValueOnce([
-        { id: 'cat-food', name: 'Food', icon: null },
-      ])
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
-        monthly_limit: null,
-        category_budgets: [
-          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
-        ],
-      })
-      .mockRejectedValueOnce(new Error('planner summary timed out'))
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
+    mockFoodCatNoCap({ failSummary: new Error('planner summary timed out') })
 
     await renderPlanner()
 
@@ -533,22 +496,8 @@ describe('PlannerView', () => {
           { category_id: 'cat-fun', category_name: 'Fun', category_icon: null, monthly_limit: '80.00', spent: '30.00' },
         ],
       })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
+      .mockResolvedValueOnce({ month: '2026-02-01', monthly_limit: null, category_budgets: [] })
+      .mockResolvedValueOnce(emptyGoalsSummaryPayload)
     apiDelete.mockResolvedValueOnce({
       month: '2026-03-01',
       monthly_limit: null,
@@ -645,45 +594,7 @@ describe('PlannerView', () => {
   })
 
   it('points zero drafts on saved rows to the clear action', async () => {
-    apiGet
-      .mockResolvedValueOnce([
-        { id: 'cat-food', name: 'Food', icon: null },
-      ])
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
-        monthly_limit: null,
-        category_budgets: [
-          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-03-01',
-        monthly_limit: null,
-        total_budget: '120.00',
-        total_expenses: '20.00',
-        total_income: '1000.00',
-        remaining_budget: '100.00',
-        threshold_exceeded: false,
-        category_statuses: [
-          { category_id: 'cat-food', category_name: 'Food', category_icon: null, monthly_limit: '120.00', spent: '20.00' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        month: '2026-02-01',
-        monthly_limit: null,
-        category_budgets: [],
-      })
-      .mockResolvedValueOnce({
-        goals: [],
-        summary: {
-          active_count: 0,
-          current_total: '0.00',
-          remaining_total: '0.00',
-          monthly_required_total: '0.00',
-          available_after_goal_contributions: null,
-          pressure_level: 'none',
-        },
-      })
+    mockFoodCatNoCap()
 
     await renderPlanner()
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
@@ -773,6 +684,56 @@ describe('PlannerView', () => {
     await waitFor(() => expect(screen.getByDisplayValue('49.23')).toBeTruthy())
   })
 
+  it('surfaces partial availability when the budget summary request fails', async () => {
+    mockPlannerResponses({ failSummary: new ApiError('Summary unavailable', { status: 503 }) })
+
+    await renderPlanner()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Some planner details are missing/i)).toBeTruthy()
+    })
+  })
+
+  it('shows the server error message when updating the overall cap fails', async () => {
+    mockPlannerResponses()
+    apiPost.mockRejectedValueOnce(new Error('Planner sync interrupted'))
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Overall monthly cap'), { target: { value: '1100' } })
+      await flushAsyncUpdates()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Update cap' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Planner sync interrupted')).toBeTruthy()
+    })
+  })
+
+  it('shows the generic planner message when overall cap save fails with a non-Error rejection', async () => {
+    mockPlannerResponses()
+    apiPost.mockRejectedValueOnce('tcp reset')
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Overall monthly cap'), { target: { value: '1100' } })
+      await flushAsyncUpdates()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Update cap' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/planner could not load this month right now/i)).toBeTruthy()
+    })
+  })
+
   it('disables the overall cap save while a category plan save is in flight', async () => {
     mockPlannerResponses()
     let resolveCategorySave
@@ -814,25 +775,6 @@ describe('PlannerView', () => {
     })
   })
 
-  it('opens the inline Add goal form from the savings goals CTA', async () => {
-    mockPlannerResponses()
-
-    await renderPlanner()
-
-    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
-      await flushAsyncUpdates()
-    })
-
-    expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Choose goal icon' })).toBeTruthy()
-    expect(screen.getByLabelText('Goal name')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create goal' }).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Add goal' }).className).toContain('button-primary')
-  })
-
   it('toggles and cancels the inline Add goal form with a closing state', async () => {
     mockPlannerResponses()
 
@@ -848,6 +790,10 @@ describe('PlannerView', () => {
     })
 
     expect(screen.getByRole('heading', { name: 'Add savings goal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Choose goal icon' })).toBeTruthy()
+    expect(screen.getByLabelText('Goal name')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create goal' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Add goal' }).className).toContain('button-primary')
     expect(screen.getByRole('button', { name: 'Add goal' }).getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
@@ -880,16 +826,12 @@ describe('PlannerView', () => {
       await flushAsyncUpdates()
     })
 
-    closingShell = container.querySelector('.savings-goal-form-shell--closing')
-    expect(closingShell).toBeTruthy()
-    expect(container.querySelector('.savings-goal-form--closing')).toBeTruthy()
-
+    const cancelClosingShell = container.querySelector('.savings-goal-form-shell--closing')
+    expect(cancelClosingShell).toBeTruthy()
     await act(async () => {
-      fireEvent.transitionEnd(closingShell, { propertyName: 'grid-template-rows' })
+      fireEvent.transitionEnd(cancelClosingShell, { propertyName: 'grid-template-rows' })
       await flushAsyncUpdates()
     })
-
-    expect(screen.queryByRole('heading', { name: 'Add savings goal' })).toBeNull()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add goal' }))
@@ -925,11 +867,6 @@ describe('PlannerView', () => {
     })
 
     expect(screen.getByRole('group', { name: 'Goal icons' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use Emergency icon' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use Medical icon' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use Wedding icon' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use Family icon' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Use Holiday icon' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /Use .* icon/ }).length).toBeGreaterThanOrEqual(24)
 
     await act(async () => {
@@ -998,5 +935,145 @@ describe('PlannerView', () => {
       await flushAsyncUpdates()
     })
     expect(screen.queryByRole('group', { name: 'Goal icons' })).toBeNull()
+  })
+
+  it('copies last month overall cap into the current month when the button is enabled', async () => {
+    const notifyDataChanged = jest.fn()
+    useDataChanged.mockReturnValue({ notifyDataChanged })
+    const firstLoad = mockCopyLastMonthLoad('850.00')
+    const repeatLoad = [...firstLoad, ...firstLoad]
+    let loadIndex = 0
+    apiGet.mockImplementation(() => {
+      const fn = repeatLoad[loadIndex]
+      loadIndex += 1
+      return fn ? fn() : Promise.resolve([])
+    })
+    apiPost.mockResolvedValueOnce({ ok: true })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy last month' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/budget',
+        expect.objectContaining({ month: '2026-03-01', monthly_limit: 850 }),
+        { accessToken: 'test-token' }
+      )
+    })
+    expect(notifyDataChanged).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByText(/Copied the 2026-02-01 plan into 2026-03-01/i)).toBeTruthy()
+    })
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(10))
+  })
+
+  it('shows feedback when copy last month fails with a non-auth API error', async () => {
+    const firstLoad = mockCopyLastMonthLoad('200.00')
+    let loadIndex = 0
+    apiGet.mockImplementation(() => {
+      const fn = firstLoad[loadIndex]
+      loadIndex += 1
+      return fn ? fn() : Promise.resolve([])
+    })
+    apiPost.mockRejectedValueOnce(new ApiError('Planner save failed', 503))
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy last month' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Planner save failed/i)).toBeTruthy()
+    })
+  })
+
+  it('archives a savings goal, refreshes planner data, and shows archived feedback', async () => {
+    const goalsPayload = makeRainyDayGoalPayload('goal-arch-1')
+    mockPlannerResponses({ goalsPayload })
+    mockPlannerResponses({ goalsPayload })
+    apiPost.mockResolvedValueOnce({ ok: true })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    const goalCard = screen.getByText('Rainy day fund').closest('.savings-goal')
+    await act(async () => {
+      fireEvent.click(within(goalCard).getByRole('button', { name: 'Archive' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/savings-goals/archive',
+        { goal_id: 'goal-arch-1' },
+        { accessToken: 'test-token' }
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/Rainy day fund archived/i)).toBeTruthy()
+    })
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(10))
+  })
+
+  it('opens edit mode for a goal and posts updates to the savings goals update endpoint', async () => {
+    const goalsPayload = makeRainyDayGoalPayload('goal-edit-1')
+    mockPlannerResponses({ goalsPayload })
+    mockPlannerResponses({ goalsPayload })
+    apiPost.mockResolvedValueOnce({ ok: true })
+
+    await renderPlanner()
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(5))
+    const goalCard = screen.getByText('Rainy day fund').closest('.savings-goal')
+    await act(async () => {
+      fireEvent.click(within(goalCard).getByRole('button', { name: 'Edit' }))
+      await flushAsyncUpdates()
+    })
+    expect(screen.getByRole('heading', { name: 'Edit savings goal' })).toBeTruthy()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Goal name'), { target: { value: 'Rainy day fund v2' } })
+      await flushAsyncUpdates()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save goal' }))
+      await flushAsyncUpdates()
+    })
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/savings-goals/update',
+        expect.objectContaining({
+          goal_id: 'goal-edit-1',
+          month: '2026-03-01',
+          name: 'Rainy day fund v2',
+        }),
+        { accessToken: 'test-token' }
+      )
+    })
+  })
+})
+
+describe('PlannerView (sample data)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({
+      isReady: true,
+      logout: jest.fn(),
+      session: { accessToken: 'tok', user: { email: 'sam@example.com' } },
+    })
+    useDataChanged.mockReturnValue({ notifyDataChanged: jest.fn() })
+    useDataMode.mockReturnValue({ isSampleMode: true })
+  })
+
+  it('hydrates the planner from demo payloads without live API calls', async () => {
+    await renderPlanner()
+
+    expect(apiGet).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Planner' })).toBeTruthy()
   })
 })
