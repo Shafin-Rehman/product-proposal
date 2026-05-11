@@ -63,6 +63,7 @@ import TransactionDetailSheet from '@/components/ui/TransactionDetailSheet'
 
 const ACTIVITY_PREVIEW_LIMIT = 6
 const BUDGET_DRAFT_VALIDATION_MESSAGE = 'Monthly limit must be a positive dollar amount with up to 2 decimal places.'
+const BUDGET_DRAFT_INPUT_PATTERN = /^\d*(?:\.\d{0,2})?$/
 const BUDGET_DRAFT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
 
 export {
@@ -92,6 +93,10 @@ export function getBudgetDraftValidationMessage(value) {
   }
 
   return ''
+}
+
+function isValidBudgetDraftInput(value) {
+  return value === '' || BUDGET_DRAFT_INPUT_PATTERN.test(value)
 }
 
 function LiveNotice({ message, onRetry }) {
@@ -686,14 +691,13 @@ export default function DashboardView() {
                 <input
                   className="input-field"
                   inputMode="decimal"
-                  min="0.01"
                   onChange={(event) => {
+                    if (!isValidBudgetDraftInput(event.target.value)) return
                     setBudgetDraft({ monthly_limit: event.target.value })
                     if (budgetSaveError) setBudgetSaveError('')
                   }}
                   placeholder="e.g. 2000"
-                  step="0.01"
-                  type="number"
+                  type="text"
                   value={budgetDraft.monthly_limit}
                 />
               </label>
