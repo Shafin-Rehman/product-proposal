@@ -57,3 +57,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Smoke check production deployment
+        working-directory: ${{ github.workspace }}
+        run: |
+          curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/ > /dev/null
+          curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/api/health > /dev/null
