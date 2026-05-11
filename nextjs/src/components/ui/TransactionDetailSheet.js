@@ -13,11 +13,9 @@ export default function TransactionDetailSheet({ entry, onClose, children }) {
     ? entry.note?.trim() || 'No note added'
     : entry.merchant?.trim() || 'No merchant added'
 
-  const selectedSubtitle = entry.kind === 'income' && entry.note?.trim()
-    ? entry.note.trim()
-    : entry.merchant && entry.merchant !== displayTitle
-      ? entry.merchant
-      : formatLongDate(entry.occurredOn)
+  const selectedSubtitle = entry.merchant && entry.merchant !== displayTitle
+    ? entry.merchant
+    : formatLongDate(entry.occurredOn)
   const categoryOrSourceLabel = entry.kind === 'income' ? 'Source' : 'Category'
 
   return (

@@ -270,7 +270,7 @@ export function buildActivityFeed(expenses = [], income = []) {
     return {
       id: `income-${entry.id}`,
       kind: 'income',
-      title: sourceName || displayCategory,
+      title: notes || sourceName || displayCategory,
       chip: displayCategory,
       sourceIcon: entry.source_icon ?? null,
       amount: Number(entry.amount ?? 0),

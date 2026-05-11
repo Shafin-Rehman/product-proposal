@@ -202,6 +202,36 @@ describe('GET /api/income', () => {
     })
   })
 
+  it('SQL JOINs recurring_rules to include recurring_cancelled_at in each row', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        await fetch()
+        const [sql] = db.query.mock.calls[0]
+        expect(sql.toUpperCase()).toContain('RECURRING_RULES')
+        expect(sql).toContain('recurring_cancelled_at')
+      }
+    })
+  })
+
+  it('recurring income entry includes recurring_cancelled_at from joined rule', async () => {
+    const rows = [{
+      id: 2, user_id: 'uid', amount: '500.00', date: '2026-05-01',
+      source_name: 'Salary', recurring_rule_id: 'rule-2', recurring_cancelled_at: null,
+    }]
+    db.query.mockResolvedValueOnce({ rows })
+    await testApiHandler({
+      appHandler: incomeHandler,
+      async test({ fetch }) {
+        const res = await fetch()
+        const body = await res.json()
+        expect(body[0]).toHaveProperty('recurring_cancelled_at')
+        expect(body[0].recurring_cancelled_at).toBeNull()
+      }
+    })
+  })
+
   it('can narrow income entries to a requested month', async () => {
     db.query.mockResolvedValueOnce({ rows: [] })
     await testApiHandler({

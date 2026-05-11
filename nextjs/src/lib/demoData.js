@@ -219,6 +219,28 @@ export const demoActivity = [
     accent: '#d9a15b',
   },
   {
+    id: 'demo-exp-spotify',
+    kind: 'expense',
+    title: 'Spotify',
+    chip: 'Fun',
+    amount: 11.99,
+    occurredOn: '2026-03-02',
+    merchant: 'Spotify',
+    accent: '#8a85ca',
+    raw: { recurring_rule_id: 'recur-1' },
+  },
+  {
+    id: 'demo-exp-cloud-cancelled',
+    kind: 'expense',
+    title: 'Cloud backup',
+    chip: 'Bills',
+    amount: 2.99,
+    occurredOn: '2026-03-01',
+    merchant: 'Backblaze',
+    accent: '#79b5c7',
+    raw: { recurring_rule_id: 'recur-old', recurring_cancelled_at: '2026-03-15T00:00:00Z' },
+  },
+  {
     id: 'demo-exp-4',
     kind: 'expense',
     title: 'Movie night',
@@ -290,6 +312,12 @@ export const demoRecurringCharges = [
   { id: 'recur-1', title: 'Spotify', amount: 11.99, dueLabel: 'Apr 2' },
   { id: 'recur-2', title: 'Phone plan', amount: 36.0, dueLabel: 'Apr 7' },
   { id: 'recur-3', title: 'Cloud storage', amount: 2.99, dueLabel: 'Apr 11' },
+]
+
+export const demoRulesForSheet = [
+  { id: 'recur-1', description: 'Spotify', amount: '11.99', frequency: 'monthly', next_date: '2026-04-02', paused: false },
+  { id: 'recur-2', description: 'Phone plan', amount: '36.00', frequency: 'monthly', next_date: '2026-04-07', paused: false },
+  { id: 'recur-3', description: 'Cloud storage', amount: '2.99', frequency: 'monthly', next_date: '2026-04-11', paused: false },
 ]
 
 export const demoIncomeSources = [
@@ -406,4 +434,9 @@ export const demoInsightsSnapshot = {
       { id: 'demo-prev-11', key: '2026-02-28', amount: 23.28, title: 'Late dinner', categoryName: 'Dining', occurredOn: '2026-02-28', color: '#d29e4a', soft: 'rgba(210, 158, 74, 0.18)', symbol: '\u{1F37D}\uFE0F' },
     ],
   },
+  upcomingRecurring: [
+    { id: 'recur-1', title: 'Spotify', amount: 11.99, frequency: 'monthly', nextDate: '2026-04-02', categoryName: 'Fun', categoryIcon: null },
+    { id: 'recur-2', title: 'Phone plan', amount: 36.0, frequency: 'monthly', nextDate: '2026-04-07', categoryName: 'Bills', categoryIcon: null },
+    { id: 'recur-3', title: 'Cloud storage', amount: 2.99, frequency: 'monthly', nextDate: '2026-04-11', categoryName: 'Bills', categoryIcon: null },
+  ],
 }

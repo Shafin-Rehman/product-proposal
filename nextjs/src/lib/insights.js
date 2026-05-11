@@ -594,6 +594,45 @@ export function buildComparisonMetrics(summary, previousSummary) {
   ]
 }
 
+async function getUpcomingRecurring(userId) {
+  const { rows } = await db.query(
+    `SELECT r.id, r.type, r.description, r.amount, r.frequency, r.next_date,
+            c.name AS category_name, c.icon AS category_icon,
+            s.name AS source_name,
+            linked_income.notes AS income_notes
+     FROM public.recurring_rules r
+     LEFT JOIN public.categories c ON r.category_id = c.id
+     LEFT JOIN public.income_sources s ON r.source_id = s.id
+     LEFT JOIN LATERAL (
+       SELECT i.notes
+       FROM public.income i
+       WHERE i.user_id = r.user_id
+         AND i.recurring_rule_id = r.id
+         AND NULLIF(BTRIM(i.notes), '') IS NOT NULL
+       ORDER BY i.date DESC, i.created_at DESC
+       LIMIT 1
+     ) linked_income ON TRUE
+     WHERE r.user_id = $1
+       AND r.paused = FALSE
+       AND r.cancelled_at IS NULL
+       AND r.next_date >= CURRENT_DATE
+       AND r.next_date < CURRENT_DATE + INTERVAL '60 days'
+     ORDER BY r.next_date ASC`,
+    [userId]
+  )
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.description ?? row.income_notes ?? row.category_name ?? row.source_name ?? (row.type === 'income' ? 'Recurring income' : 'Recurring expense'),
+    amount: toAmount(row.amount),
+    frequency: row.frequency,
+    nextDate: formatDayKey(row.next_date),
+    categoryName: row.category_name ?? null,
+    categoryIcon: row.category_icon ?? null,
+    sourceName: row.source_name ?? null,
+  }))
+}
+
 export async function buildInsightsSnapshot(userId, month) {
   const previousMonth = shiftMonth(month, -1)
   const monthWindow = buildMonthWindow(month)
@@ -613,6 +652,7 @@ export async function buildInsightsSnapshot(userId, month) {
     previousDailyExpenseTotals,
     previousDailyExpenseEntries,
     savingsGoalRows,
+    upcomingRecurring,
   ] = await Promise.all([
     buildBudgetSummary(userId, month),
     previousMonth ? buildBudgetSummary(userId, previousMonth) : Promise.resolve(null),
@@ -626,6 +666,7 @@ export async function buildInsightsSnapshot(userId, month) {
     previousMonth ? getDailyExpenseTotals(userId, previousMonth) : Promise.resolve([]),
     previousMonth ? getDailyExpenseEntries(userId, previousMonth) : Promise.resolve([]),
     listSavingsGoals(userId),
+    getUpcomingRecurring(userId),
   ])
 
   const cashFlow = buildCashFlowSeries(monthWindow, monthlyExpenseTotals, monthlyIncomeTotals)
@@ -659,5 +700,6 @@ export async function buildInsightsSnapshot(userId, month) {
     dailySpend,
     previousDailySpend,
     topExpenses,
+    upcomingRecurring,
   }
 }

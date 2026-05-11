@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth, useDataMode } from '@/components/providers'
+import { useAuth, useDataChanged, useDataMode } from '@/components/providers'
+import { apiPost } from '@/lib/apiClient'
+import { localCalendarYmd } from '@/lib/recurringDates'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -79,8 +81,9 @@ function TabIcon({ icon }) {
 export default function AppLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isReady, isAuthenticated } = useAuth()
+  const { isReady, isAuthenticated, session } = useAuth()
   const { isSampleMode, isDataModeReady } = useDataMode()
+  const { notifyDataChanged } = useDataChanged()
 
   useEffect(() => {
     if (!isDataModeReady) return
@@ -88,6 +91,26 @@ export default function AppLayout({ children }) {
     if (!isReady || isAuthenticated) return
     router.replace('/login')
   }, [isAuthenticated, isDataModeReady, isReady, isSampleMode, router])
+
+  useEffect(() => {
+    if (isSampleMode || !session?.accessToken) return
+    const controller = new AbortController()
+    let cancelled = false
+    ;(async () => {
+      try {
+        await apiPost(
+          '/api/recurring/process',
+          { as_of: localCalendarYmd() },
+          { accessToken: session.accessToken, signal: controller.signal },
+        )
+        if (!cancelled) notifyDataChanged()
+      } catch {}
+    })()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [session?.accessToken, isSampleMode, pathname, notifyDataChanged])
 
   if (!isSampleMode && (!isReady || !isAuthenticated)) {
     return <AppLoadingShell />

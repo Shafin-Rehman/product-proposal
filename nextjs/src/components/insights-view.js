@@ -1006,6 +1006,40 @@ export default function InsightsView() {
           </article>
         </div>
 
+        {(() => {
+          const upcomingRecurring = snapshot?.upcomingRecurring ?? []
+          if (!upcomingRecurring.length) return null
+          return (
+            <section className="section-block" aria-label="Upcoming recurring">
+              <div className="section-headline">
+                <h2>Upcoming recurring</h2>
+              </div>
+              <div className="insights-v57__recurring-list">
+                {upcomingRecurring.map((item) => (
+                  <div className="insights-v57__recurring-row" key={item.id}>
+                    <div className="insights-v57__recurring-info">
+                      <strong className="insights-v57__recurring-title">{item.title}</strong>
+                      <span className="insights-v57__recurring-meta">
+                        {(() => {
+                          const label = item.type === 'income' ? item.sourceName : item.categoryName
+                          return label ? `${label} · ` : ''
+                        })()}
+                        {item.frequency.charAt(0).toUpperCase() + item.frequency.slice(1)}
+                      </span>
+                    </div>
+                    <div className="insights-v57__recurring-side">
+                      <strong className={`entry-amount entry-amount--${item.type}`}>
+                        {item.type !== 'income' && '-'}{formatCurrency(item.amount)}
+                      </strong>
+                      <small>{formatShortDate(item.nextDate)}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+        })()}
+
         <section className="section-block insights-v57__pace-section" aria-label="Month over month pace">
           <div className="section-headline">
             <h2>Pace vs last month</h2>
