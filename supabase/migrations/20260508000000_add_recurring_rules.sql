@@ -20,3 +20,11 @@ ALTER TABLE public.expenses
 
 ALTER TABLE public.income
   ADD COLUMN IF NOT EXISTS recurring_rule_id UUID REFERENCES public.recurring_rules(id) ON DELETE SET NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_user_recurring_rule_date_unique
+  ON public.expenses (user_id, recurring_rule_id, date)
+  WHERE recurring_rule_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS income_user_recurring_rule_date_unique
+  ON public.income (user_id, recurring_rule_id, date)
+  WHERE recurring_rule_id IS NOT NULL;

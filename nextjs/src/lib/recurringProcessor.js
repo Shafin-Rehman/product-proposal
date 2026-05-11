@@ -6,26 +6,6 @@ function toDateStr(v) {
   return String(v).slice(0, 10)
 }
 
-async function recurringExpenseExists(client, userId, ruleId, date) {
-  const { rowCount } = await client.query(
-    `SELECT 1 FROM public.expenses
-     WHERE user_id = $1 AND recurring_rule_id = $2 AND date = $3
-     LIMIT 1`,
-    [userId, ruleId, date]
-  )
-  return rowCount > 0
-}
-
-async function recurringIncomeExists(client, userId, ruleId, date) {
-  const { rowCount } = await client.query(
-    `SELECT 1 FROM public.income
-     WHERE user_id = $1 AND recurring_rule_id = $2 AND date = $3
-     LIMIT 1`,
-    [userId, ruleId, date]
-  )
-  return rowCount > 0
-}
-
 export async function processUserRecurring(userId, asOf = new Date().toISOString().slice(0, 10)) {
   const { rows: rules } = await db.query(
     `SELECT * FROM public.recurring_rules
@@ -45,21 +25,22 @@ export async function processUserRecurring(userId, asOf = new Date().toISOString
       let insertsThisRule = 0
       for (const date of dates) {
         if (rule.type === 'expense') {
-          if (await recurringExpenseExists(client, rule.user_id, rule.id, date)) continue
-          await client.query(
+          const ins = await client.query(
             `INSERT INTO public.expenses (user_id, category_id, amount, description, date, recurring_rule_id)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (user_id, recurring_rule_id, date) WHERE recurring_rule_id IS NOT NULL DO NOTHING`,
             [rule.user_id, rule.category_id, rule.amount, rule.description, date, rule.id]
           )
+          insertsThisRule += ins.rowCount ?? 0
         } else {
-          if (await recurringIncomeExists(client, rule.user_id, rule.id, date)) continue
-          await client.query(
+          const ins = await client.query(
             `INSERT INTO public.income (user_id, source_id, amount, notes, date, recurring_rule_id)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (user_id, recurring_rule_id, date) WHERE recurring_rule_id IS NOT NULL DO NOTHING`,
             [rule.user_id, rule.source_id, rule.amount, rule.description ?? null, date, rule.id]
           )
+          insertsThisRule += ins.rowCount ?? 0
         }
-        insertsThisRule++
       }
 
       const newNextDate = addPeriod(dates[dates.length - 1], rule.frequency)
