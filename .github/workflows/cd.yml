@@ -61,5 +61,11 @@ jobs:
       - name: Smoke check production deployment
         working-directory: ${{ github.workspace }}
         run: |
-          curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/ > /dev/null
-          curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/api/health > /dev/null
+          for i in 1 2 3; do
+            if curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/ > /dev/null && \
+               curl --fail --silent --show-error --max-time 30 https://product-proposal-kappa.vercel.app/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
