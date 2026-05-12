@@ -77,6 +77,52 @@ describe('CashFlowSnapshot', () => {
     expect(screen.getByText('Jan selected')).toBeTruthy()
   })
 
+  it('clears trend hover when pointer leaves the trend group', () => {
+    render(React.createElement(CashFlowSnapshot, {
+      income: 3000,
+      expenses: 1500,
+      trend: [
+        { month: '2026-01-01', label: 'Jan', netAmount: 500, incomeAmount: 1000, expenseAmount: 500 },
+        { month: '2026-02-01', label: 'Feb', netAmount: -200, incomeAmount: 800, expenseAmount: 1000 },
+        { month: '2026-03-01', label: 'Mar', netAmount: 1500, incomeAmount: 3000, expenseAmount: 1500 },
+      ],
+    }))
+
+    const trendGroup = screen.getByRole('group', { name: /Recent net cash flow trend/i })
+    const buttons = trendGroup.querySelectorAll('button')
+
+    fireEvent.mouseEnter(buttons[0])
+
+    expect(screen.getByText('Jan selected')).toBeTruthy()
+
+    fireEvent.mouseLeave(trendGroup)
+
+    expect(screen.getByText(/Mar latest/)).toBeTruthy()
+  })
+
+  it('clears keyboard-selected trend month when the trend button blurs', () => {
+    render(React.createElement(CashFlowSnapshot, {
+      income: 3000,
+      expenses: 1500,
+      trend: [
+        { month: '2026-01-01', label: 'Jan', netAmount: 500, incomeAmount: 1000, expenseAmount: 500 },
+        { month: '2026-02-01', label: 'Feb', netAmount: -200, incomeAmount: 800, expenseAmount: 1000 },
+        { month: '2026-03-01', label: 'Mar', netAmount: 1500, incomeAmount: 3000, expenseAmount: 1500 },
+      ],
+    }))
+
+    const trendGroup = screen.getByRole('group', { name: /Recent net cash flow trend/i })
+    const buttons = trendGroup.querySelectorAll('button')
+
+    fireEvent.focus(buttons[1])
+
+    expect(screen.getByText('Feb selected')).toBeTruthy()
+
+    fireEvent.blur(buttons[1])
+
+    expect(screen.getByText(/Mar latest/)).toBeTruthy()
+  })
+
   it('shows "--" for savings rate when there is no income', () => {
     render(React.createElement(CashFlowSnapshot, {
       income: 0,

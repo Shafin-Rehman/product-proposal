@@ -57,11 +57,11 @@ jobs:
           SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
         run: node scripts/seed-test-user.js "${{ steps.preview_branch.outputs.service_role_file }}"
 
-      - run: npm test -- --coverage
-        env:
-          SUPABASE_URL: ${{ env.PREVIEW_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ env.PREVIEW_SUPABASE_ANON_KEY }}
-          DATABASE_URL: ${{ env.PREVIEW_DB_URL }}
+      - name: Backend coverage report
+        run: npx jest __tests__/backend --coverage
+
+      - name: Frontend coverage report
+        run: npx jest __tests__/frontend --coverage
 
       - run: npm run build
         env:

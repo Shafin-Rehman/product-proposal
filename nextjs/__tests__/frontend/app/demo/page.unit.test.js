@@ -1,12 +1,7 @@
 /** @jest-environment jsdom */
 
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(),
-}))
-
-jest.mock('@/components/providers', () => ({
-  useDataMode: jest.fn(),
-}))
+jest.mock('next/navigation', () => ({ useRouter: jest.fn() }))
+jest.mock('@/components/providers', () => ({ useDataMode: jest.fn() }))
 
 const React = require('react')
 const { render, act } = require('@testing-library/react')
@@ -28,27 +23,20 @@ afterEach(() => {
   jest.clearAllMocks()
 })
 
-describe('DemoPage — setMode', () => {
-  it('calls setMode("sample") on mount', async () => {
-    await act(async () => { render(React.createElement(DemoPage)) })
-    expect(mockSetMode).toHaveBeenCalledWith('sample')
+it('demo route requests sample mode and does not redirect until sample is active', async () => {
+  let container
+  await act(async () => {
+    container = render(React.createElement(DemoPage)).container
   })
+  expect(mockSetMode).toHaveBeenCalledWith('sample')
+  expect(mockReplace).not.toHaveBeenCalled()
+  expect(container.firstChild).toBeNull()
 })
 
-describe('DemoPage — redirect', () => {
-  it('does NOT call router.replace until isSampleMode is true', async () => {
-    await act(async () => { render(React.createElement(DemoPage)) })
-    expect(mockReplace).not.toHaveBeenCalled()
+it('demo route redirects to dashboard when sample mode is already on', async () => {
+  useDataMode.mockReturnValue({ isSampleMode: true, setMode: mockSetMode })
+  await act(async () => {
+    render(React.createElement(DemoPage))
   })
-
-  it('calls router.replace("/dashboard") once isSampleMode becomes true', async () => {
-    useDataMode.mockReturnValue({ isSampleMode: true, setMode: mockSetMode })
-    await act(async () => { render(React.createElement(DemoPage)) })
-    expect(mockReplace).toHaveBeenCalledWith('/dashboard')
-  })
-
-  it('renders nothing (returns null)', async () => {
-    const { container } = await act(async () => render(React.createElement(DemoPage)))
-    expect(container.firstChild).toBeNull()
-  })
+  expect(mockReplace).toHaveBeenCalledWith('/dashboard')
 })

@@ -107,11 +107,52 @@ it('shows API error when response is not ok', async () => {
   })
 })
 
+it('shows a connection-style error when fetch throws before a response', async () => {
+  global.fetch.mockRejectedValueOnce(new Error('network down'))
+  await openForm()
+  fireEvent.change(screen.getByPlaceholderText(/enter current password/i), { target: { value: 'current123' } })
+  fireEvent.change(screen.getByPlaceholderText(/at least 6 characters/i), { target: { value: 'newpass456' } })
+  fireEvent.change(screen.getByPlaceholderText(/re-enter new password/i), { target: { value: 'newpass456' } })
+
+  await act(async () => {
+    fireEvent.submit(screen.getByRole('button', { name: /update password/i }).closest('form'))
+  })
+
+  await waitFor(() => {
+    expect(screen.getByRole('alert').textContent).toMatch(/check your connection/i)
+  })
+})
+
 it('disables the Change password button when there is no access token', async () => {
   const { useAuth } = require('@/components/providers')
   useAuth.mockReturnValue({ session: null })
   await act(async () => { render(React.createElement(ChangePasswordForm)) })
   expect(screen.getByRole('button', { name: /change password/i }).disabled).toBe(true)
+})
+
+it('blocks submit with a session-expired message when the session loses its access token', async () => {
+  const { useAuth } = require('@/components/providers')
+  useAuth.mockReturnValue({ session: { accessToken: 'valid-token' } })
+  const view = render(React.createElement(ChangePasswordForm))
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }))
+  })
+
+  useAuth.mockReturnValue({ session: { user: { email: 'a@b.com' } } })
+  await act(async () => {
+    view.rerender(React.createElement(ChangePasswordForm))
+  })
+
+  fireEvent.change(screen.getByPlaceholderText(/enter current password/i), { target: { value: 'old' } })
+  fireEvent.change(screen.getByPlaceholderText(/at least 6 characters/i), { target: { value: 'newpass456' } })
+  fireEvent.change(screen.getByPlaceholderText(/re-enter new password/i), { target: { value: 'newpass456' } })
+  const form = screen.getByRole('button', { name: /update password/i }).closest('form')
+  await act(async () => {
+    fireEvent.submit(form)
+  })
+
+  expect(screen.getByRole('alert').textContent).toMatch(/session has expired/i)
+  expect(global.fetch).not.toHaveBeenCalled()
 })
 
 

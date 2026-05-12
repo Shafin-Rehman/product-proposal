@@ -10,7 +10,13 @@ jest.mock('@/components/providers', () => ({
   useDataMode: jest.fn(),
 }))
 jest.mock('@/lib/apiClient', () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(message = 'API error', { status = 500 } = {}) {
+      super(message)
+      this.name = 'ApiError'
+      this.status = status
+    }
+  },
   apiGet: jest.fn(),
 }))
 jest.mock('@/lib/demoData', () => ({
@@ -114,11 +120,19 @@ jest.mock('@/lib/financeUtils', () => ({
 }))
 
 const React = require('react')
-const { render, screen, fireEvent, waitFor, act } = require('@testing-library/react')
+const { render, screen, fireEvent, waitFor, act, within } = require('@testing-library/react')
 const { useRouter } = require('next/navigation')
 const { useAuth, useDataMode } = require('@/components/providers')
-const { apiGet } = require('@/lib/apiClient')
+const { apiGet, ApiError } = require('@/lib/apiClient')
 const { getActiveBreakdownItems, default: InsightsView } = require('@/components/insights-view')
+
+const EMPTY_SNAPSHOT = {
+  comparisonMetrics: [], expenseBreakdown: [], incomeBreakdown: [],
+  cashFlowSeries: [], cashFlowSummary: { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 },
+  budgetHealth: { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] },
+  categoryMovers: [], dailySpend: { series: [], details: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, activeDays: 0, peakDay: null },
+  previousDailySpend: { series: [], details: [], totalAmount: 0 }, topExpenses: [], earliestMonth: '2026-01-01',
+}
 
 describe('getActiveBreakdownItems', () => {
   it('returns expense breakdown by default', () => {
@@ -200,13 +214,9 @@ describe('InsightsView (sample data)', () => {
     expect(screen.queryByRole('heading', { name: 'Category detail' })).toBeNull()
   })
 
-  it('shows a readable cash flow scale note in the card header', () => {
+  it('does not render removed legacy elements', () => {
     const { container } = render(React.createElement(InsightsView))
     expect(container.querySelector('.insights-v57__cashflow-baseline-label')).toBeNull()
-  })
-
-  it('does not render the removed spend-pattern sparkline', () => {
-    const { container } = render(React.createElement(InsightsView))
     expect(container.querySelector('.insights-v57__sparkline')).toBeNull()
     expect(container.querySelector('.insights-v57__cashflow-summary')).toBeNull()
   })
@@ -228,23 +238,31 @@ describe('InsightsView (sample data)', () => {
     const button = screen.getByRole('button', { name: 'Live export only' })
     expect(button.disabled).toBe(true)
   })
+
+  it('shows a rhythm tooltip after hovering a daily rhythm column', () => {
+    const { container } = render(React.createElement(InsightsView))
+    const column = container.querySelector('.insights-v57__rhythm-column')
+
+    fireEvent.mouseEnter(column)
+
+    expect(container.querySelector('.insights-v57__rhythm-tooltip')).toBeTruthy()
+  })
+
+  it('shows the empty day detail copy when a zero-spend day is chosen in the month modal', async () => {
+    render(React.createElement(InsightsView))
+    fireEvent.click(screen.getByRole('button', { name: /Open March 2026 month view/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Mar 6 spending \$0/ }))
+
+    expect(within(dialog).getByText(/No expenses on this day/i)).toBeTruthy()
+  })
 })
 
 describe('InsightsView CSV export', () => {
-  const snapshot = {
-    comparisonMetrics: [],
-    expenseBreakdown: [],
-    incomeBreakdown: [],
-    cashFlowSeries: [],
-    cashFlowSummary: { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 },
-    budgetHealth: { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] },
-    categoryMovers: [],
-    dailySpend: { series: [], details: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, activeDays: 0, peakDay: null },
-    previousDailySpend: { series: [], details: [], totalAmount: 0 },
-    topExpenses: [],
-    earliestMonth: '2026-01-01',
-  }
-
   beforeEach(() => {
     jest.clearAllMocks()
     useRouter.mockReturnValue({ replace: jest.fn() })
@@ -254,7 +272,7 @@ describe('InsightsView CSV export', () => {
       session: { accessToken: 'live-token' },
     })
     useDataMode.mockReturnValue({ isSampleMode: false })
-    apiGet.mockResolvedValue(snapshot)
+    apiGet.mockResolvedValue(EMPTY_SNAPSHOT)
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -274,6 +292,39 @@ describe('InsightsView CSV export', () => {
 
   afterEach(() => {
     HTMLAnchorElement.prototype.click.mockRestore()
+  })
+
+  it('logs out when CSV export responds with 401', async () => {
+    const replace = jest.fn()
+    const logout = jest.fn()
+    useRouter.mockReturnValue({ replace })
+    useAuth.mockReturnValue({ isReady: true, logout, session: { accessToken: 'live-token' } })
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(apiGet).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalled()
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
+  })
+
+  it('surfaces the server export error when CSV download fails with a JSON body', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: 'Export is temporarily disabled' }),
+    })
+
+    render(React.createElement(InsightsView))
+    await waitFor(() => expect(apiGet).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Export is temporarily disabled')).toBeTruthy()
+    })
   })
 
   it('downloads the selected-month CSV with bearer auth', async () => {
@@ -328,17 +379,24 @@ describe('InsightsView CSV export', () => {
     expect(februaryLink.getAttribute('href')).toBe('/planner?month=2026-02')
   })
 
-  it('uses sanitized filenames from Content-Disposition before downloading', async () => {
+  it.each([
+    [
+      'sanitizes an unsafe Content-Disposition filename',
+      "attachment; filename*=UTF-8''reports%2Fbudget%0D%0A2026.csv",
+      'reports-budget2026.csv',
+    ],
+    [
+      'falls back to default when Content-Disposition is unparseable',
+      'attachment; filename="\\/\r\n"',
+      'budgetbuddy-2026-03-report.csv',
+    ],
+  ])('%s', async (_, contentDisposition, expectedFilename) => {
     let downloadedFilename = ''
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
       headers: {
-        get: jest.fn((name) => (
-          name.toLowerCase() === 'content-disposition'
-            ? "attachment; filename*=UTF-8''reports%2Fbudget%0D%0A2026.csv"
-            : null
-        )),
+        get: jest.fn((name) => (name.toLowerCase() === 'content-disposition' ? contentDisposition : null)),
       },
       blob: jest.fn().mockResolvedValue(new Blob(['csv'], { type: 'text/csv' })),
     })
@@ -347,41 +405,10 @@ describe('InsightsView CSV export', () => {
     })
 
     render(React.createElement(InsightsView))
-
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
 
-    await waitFor(() => {
-      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
-    })
-    expect(downloadedFilename).toBe('reports-budget2026.csv')
-  })
-
-  it('falls back when Content-Disposition resolves to an unsafe filename', async () => {
-    let downloadedFilename = ''
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        get: jest.fn((name) => (
-          name.toLowerCase() === 'content-disposition'
-            ? 'attachment; filename="\\/\r\n"'
-            : null
-        )),
-      },
-      blob: jest.fn().mockResolvedValue(new Blob(['csv'], { type: 'text/csv' })),
-    })
-    HTMLAnchorElement.prototype.click.mockImplementationOnce(function handleClick() {
-      downloadedFilename = this.download
-    })
-
-    render(React.createElement(InsightsView))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
-
-    await waitFor(() => {
-      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled()
-    })
-    expect(downloadedFilename).toBe('budgetbuddy-2026-03-report.csv')
+    await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled())
+    expect(downloadedFilename).toBe(expectedFilename)
   })
 
   it('aborts an in-flight CSV export when switching to sample mode', async () => {
@@ -460,18 +487,6 @@ describe('InsightsView CSV export', () => {
 })
 
 describe('InsightsView — upcoming recurring section', () => {
-  const { useRouter } = require('next/navigation')
-  const { useAuth, useDataMode } = require('@/components/providers')
-  const { apiGet } = require('@/lib/apiClient')
-
-  const BASE_SNAPSHOT = {
-    comparisonMetrics: [], expenseBreakdown: [], incomeBreakdown: [],
-    cashFlowSeries: [], cashFlowSummary: { totalIncome: 0, totalExpenses: 0, totalNet: 0, averageNet: 0 },
-    budgetHealth: { tone: 'neutral', statusLabel: 'No budget', budgetAmount: null, spentAmount: 0, remainingAmount: null, progressValue: 0, pressureCategories: [] },
-    categoryMovers: [], dailySpend: { series: [], details: [], totalAmount: 0, averageAmount: 0, activeDayAverage: 0, activeDays: 0, peakDay: null },
-    previousDailySpend: { series: [], details: [], totalAmount: 0 }, topExpenses: [], earliestMonth: '2026-01-01',
-  }
-
   beforeEach(() => {
     jest.clearAllMocks()
     useRouter.mockReturnValue({ replace: jest.fn() })
@@ -479,31 +494,16 @@ describe('InsightsView — upcoming recurring section', () => {
     useDataMode.mockReturnValue({ isSampleMode: false })
   })
 
-  it('shows the upcoming recurring section when rules are present', async () => {
-    const InsightsView = require('@/components/insights-view').default
-    apiGet.mockResolvedValue({
-      ...BASE_SNAPSHOT,
-      upcomingRecurring: [
-        { id: 'r1', type: 'expense', title: 'Spotify', amount: 11.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Fun', sourceName: null },
-      ],
-    })
-    render(React.createElement(InsightsView))
-    await waitFor(() => expect(screen.getByText('Spotify')).toBeTruthy())
-    expect(screen.getByText('Upcoming recurring')).toBeTruthy()
-  })
-
   it('hides the upcoming recurring section when there are no upcoming rules', async () => {
-    const InsightsView = require('@/components/insights-view').default
-    apiGet.mockResolvedValue({ ...BASE_SNAPSHOT, upcomingRecurring: [] })
+    apiGet.mockResolvedValue({ ...EMPTY_SNAPSHOT, upcomingRecurring: [] })
     render(React.createElement(InsightsView))
     await waitFor(() => expect(screen.queryByText('Loading')).toBeNull())
     expect(screen.queryByText('Upcoming recurring')).toBeNull()
   })
 
-  it('shows multiple upcoming rules with their amounts and frequencies', async () => {
-    const InsightsView = require('@/components/insights-view').default
+  it('shows multiple upcoming rules and the section header', async () => {
     apiGet.mockResolvedValue({
-      ...BASE_SNAPSHOT,
+      ...EMPTY_SNAPSHOT,
       upcomingRecurring: [
         { id: 'r1', type: 'expense', title: 'Spotify', amount: 11.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Fun', sourceName: null },
         { id: 'r2', type: 'expense', title: 'Gym', amount: 45.00, frequency: 'monthly', nextDate: '2026-06-05', categoryName: 'Health', sourceName: null },
@@ -511,34 +511,83 @@ describe('InsightsView — upcoming recurring section', () => {
     })
     render(React.createElement(InsightsView))
     await waitFor(() => {
+      expect(screen.getByText('Upcoming recurring')).toBeTruthy()
       expect(screen.getByText('Spotify')).toBeTruthy()
       expect(screen.getByText('Gym')).toBeTruthy()
     })
   })
 
-  it('income item shows sourceName in the meta line', async () => {
-    const InsightsView = require('@/components/insights-view').default
+  it.each([
+    ['income', 'Monthly stipend', null, 'University', /University.*Monthly/i],
+    ['expense', 'Netflix', 'Entertainment', null, /Entertainment.*Monthly/i],
+  ])('%s item shows the right meta label', async (type, title, categoryName, sourceName, pattern) => {
     apiGet.mockResolvedValue({
-      ...BASE_SNAPSHOT,
+      ...EMPTY_SNAPSHOT,
       upcomingRecurring: [
-        { id: 'r-income', type: 'income', title: 'Monthly stipend', amount: 1000, frequency: 'monthly', nextDate: '2026-06-01', categoryName: null, sourceName: 'University' },
+        { id: 'r1', type, title, amount: 12, frequency: 'monthly', nextDate: '2026-06-01', categoryName, sourceName },
       ],
     })
     render(React.createElement(InsightsView))
-    await waitFor(() => expect(screen.getByText('Monthly stipend')).toBeTruthy())
-    expect(screen.getByText(/University.*Monthly/i)).toBeTruthy()
+    await waitFor(() => expect(screen.getByText(title)).toBeTruthy())
+    expect(screen.getByText(pattern)).toBeTruthy()
+  })
+})
+
+describe('InsightsView — live auth failures', () => {
+  it('logs out when the insights snapshot request returns 401', async () => {
+    const replace = jest.fn()
+    const logout = jest.fn()
+    useRouter.mockReturnValue({ replace })
+    useAuth.mockReturnValue({ isReady: true, logout, session: { accessToken: 'live-token' } })
+    useDataMode.mockReturnValue({ isSampleMode: false })
+    apiGet.mockRejectedValueOnce(new ApiError('Unauthorized', { status: 401 }))
+
+    render(React.createElement(InsightsView))
+
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalled()
+      expect(replace).toHaveBeenCalledWith('/login')
+    })
+  })
+})
+
+describe('InsightsView — month modal and live recovery', () => {
+  it('opens the spend calendar modal, selects a day, and closes it with Escape', async () => {
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({ isReady: true, logout: jest.fn(), session: { accessToken: 'live-token' } })
+    useDataMode.mockReturnValue({ isSampleMode: true })
+
+    render(React.createElement(InsightsView))
+    fireEvent.click(screen.getByRole('button', { name: /Open March 2026 month view/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+    const dialog = screen.getByRole('dialog')
+    const dayCell = within(dialog).getByRole('button', { name: /Mar 30 spending/i })
+    fireEvent.click(dayCell)
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
   })
 
-  it('expense item shows categoryName in the meta line', async () => {
-    const InsightsView = require('@/components/insights-view').default
-    apiGet.mockResolvedValue({
-      ...BASE_SNAPSHOT,
-      upcomingRecurring: [
-        { id: 'r-expense', type: 'expense', title: 'Netflix', amount: 15.99, frequency: 'monthly', nextDate: '2026-06-01', categoryName: 'Entertainment', sourceName: null },
-      ],
-    })
+  it('retries live insights after an error and replaces the inline notice', async () => {
+    useRouter.mockReturnValue({ replace: jest.fn() })
+    useAuth.mockReturnValue({ isReady: true, logout: jest.fn(), session: { accessToken: 'live-token' } })
+    useDataMode.mockReturnValue({ isSampleMode: false })
+    apiGet.mockRejectedValueOnce(new Error('first load failed'))
     render(React.createElement(InsightsView))
-    await waitFor(() => expect(screen.getByText('Netflix')).toBeTruthy())
-    expect(screen.getByText(/Entertainment.*Monthly/i)).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText(/first load failed/i)).toBeTruthy()
+    })
+
+    apiGet.mockResolvedValueOnce(EMPTY_SNAPSHOT)
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/first load failed/i)).toBeNull()
+    })
+    expect(screen.getByRole('heading', { name: 'Insights' })).toBeTruthy()
   })
 })

@@ -14,6 +14,16 @@ describe('BudgetHudMetrics', () => {
     expect(container.firstChild).toBeNull()
   })
 
+  it('renders nothing when metrics is null', () => {
+    const { container } = render(React.createElement(BudgetHudMetrics, { metrics: null }))
+    expect(container.querySelector('.budget-hud-metrics')).toBeNull()
+  })
+
+  it('renders nothing when metrics is not an array', () => {
+    const { container } = render(React.createElement(BudgetHudMetrics, { metrics: 'bad' }))
+    expect(container.querySelector('.budget-hud-metrics')).toBeNull()
+  })
+
   it('renders each metric with its label, value, and hint in order', () => {
     const metrics = [
       { label: 'Spent', value: '$450', hint: 'Current month' },
