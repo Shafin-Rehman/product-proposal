@@ -1,0 +1,75 @@
+name: Build and Deploy to Elastic Beanstalk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'nextjs/**'
+      - '.github/workflows/deployment.yml'
+      - 'nextjs/scripts/package-deploy.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nextjs
+    env:
+      AWS_REGION: us-east-1
+      APP_NAME: budgetbuddy-app
+      ENV_NAME: budgetbuddy-environment
+      DEPLOY_BUCKET: b-karthikeya-reddy-budgetbuddy-deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nextjs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Package deployment artifact
+        run: |
+          export ZIP_NAME="deploy-${GITHUB_RUN_NUMBER}.zip"
+          bash scripts/package-deploy.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-zip
+          path: nextjs/deploy-${{ github.run_number }}.zip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy artifact to Elastic Beanstalk
+        run: |
+          VERSION_LABEL="ver-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          ZIP_NAME="deploy-${GITHUB_RUN_NUMBER}.zip"
+          aws s3 cp "$ZIP_NAME" "s3://$DEPLOY_BUCKET/$ZIP_NAME"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$APP_NAME" \
+            --source-bundle S3Bucket="$DEPLOY_BUCKET",S3Key="$ZIP_NAME" \
+            --version-label "$VERSION_LABEL" \
+            --description "GitHub Actions deployment $GITHUB_SHA"
+          aws elasticbeanstalk update-environment \
+            --environment-name "$ENV_NAME" \
+            --version-label "$VERSION_LABEL"
