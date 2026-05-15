@@ -322,7 +322,7 @@ export default function CategoryManager({ accessToken, isOpen, onClose }) {
             <h3 className="category-manager__heading">Create New Category</h3>
             <CreateCategoryForm
               accessToken={accessToken}
-              onSuccess={(newCategory) => setCategories([...categories, newCategory])}
+              onSuccess={(newCategory) => setCategories((prev) => [...prev, newCategory])}
             />
           </section>
 
