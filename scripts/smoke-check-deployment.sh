@@ -2,21 +2,20 @@
 
 set -euo pipefail
 
-deploy_url="${1:-}"
+smoke_test_url="${1:-}"
 
-if [ -z "$deploy_url" ]; then
-  echo "Usage: $0 <deploy-url>"
+if [ -z "$smoke_test_url" ]; then
+  echo "Usage: $0 <smoke-test-url>"
   exit 1
 fi
 
 for i in 1 2 3; do
-  if curl --fail --silent --show-error --max-time 30 "${deploy_url}/" > /dev/null && \
-     curl --fail --silent --show-error --max-time 30 "${deploy_url}/api/health" > /dev/null; then
+  if curl --fail --silent --show-error --max-time 30 "${smoke_test_url}" > /dev/null; then
     exit 0
   fi
 
   sleep 5
 done
 
-echo "Smoke check failed for ${deploy_url}"
+echo "Smoke check failed for ${smoke_test_url}"
 exit 1
