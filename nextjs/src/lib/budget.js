@@ -223,7 +223,7 @@ export async function getMonthlyCategorySpend(userId, month) {
        COALESCE(SUM(e.amount), 0.00)::TEXT AS spent
      FROM public.expenses e
      LEFT JOIN public.categories c ON e.category_id = c.id
-     WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3 AND (c.id IS NULL OR c.archived = FALSE)
+     WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3
      GROUP BY e.category_id, COALESCE(c.name, 'Uncategorized'), c.icon
      ORDER BY category_name ASC`,
     [userId, month, endMonth]
