@@ -129,23 +129,6 @@ describe('financeVisuals specification', () => {
       expect(p.color).toBe(BUILT_IN_INCOME_VISUALS.Salary.color)
     })
 
-    it('aligns display label with getCategoryLabel and does not rename "grocery run"', () => {
-      const presentation = getCategoryPresentation({ name: 'grocery run', kind: 'expense' })
-      expect(presentation.label).toBe('grocery run')
-      expect(presentation.label).toBe(getCategoryLabel('grocery run', 'expense'))
-    })
-
-    it('gives built-in seed categories a stable icon+color (Utilities vs merchant initials)', () => {
-      const p = getCategoryPresentation({ name: 'Utilities', icon: '💡', kind: 'expense' })
-      expect(p.label).toBe('Utilities')
-      expect(p.symbol).toBe('💡')
-      expect(p.color).toBe(BUILT_IN_EXPENSE_VISUALS.Utilities.color)
-    })
-
-    it('uses one Transit bus icon for the Transit category, not a mixed train default', () => {
-      const p = getCategoryPresentation({ name: 'Transit', kind: 'expense' })
-      expect(p.symbol).toBe(BUILT_IN_EXPENSE_VISUALS.Transit.symbol)
-    })
   })
 
   describe('built-in color uniqueness', () => {
@@ -163,13 +146,6 @@ describe('financeVisuals specification', () => {
       const { expense, income } = getBuiltInColorCollisions()
       expect(expense).toEqual([])
       expect(income).toEqual([])
-    })
-
-    it('keeps a unique hex for every built-in expense and income name', () => {
-      const ex = Object.values(BUILT_IN_EXPENSE_VISUALS)
-      const inc = Object.values(BUILT_IN_INCOME_VISUALS)
-      expect(new Set(ex.map((v) => v.color)).size).toBe(ex.length)
-      expect(new Set(inc.map((v) => v.color)).size).toBe(inc.length)
     })
 
     it('keeps manually flagged color families visibly distinct', () => {

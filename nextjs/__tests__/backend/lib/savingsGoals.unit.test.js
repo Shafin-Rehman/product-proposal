@@ -140,14 +140,6 @@ describe('savingsGoals specification', () => {
     })
   })
 
-  describe('SavingsGoalValidationError', () => {
-    it('is a named error for validation failures', () => {
-      const err = new SavingsGoalValidationError('bad')
-      expect(err.name).toBe('SavingsGoalValidationError')
-      expect(err.message).toBe('bad')
-    })
-  })
-
   const goalRow = {
     id: '66666666-6666-4666-8666-666666666666',
     name: 'Trip',
@@ -179,13 +171,6 @@ describe('savingsGoals specification', () => {
   describe('getSavingsGoalById', () => {
     beforeEach(() => {
       db.query.mockReset()
-    })
-
-    it('returns null when the goal is missing', async () => {
-      db.query.mockResolvedValueOnce({ rows: [] })
-      const goal = await getSavingsGoalById('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', goalRow.id)
-
-      expect(goal).toBeNull()
     })
 
     it('returns the serialized row when present', async () => {

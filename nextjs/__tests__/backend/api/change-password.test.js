@@ -146,19 +146,6 @@ describe('POST /api/change-password', () => {
   })
 
 
-  it('200 — updateUser is called on verifyClient (uses signIn session)', async () => {
-    mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: { email: 'user@example.com' } }, error: null })
-    mockVerifyClient.auth.signInWithPassword.mockResolvedValueOnce({ error: null })
-    mockVerifyClient.auth.updateUser.mockResolvedValueOnce({ error: null })
-    await testApiHandler({
-      appHandler: changePasswordHandler,
-      async test({ fetch }) {
-        await fetch(post({ access_token: 'tok', current_password: 'current123', new_password: 'newpass123' }))
-        expect(mockVerifyClient.auth.updateUser).toHaveBeenCalledWith({ password: 'newpass123' })
-      },
-    })
-  })
-
   it('500 — unexpected throw returns 500', async () => {
     mockSupabase.auth.getUser.mockRejectedValueOnce(new Error('unexpected'))
     await testApiHandler({

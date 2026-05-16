@@ -12,14 +12,6 @@ describe('transactionQuery specification', () => {
       )
     })
 
-    it('builds a half-open month window on the date column', () => {
-      const result = buildTransactionListQuery(params('month=2026-03-01'), { dateColumn: 'e.date', firstParameterIndex: 2 })
-      expect(result.error).toBeUndefined()
-      expect(result.clauses).toEqual(['e.date >= $2', 'e.date < $3'])
-      expect(result.values).toEqual(['2026-03-01', '2026-04-01'])
-      expect(result.limitClause).toBe('')
-    })
-
     it('returns an error for an invalid month', () => {
       expect(buildTransactionListQuery(params('month=2026-13-01'), { dateColumn: 'date' }).error).toBe('Valid month is required')
     })

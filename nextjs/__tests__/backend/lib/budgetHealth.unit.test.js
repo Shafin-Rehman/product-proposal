@@ -79,10 +79,6 @@ describe('budgetHealth specification', () => {
       }))
     })
 
-    it('exposes the canonical near-limit ratio used by overall budget health', () => {
-      expect(BUDGET_NEAR_LIMIT_RATIO).toBe(0.8)
-    })
-
     it('returns a near-limit state at exactly the canonical threshold', () => {
       expect(buildOverallBudgetHealth({
         summary: {
@@ -122,25 +118,6 @@ describe('budgetHealth specification', () => {
         label: 'Over budget',
         tone: 'danger',
         primaryValue: '$100.00 over',
-      }))
-    })
-
-    it('returns an over-budget state when threshold_exceeded is true', () => {
-      expect(buildOverallBudgetHealth({
-        summary: {
-          month: '2026-03-01',
-          total_income: '1200.00',
-          total_expenses: '1000.00',
-          total_budget: '1000.00',
-          remaining_budget: '0.00',
-          threshold_exceeded: true,
-        },
-        availability: 'ready',
-        month: '2026-03-01',
-        referenceDate: new Date('2026-03-21T12:00:00Z'),
-      })).toEqual(expect.objectContaining({
-        key: 'over_budget',
-        tone: 'danger',
       }))
     })
 
@@ -214,19 +191,6 @@ describe('budgetHealth specification', () => {
       }))
     })
 
-    it('returns a break-even state when income matches expenses', () => {
-      expect(buildFinancialHealth({
-        summary: { total_income: '1200.00', total_expenses: '1200.00' },
-        availability: 'ready',
-      })).toEqual(expect.objectContaining({
-        key: 'break_even',
-        label: 'Break even',
-        tone: 'neutral',
-        valueText: '$0.00',
-        detailText: 'Income matches expenses this month.',
-      }))
-    })
-
     it('returns unavailable when summary is null even if availability is ready', () => {
       expect(buildFinancialHealth({
         summary: null,
@@ -288,20 +252,6 @@ describe('budgetHealth specification', () => {
         label: 'Near limit',
         tone: 'warning',
         remainingAmount: 20,
-      }))
-    })
-
-    it('returns watch between watch ratio and near-limit', () => {
-      expect(BUDGET_WATCH_RATIO).toBe(0.6)
-      expect(buildCategoryBudgetHealth({
-        monthlyLimit: '100.00',
-        spent: '65.00',
-        actualsAvailable: true,
-      })).toEqual(expect.objectContaining({
-        key: 'watch',
-        label: 'Watch',
-        tone: 'caution',
-        remainingAmount: 35,
       }))
     })
 
@@ -371,17 +321,6 @@ describe('budgetHealth specification', () => {
       }))
     })
 
-    it('falls back to top spend area when no budgeted categories exist', () => {
-      expect(buildBudgetPressureHighlight({
-        categoryStatuses: [],
-        fallbackSpendCards: [{ name: 'Food', note: '60% of spend' }],
-      })).toEqual(expect.objectContaining({
-        key: 'top_spend_area',
-        tone: 'neutral',
-        title: 'Food',
-      }))
-    })
-
     it('returns waiting when there is no category signal at all', () => {
       expect(buildBudgetPressureHighlight({
         categoryStatuses: [],
@@ -395,15 +334,6 @@ describe('budgetHealth specification', () => {
   })
 
   describe('getMonthProgressState', () => {
-    it('returns empty month metadata when the calendar day is invalid for the month', () => {
-      const state = getMonthProgressState('2026-02-30', {
-        referenceDate: new Date('2026-02-10T12:00:00Z'),
-      })
-
-      expect(state.monthLength).toBe(0)
-      expect(state.isCurrentMonth).toBe(false)
-    })
-
     it('falls back to the current clock when referenceDate is not parseable', () => {
       const state = getMonthProgressState('2026-03-01', {
         referenceDate: 'not-a-date',

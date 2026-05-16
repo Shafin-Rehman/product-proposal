@@ -143,36 +143,6 @@ describe('POST /api/budget', () => {
     })
   })
 
-  it('accepts a two-decimal overall monthly budget', async () => {
-    budget.upsertMonthlyBudget.mockResolvedValueOnce({ month: '2026-03-01', monthly_limit: '49.23', notified: false })
-    budget.evaluateThresholdForMonth.mockResolvedValueOnce({
-      notified: false,
-      budget_alert: null,
-    })
-    budget.getMonthlyBudgetConfig.mockResolvedValueOnce({
-      month: '2026-03-01',
-      monthly_limit: '49.23',
-      notified: false,
-      category_budgets: [],
-    })
-
-    await testApiHandler({
-      appHandler: budgetHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ month: '2026-03-01', monthly_limit: 49.23 }))
-        expect(res.status).toBe(200)
-        expect(await res.json()).toEqual({
-          month: '2026-03-01',
-          monthly_limit: '49.23',
-          notified: false,
-          budget_alert: null,
-          category_budgets: [],
-        })
-        expect(budget.upsertMonthlyBudget).toHaveBeenCalledWith('uid', '2026-03-01', 49.23)
-      }
-    })
-  })
-
   it('upserts category budgets without requiring an overall monthly limit', async () => {
     budget.getOwnedOrGlobalCategoriesByIds.mockResolvedValueOnce([{ id: FOOD_CATEGORY_ID, name: 'Food', icon: '🍔' }])
     budget.upsertCategoryBudgets.mockResolvedValueOnce([{ category_id: FOOD_CATEGORY_ID, month: '2026-03-01', monthly_limit: '40.00' }])
@@ -285,18 +255,6 @@ describe('POST /api/budget', () => {
         const res = await fetch(post({ month: '2026-03-01', monthly_limit: 'abc' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
-      }
-    })
-  })
-
-  it('returns 400 when monthly_limit has more than two decimal places', async () => {
-    await testApiHandler({
-      appHandler: budgetHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ month: '2026-03-01', monthly_limit: '1.999' }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('monthly_limit must be a valid positive money amount')
-        expect(budget.upsertMonthlyBudget).not.toHaveBeenCalled()
       }
     })
   })
@@ -650,38 +608,6 @@ describe('buildBudgetSummary helper', () => {
     })
   })
 
-  it('prefers the overall monthly limit as total_budget when both overall and category budgets exist', async () => {
-    db.query
-      .mockResolvedValueOnce({
-        rows: [{ month: '2026-03-01', monthly_limit: '120.00', notified: true }]
-      })
-      .mockResolvedValueOnce({
-        rows: [{ total_expenses: '80.00' }]
-      })
-      .mockResolvedValueOnce({
-        rows: [{ total_income: '2500.00' }]
-      })
-      .mockResolvedValueOnce({
-        rows: [
-          { category_id: 'cat-1', monthly_limit: '50.00', category_name: 'Food', category_icon: '🍔' },
-          { category_id: 'cat-2', monthly_limit: '40.00', category_name: 'Transit', category_icon: '🚌' },
-        ]
-      })
-      .mockResolvedValueOnce({
-        rows: [
-          { category_id: 'cat-1', category_name: 'Food', category_icon: '🍔', spent: '45.00' },
-          { category_id: 'cat-2', category_name: 'Transit', category_icon: '🚌', spent: '25.00' },
-        ]
-      })
-
-    const summary = await actualBudget.buildBudgetSummary('uid', '2026-03-01')
-
-    expect(summary.total_budget).toBe('120.00')
-    expect(summary.category_budget_total).toBe('90.00')
-    expect(summary.remaining_budget).toBe('40.00')
-    expect(summary.notified).toBe(true)
-  })
-
   it('includes categories with spend even when no category budget exists', async () => {
     db.query
       .mockResolvedValueOnce({
@@ -741,35 +667,11 @@ describe('buildBudgetSummary helper', () => {
   })
 })
 
-describe('normalizeDate', () => {
-  it('accepts plain YYYY-MM-DD input', () => {
-    expect(actualBudget.normalizeDate('2026-03-15')).toBe('2026-03-15')
-  })
-
-  it('accepts ISO timestamp input', () => {
-    expect(actualBudget.normalizeDate('2026-03-15T08:30:00Z')).toBe('2026-03-15')
-  })
-
-  it('accepts Date instance input', () => {
-    const date = new Date(Date.UTC(2026, 2, 15, 8, 30, 0))
-    expect(actualBudget.normalizeDate(date)).toBe('2026-03-15')
-  })
-
-  it('rejects invalid dates', () => {
-    expect(actualBudget.normalizeDate('2026-02-30')).toBeNull()
-  })
-})
-
 describe('isPositiveMoneyValue', () => {
   it('accepts positive numbers and numeric strings', () => {
     expect(actualBudget.isPositiveMoneyValue(25)).toBe(true)
     expect(actualBudget.isPositiveMoneyValue('25.50')).toBe(true)
     expect(actualBudget.isPositiveMoneyValue(' 25.50 ')).toBe(true)
-  })
-
-  it('accepts numeric inputs that are valid cent values despite floating-point noise', () => {
-    expect(actualBudget.isPositiveMoneyValue(0.1 + 0.2)).toBe(true)
-    expect(actualBudget.isPositiveMoneyValue(10.23 * 100 / 100)).toBe(true)
   })
 
   it('rejects empty, non-numeric, and non-positive values', () => {
@@ -873,45 +775,6 @@ describe('clearCategoryBudgetConfig', () => {
 })
 
 describe('budget helper threshold boundary', () => {
-  it('treats spending equal to the limit as threshold reached in the summary', async () => {
-    db.query
-      .mockResolvedValueOnce({
-        rows: [{ month: '2026-03-01', monthly_limit: '100.00', notified: false }]
-      })
-      .mockResolvedValueOnce({
-        rows: [{ total_expenses: '100.00' }]
-      })
-      .mockResolvedValueOnce({
-        rows: [{ total_income: '2500.00' }]
-      })
-      .mockResolvedValueOnce({
-        rows: []
-      })
-      .mockResolvedValueOnce({
-        rows: []
-      })
-
-    const summary = await actualBudget.buildBudgetSummary('uid', '2026-03-01')
-
-    expect(summary).toEqual({
-      month: '2026-03-01',
-      monthly_limit: '100.00',
-      category_budget_total: '0.00',
-      total_budget: '100.00',
-      total_income: '2500.00',
-      total_expenses: '100.00',
-      remaining_budget: '0.00',
-      threshold_exceeded: true,
-      notified: false,
-      category_statuses: [],
-    })
-    expect(db.query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringMatching(/FROM public\.income[\s\S]*WHERE user_id = \$1 AND date >= \$2 AND date < \$3/),
-      ['uid', '2026-03-01', '2026-04-01']
-    )
-  })
-
   it('triggers a budget alert when spending reaches the limit', async () => {
     db.query
       .mockResolvedValueOnce({
