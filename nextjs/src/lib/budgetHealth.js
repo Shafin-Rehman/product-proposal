@@ -97,6 +97,7 @@ export function buildOverallBudgetHealth({
   month,
   observedDayCount = 0,
   referenceDate = new Date(),
+  isPrivate = false,
 } = {}) {
   const availabilityKey = getAvailabilityKey(availability)
   const monthState = getMonthProgressState(month || summary?.month, { observedDayCount, referenceDate })
@@ -169,8 +170,8 @@ export function buildOverallBudgetHealth({
       progressPercentage: 0,
       daysRemaining: null,
       dailyAllowance: null,
-      primaryValue: `${formatCurrency(spent)} spent`,
-      supportingText: `${formatCurrency(income)} in income tracked so far.`,
+      primaryValue: `${formatCurrency(spent, isPrivate)} spent`,
+      supportingText: `${formatCurrency(income, isPrivate)} in income tracked so far.`,
       progressLabel: 'No monthly budget set yet.',
       progressNote: 'Set a budget to unlock left-to-spend guidance, days left, and daily allowance.',
       monthState,
@@ -186,8 +187,8 @@ export function buildOverallBudgetHealth({
     daysRemaining: monthState.daysRemaining,
     dailyAllowance,
     monthState,
-    supportingText: `Spent ${formatCurrency(spent)} of ${formatCurrency(totalBudget)} budgeted.`,
-    progressLabel: `${formatCurrency(spent)} spent against ${formatCurrency(totalBudget)} budgeted`,
+    supportingText: `Spent ${formatCurrency(spent, isPrivate)} of ${formatCurrency(totalBudget, isPrivate)} budgeted.`,
+    progressLabel: `${formatCurrency(spent, isPrivate)} spent against ${formatCurrency(totalBudget, isPrivate)} budgeted`,
   }
 
   if (isOverBudget) {
@@ -195,7 +196,7 @@ export function buildOverallBudgetHealth({
       key: 'over_budget',
       label: 'Over budget',
       tone: 'danger',
-      primaryValue: `${formatCurrency(Math.abs(remaining ?? 0))} over`,
+      primaryValue: `${formatCurrency(Math.abs(remaining ?? 0), isPrivate)} over`,
       progressNote: 'This month has moved past the budget cap and needs correction at a glance.',
       ...baseState,
     }
@@ -206,7 +207,7 @@ export function buildOverallBudgetHealth({
       key: 'near_limit',
       label: 'Near limit',
       tone: 'warning',
-      primaryValue: `${formatCurrency(remaining ?? 0)} left`,
+      primaryValue: `${formatCurrency(remaining ?? 0, isPrivate)} left`,
       progressNote: 'Budget pressure is rising and should stay visible across the app.',
       ...baseState,
     }
@@ -216,13 +217,13 @@ export function buildOverallBudgetHealth({
     key: 'on_track',
     label: 'On track',
     tone: 'positive',
-    primaryValue: `${formatCurrency(remaining ?? 0)} left`,
+    primaryValue: `${formatCurrency(remaining ?? 0, isPrivate)} left`,
     progressNote: 'Budget pace is still healthy for the month so far.',
     ...baseState,
   }
 }
 
-export function buildFinancialHealth({ summary = null, availability = 'ready' } = {}) {
+export function buildFinancialHealth({ summary = null, availability = 'ready', isPrivate = false } = {}) {
   const availabilityKey = getAvailabilityKey(availability)
 
   if (availabilityKey === 'loading') {
@@ -257,7 +258,7 @@ export function buildFinancialHealth({ summary = null, availability = 'ready' } 
       label: 'Negative cash flow',
       tone: 'danger',
       netAmount,
-      valueText: `${formatCurrency(Math.abs(netAmount))} behind`,
+      valueText: `${formatCurrency(Math.abs(netAmount), isPrivate)} behind`,
       detailText: 'Expenses exceed income this month.',
     }
   }
@@ -268,7 +269,7 @@ export function buildFinancialHealth({ summary = null, availability = 'ready' } 
       label: 'Positive cash flow',
       tone: 'positive',
       netAmount,
-      valueText: `${formatCurrency(netAmount)} ahead`,
+      valueText: `${formatCurrency(netAmount, isPrivate)} ahead`,
       detailText: 'Income exceeds expenses this month.',
     }
   }
@@ -278,7 +279,7 @@ export function buildFinancialHealth({ summary = null, availability = 'ready' } 
     label: 'Break even',
     tone: 'neutral',
     netAmount: 0,
-    valueText: formatCurrency(0),
+    valueText: formatCurrency(0, isPrivate),
     detailText: 'Income matches expenses this month.',
   }
 }
@@ -287,6 +288,7 @@ export function buildCategoryBudgetHealth({
   monthlyLimit,
   spent,
   actualsAvailable = true,
+  isPrivate = false,
 } = {}) {
   const limit = getSafeMoneyNumber(monthlyLimit)
   const spentAmount = actualsAvailable ? (getSafeMoneyNumber(spent) ?? 0) : null
@@ -325,9 +327,9 @@ export function buildCategoryBudgetHealth({
         tone: 'warning',
         progressPercentage: 100,
         remainingAmount: null,
-        remainingText: `${formatCurrency(spentAmount)} spent unplanned`,
+        remainingText: `${formatCurrency(spentAmount, isPrivate)} spent unplanned`,
         detailText: 'Spending is landing in this category without a saved budget.',
-        ariaValueText: `${formatCurrency(spentAmount)} spent without a saved budget.`,
+        ariaValueText: `${formatCurrency(spentAmount, isPrivate)} spent without a saved budget.`,
       }
     }
 
@@ -345,7 +347,7 @@ export function buildCategoryBudgetHealth({
 
   const remainingAmount = Number((limit - spentAmount).toFixed(2))
   const progressPercentage = Math.min(Number(((spentAmount / limit) * 100).toFixed(2)), 100)
-  const detailText = `Spent ${formatCurrency(spentAmount)} of ${formatCurrency(limit)} budgeted.`
+  const detailText = `Spent ${formatCurrency(spentAmount, isPrivate)} of ${formatCurrency(limit, isPrivate)} budgeted.`
 
   if (spentAmount > limit) {
     return {

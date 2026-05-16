@@ -137,6 +137,7 @@ export default function DashboardView() {
   const [activityFilter, setActivityFilter] = useState('all')
   const [categoryDrillDown, setCategoryDrillDown] = useState(null)
   const [activityDetailEntry, setActivityDetailEntry] = useState(null)
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false)
 
   useEffect(() => {
     if (isSampleMode || !isReady || !session?.accessToken) return
@@ -333,9 +334,9 @@ export default function DashboardView() {
   ), [currentMonthExpenses, hasBudgetedStatuses, isSampleMode])
   const categoryCards = useMemo(() => (
     isSampleMode
-      ? buildSampleCategoryCards(demoCategoryBudgets)
-      : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards)
-  ), [currentMonthExpenses, derivedCategoryCards, isSampleMode, summary?.category_statuses])
+      ? buildSampleCategoryCards(demoCategoryBudgets, isPrivacyMode)
+      : getCategoryCards(summary?.category_statuses, currentMonthExpenses, derivedCategoryCards, isPrivacyMode)
+  ), [currentMonthExpenses, derivedCategoryCards, isSampleMode, summary?.category_statuses, isPrivacyMode])
   const budgetCtaLabel = getBudgetCtaLabel(summary)
   const trendPoints = useMemo(() => (
     isSampleMode
@@ -346,11 +347,13 @@ export default function DashboardView() {
     month: chartMonth,
     observedDayCount: trendPoints.length,
     availability: summaryAvailability,
-  }), [chartMonth, summary, summaryAvailability, trendPoints.length])
+    isPrivate: isPrivacyMode,
+  }), [chartMonth, summary, summaryAvailability, trendPoints.length, isPrivacyMode])
   const financialHealth = useMemo(() => buildFinancialHealth({
     summary,
     availability: summaryAvailability,
-  }), [summary, summaryAvailability])
+    isPrivate: isPrivacyMode,
+  }), [summary, summaryAvailability, isPrivacyMode])
   const savingsGoals = isSampleMode ? demoSavingsGoals : liveState.savingsGoals
   const topSavingsGoal = useMemo(() => (
     getTopSavingsGoal(savingsGoals)
@@ -368,7 +371,7 @@ export default function DashboardView() {
   const monthMarkerLabel = hudState.monthState?.monthLength
     ? `Today · Day ${hudState.monthState.activeDay}`
     : null
-  const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0) : '--'
+  const chartSpendValue = trendPoints.length ? formatCurrency(trendPoints.at(-1) ?? 0, isPrivacyMode) : '--'
 
   if (!isSampleMode && (!isReady || !session?.accessToken)) {
     return null
@@ -385,9 +388,19 @@ export default function DashboardView() {
             <h1 className="screen-persona__title">{firstName}</h1>
           </div>
         </div>
-        <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
-          {isSampleMode ? 'Sample' : 'Live'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            aria-pressed={isPrivacyMode}
+            className={`button-secondary ${isPrivacyMode ? 'is-active' : ''}`}
+            onClick={() => setIsPrivacyMode((current) => !current)}
+            type="button"
+          >
+            {isPrivacyMode ? '👁️ Show' : '👁️‍🗨️ Hide'}
+          </button>
+          <span className={`screen-chip screen-chip--${isSampleMode ? 'sample' : 'live'}`}>
+            {isSampleMode ? 'Sample' : 'Live'}
+          </span>
+        </div>
       </div>
 
       <LiveNotice
@@ -442,6 +455,7 @@ export default function DashboardView() {
           monthLength={hudState.monthState?.monthLength ?? 30}
           activeDay={hudState.monthState?.activeDay ?? 0}
           isOverBudget={hudState.isOverBudget}
+          isPrivacyMode={isPrivacyMode}
           emptyState={(
             <div className="blank-state blank-state--compact">
               <strong>Waiting on activity</strong>
@@ -456,6 +470,7 @@ export default function DashboardView() {
           health={financialHealth}
           income={hudState.income}
           expenses={hudState.spent}
+          isPrivacyMode={isPrivacyMode}
         />
       </section>
 
@@ -473,7 +488,7 @@ export default function DashboardView() {
                 <div className="savings-goal__avatar" aria-hidden="true">{getSavingsGoalAvatar(topSavingsGoal)}</div>
                 <div>
                   <strong>{topSavingsGoal.name}</strong>
-                  <span>{Math.round(topSavingsGoal.progress_percentage ?? 0)}% saved toward {formatCurrency(topSavingsGoal.target_amount)}</span>
+                  <span>{Math.round(topSavingsGoal.progress_percentage ?? 0)}% saved toward {formatCurrency(topSavingsGoal.target_amount, isPrivacyMode)}</span>
                   <small>{getSavingsGoalStatusReason(topSavingsGoal)}</small>
                 </div>
               </div>
@@ -485,9 +500,9 @@ export default function DashboardView() {
               <span style={{ width: `${Math.min(Number(topSavingsGoal.progress_percentage ?? 0), 100)}%` }} />
             </div>
             <div className="savings-goal__metrics">
-              <div><span>Saved</span><strong>{formatCurrency(topSavingsGoal.current_amount)}</strong></div>
-              <div><span>Monthly</span><strong>{formatCurrency(topSavingsGoal.monthly_required)}</strong></div>
-              <div><span>After goals</span><strong>{savingsGoals?.summary?.available_after_goal_contributions == null ? 'No budget' : formatCurrency(savingsGoals.summary.available_after_goal_contributions)}</strong></div>
+              <div><span>Saved</span><strong>{formatCurrency(topSavingsGoal.current_amount, isPrivacyMode)}</strong></div>
+              <div><span>Monthly</span><strong>{formatCurrency(topSavingsGoal.monthly_required, isPrivacyMode)}</strong></div>
+              <div><span>After goals</span><strong>{savingsGoals?.summary?.available_after_goal_contributions == null ? 'No budget' : formatCurrency(savingsGoals.summary.available_after_goal_contributions, isPrivacyMode)}</strong></div>
             </div>
           </article>
         ) : (
@@ -529,6 +544,7 @@ export default function DashboardView() {
                 statusLabel={item.statusLabel}
                 symbol={item.symbol}
                 tone={item.statusTone || 'neutral'}
+                isPrivacyMode={isPrivacyMode}
               />
             ))}
           </div>
@@ -606,7 +622,7 @@ export default function DashboardView() {
 
                     <div className={`entry-amount entry-amount--${entry.kind}`}>
                       {entry.kind === 'income' ? '+' : '-'}
-                      {formatCurrency(entry.amount)}
+                      {formatCurrency(entry.amount, isPrivacyMode)}
                     </div>
                   </button>
                 )

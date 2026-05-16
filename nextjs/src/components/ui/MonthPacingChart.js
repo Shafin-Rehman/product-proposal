@@ -98,6 +98,7 @@ export default function MonthPacingChart({
   activeDay = null,
   isOverBudget = false,
   emptyState = null,
+  isPrivacyMode = false,
 }) {
   const [hoverIndex, setHoverIndex] = useState(null)
 
@@ -127,7 +128,8 @@ export default function MonthPacingChart({
     insetTop: CHART_INSET_TOP,
     insetBottom: CHART_INSET_BOTTOM,
     valueCeiling: ceiling,
-  }), [budget, ceiling, monthLength, activeDay, trendPoints.length])
+    isPrivate: isPrivacyMode,
+  }), [budget, ceiling, monthLength, activeDay, trendPoints.length, isPrivacyMode])
 
   if (!trendPoints.length) {
     return emptyState
@@ -171,8 +173,8 @@ export default function MonthPacingChart({
     : Math.abs(focusedDelta) < 0.5
       ? 'On pace'
       : isAhead
-        ? `${formatCurrency(Math.abs(focusedDelta))} over pace`
-        : `${formatCurrency(Math.abs(focusedDelta))} under pace`
+        ? `${formatCurrency(Math.abs(focusedDelta), isPrivacyMode)} over pace`
+        : `${formatCurrency(Math.abs(focusedDelta), isPrivacyMode)} under pace`
   const chartSpendTone = focusedPace == null
     ? 'neutral'
     : getDeltaTone(focusedActual, focusedPace)
@@ -218,8 +220,8 @@ export default function MonthPacingChart({
     }
   }
 
-  const focusedAriaLabel = `Day ${focusedDay}: ${formatCurrency(focusedActual)} cumulative spend${
-    focusedPace != null ? `, pace ${formatCurrency(focusedPace)}, ${deltaLabel.toLowerCase()}` : ''
+  const focusedAriaLabel = `Day ${focusedDay}: ${formatCurrency(focusedActual, isPrivacyMode)} cumulative spend${
+    focusedPace != null ? `, pace ${formatCurrency(focusedPace, isPrivacyMode)}, ${deltaLabel.toLowerCase()}` : ''
   }`
 
   return (
@@ -289,7 +291,7 @@ export default function MonthPacingChart({
             role="status"
           >
             <span className="month-pacing__callout-day">Day {focusedDay}</span>
-            <strong className="month-pacing__callout-value">{formatCurrency(focusedActual)}</strong>
+            <strong className="month-pacing__callout-value">{formatCurrency(focusedActual, isPrivacyMode)}</strong>
             <span className="month-pacing__callout-delta">{deltaLabel}</span>
           </div>
         </div>
@@ -301,11 +303,11 @@ export default function MonthPacingChart({
       <div className="month-pacing__snapshot" aria-live="polite">
         <span className="month-pacing__snapshot-label">Through day {focusedDay}</span>
         <span className="month-pacing__snapshot-actual">
-          <strong>{formatCurrency(focusedActual)}</strong> actual
+          <strong>{formatCurrency(focusedActual, isPrivacyMode)}</strong> actual
         </span>
         {focusedPace != null ? (
           <span className="month-pacing__snapshot-pace">
-            {formatCurrency(focusedPace)} pace · <em>{deltaLabel}</em>
+            {formatCurrency(focusedPace, isPrivacyMode)} pace · <em>{deltaLabel}</em>
           </span>
         ) : (
           <span className="month-pacing__snapshot-pace">Set a budget to see pace</span>
@@ -314,18 +316,18 @@ export default function MonthPacingChart({
       <dl className="month-pacing__legend">
         <div className="month-pacing__legend-item month-pacing__legend-item--actual">
           <dt>Actual</dt>
-          <dd>{formatCurrency(focusedActual)}</dd>
+          <dd>{formatCurrency(focusedActual, isPrivacyMode)}</dd>
         </div>
         {focusedPace != null ? (
           <div className="month-pacing__legend-item month-pacing__legend-item--pace">
             <dt>Pace</dt>
-            <dd>{formatCurrency(focusedPace)}</dd>
+            <dd>{formatCurrency(focusedPace, isPrivacyMode)}</dd>
           </div>
         ) : null}
         {budget > 0 ? (
           <div className="month-pacing__legend-item month-pacing__legend-item--budget">
             <dt>Budget</dt>
-            <dd>{formatCurrency(budget)}</dd>
+            <dd>{formatCurrency(budget, isPrivacyMode)}</dd>
           </div>
         ) : null}
         {focusedDelta != null ? (
