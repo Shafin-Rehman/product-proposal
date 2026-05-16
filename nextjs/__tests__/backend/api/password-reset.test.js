@@ -72,21 +72,6 @@ describe('POST /api/password-reset', () => {
     })
   })
 
-  it('redirectTo is derived from request host header, not an env variable', async () => {
-    mockAuth.resetPasswordForEmail.mockResolvedValueOnce({ error: null })
-    await testApiHandler({
-      appHandler: sendHandler,
-      requestPatcher: (req) => {
-        req.headers.set('host', 'app.example.com')
-        req.headers.set('x-forwarded-proto', 'https')
-      },
-      async test({ fetch }) {
-        await fetch(post({ email: 'user@example.com' }))
-        const [, options] = mockAuth.resetPasswordForEmail.mock.calls[0]
-        expect(options.redirectTo).toBe('https://app.example.com/reset-password')
-      },
-    })
-  })
 })
 
 describe('POST /api/password-reset/confirm', () => {

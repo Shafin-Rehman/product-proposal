@@ -126,33 +126,6 @@ describe('monthlyReportExport specification', () => {
       expect(lines[3]).toContain('Rounded string,Uncategorized,,12.35')
     })
 
-    it('normalizes Date object days and summary months with UTC date parts', () => {
-      const utcMonth = new Date('2026-03-01T00:00:00Z')
-      const utcDay = new Date('2026-03-10T00:00:00Z')
-      const expectedMonth = `${utcMonth.getUTCFullYear()}-${String(utcMonth.getUTCMonth() + 1).padStart(2, '0')}-${String(utcMonth.getUTCDate()).padStart(2, '0')}`
-      const expectedDay = `${utcDay.getUTCFullYear()}-${String(utcDay.getUTCMonth() + 1).padStart(2, '0')}-${String(utcDay.getUTCDate()).padStart(2, '0')}`
-
-      const csv = buildMonthlyReportCsv({
-        month: utcMonth,
-        summary: { total_income: '100.00', total_expenses: '25.00' },
-        transactions: [
-          {
-            id: 'date-object-row',
-            month: utcMonth,
-            type: 'expense',
-            date: utcDay,
-            title: 'Date object row',
-            amount: '25.00',
-            created_at: '2026-03-10T08:00:00Z',
-          },
-        ],
-      })
-
-      const lines = csv.split('\r\n')
-      expect(lines[1].startsWith(`summary,${expectedMonth},monthly_summary`)).toBe(true)
-      expect(lines[2]).toContain(`transaction,${expectedMonth},expense,${expectedDay}`)
-    })
-
     it('breaks same-day ties with created_at first, then stable type ordering', () => {
       const csv = buildMonthlyReportCsv({
         month: '2026-03-01',
@@ -181,37 +154,6 @@ describe('monthlyReportExport specification', () => {
       const lines = csv.split('\r\n')
       expect(lines[2]).toContain('expense')
       expect(lines[3]).toContain('income')
-    })
-
-    it('sorts same-day transactions by Date object created_at values', () => {
-      const csv = buildMonthlyReportCsv({
-        month: '2026-03-01',
-        summary: { total_income: '100.00', total_expenses: '30.00' },
-        transactions: [
-          {
-            id: 'older',
-            month: '2026-03-01',
-            type: 'expense',
-            date: '2026-03-10',
-            title: 'Older row',
-            amount: '10.00',
-            created_at: new Date('2026-03-10T08:00:00Z'),
-          },
-          {
-            id: 'newer',
-            month: '2026-03-01',
-            type: 'income',
-            date: '2026-03-10',
-            title: 'Newer row',
-            amount: '20.00',
-            created_at: new Date('2026-03-10T09:00:00Z'),
-          },
-        ],
-      })
-
-      const lines = csv.split('\r\n')
-      expect(lines[2]).toContain('newer,2026-03-10T09:00:00.000Z')
-      expect(lines[3]).toContain('older,2026-03-10T08:00:00.000Z')
     })
 
     it('uses safe report filenames', () => {

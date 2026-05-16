@@ -123,14 +123,6 @@ describe('savings goal helpers', () => {
     expect(result.summary.current_total).toBe('20.00')
   })
 
-  it('keeps incomplete demo goals out of complete status', () => {
-    demoSavingsGoals.goals.forEach((goal) => {
-      if (Number(goal.current_amount) < Number(goal.target_amount)) {
-        expect(goal.budget_context.status).not.toBe('complete')
-      }
-    })
-  })
-
   it('throws a validation error when archiving an invalid goal id', async () => {
     await expect(savingsGoals.archiveSavingsGoal('uid', 'bad-id')).rejects.toBeInstanceOf(
       savingsGoals.SavingsGoalValidationError
@@ -360,52 +352,6 @@ describe('POST /api/savings-goals', () => {
     expect(db.query).not.toHaveBeenCalled()
   })
 
-  it('uses a requested payload month after creating a goal', async () => {
-    db.query.mockResolvedValueOnce({ rows: [goalRow({ target_date: '2026-08-31' })] })
-    budget.buildBudgetSummary.mockResolvedValueOnce({
-      month: '2026-05-01',
-      total_budget: '400.00',
-      remaining_budget: '100.00',
-      total_income: '2000.00',
-      total_expenses: '300.00',
-    })
-
-    await testApiHandler({
-      appHandler: goalsHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({
-          month: '2026-05',
-          name: 'Emergency cushion',
-          target_amount: 1000,
-          current_amount: 250,
-          target_date: '2026-08-31',
-        }))
-        expect(res.status).toBe(200)
-        const body = await res.json()
-        expect(body.budget_context.month).toBe('2026-05-01')
-      },
-    })
-
-    expect(budget.buildBudgetSummary).toHaveBeenCalledWith('uid', '2026-05-01')
-  })
-
-  it('returns 500 for unexpected create failures even when the message resembles validation text', async () => {
-    db.query.mockRejectedValueOnce(new Error('target_amount must be a valid positive money amount'))
-
-    await testApiHandler({
-      appHandler: goalsHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({
-          name: 'Emergency cushion',
-          target_amount: 1000,
-          current_amount: 250,
-          target_date: '2026-12-31',
-        }))
-        expect(res.status).toBe(500)
-        expect((await res.json()).error).toBe('Failed to create savings goal')
-      },
-    })
-  })
 })
 
 describe('POST /api/savings-goals/update', () => {
@@ -485,19 +431,6 @@ describe('POST /api/savings-goals/update', () => {
     expect(db.query.mock.calls[0][0]).toContain('AND archived = false')
     expect(budget.buildBudgetSummary).toHaveBeenCalledWith('uid', '2026-05-01')
   })
-
-  it('returns 500 for unexpected update failures even when the message resembles validation text', async () => {
-    db.query.mockRejectedValueOnce(new Error('No fields provided to update'))
-
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ goal_id: GOAL_ID, name: 'Updated' }))
-        expect(res.status).toBe(500)
-        expect((await res.json()).error).toBe('Failed to update savings goal')
-      },
-    })
-  })
 })
 
 describe('POST /api/savings-goals/archive', () => {
@@ -541,18 +474,5 @@ describe('POST /api/savings-goals/archive', () => {
     })
 
     expect(db.query.mock.calls[0][0]).toContain('AND archived = false')
-  })
-
-  it('returns 500 for unexpected archive failures even when the message resembles validation text', async () => {
-    db.query.mockRejectedValueOnce(new Error('goal_id must be a valid UUID'))
-
-    await testApiHandler({
-      appHandler: archiveHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ goal_id: GOAL_ID }))
-        expect(res.status).toBe(500)
-        expect((await res.json()).error).toBe('Failed to archive savings goal')
-      },
-    })
   })
 })

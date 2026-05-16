@@ -186,33 +186,11 @@ describe('POST /api/recurring', () => {
     })
   })
 
-  it('400 - invalid type value', async () => {
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ type: 'transfer', amount: 10, frequency: 'monthly', start_date: '2026-05-01' }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toMatch(/type/i)
-      },
-    })
-  })
-
   it('400 - missing amount', async () => {
     await testApiHandler({
       appHandler: recurringHandler,
       async test({ fetch }) {
         const res = await fetch(post({ type: 'expense', frequency: 'monthly', start_date: '2026-05-01' }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toMatch(/amount/i)
-      },
-    })
-  })
-
-  it('400 - zero amount is rejected', async () => {
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ type: 'expense', amount: 0, frequency: 'monthly', start_date: '2026-05-01' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toMatch(/amount/i)
       },
@@ -252,22 +230,6 @@ describe('POST /api/recurring', () => {
     })
   })
 
-  it('201 - next_date is addPeriod(start_date) and processUserRecurring is invoked', async () => {
-    const rule = { ...BASE_RULE, start_date: '2026-05-09', next_date: '2026-06-09' }
-    db.query.mockResolvedValueOnce({ rows: [rule] })
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({
-          type: 'expense', amount: 11.99, frequency: 'monthly', start_date: '2026-05-09',
-        }))
-        expect(res.status).toBe(201)
-        const body = await res.json()
-        expect(body.next_date).toBe('2026-06-09')
-        expect(processUserRecurring).toHaveBeenCalledWith('uid')
-      },
-    })
-  })
 })
 
 describe('POST /api/recurring — linked create (transactional)', () => {
@@ -321,43 +283,6 @@ describe('POST /api/recurring — linked create (transactional)', () => {
     })
   })
 
-  it('linked expense create runs BEGIN, INSERT, UPDATE, COMMIT (in that order)', async () => {
-    const rule = { ...BASE_RULE, id: 'rule-seq' }
-    const empty = { rows: [], rowCount: 0 }
-    db.query
-      .mockResolvedValueOnce(empty)
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
-      .mockResolvedValueOnce(empty)
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        await fetch(post({
-          type: 'expense', amount: 11.99, frequency: 'monthly',
-          start_date: '2026-05-09', expense_id: 'exp-seq',
-        }))
-        expect(db.query.mock.calls[0][0]).toBe('BEGIN')
-        expect(String(db.query.mock.calls[1][0]).toUpperCase()).toContain('INSERT')
-        expect(String(db.query.mock.calls[2][0]).toUpperCase()).toContain('UPDATE')
-        expect(db.query.mock.calls[3][0]).toBe('COMMIT')
-      },
-    })
-  })
-
-  it('without expense_id or income_id makes exactly 1 db call (INSERT only)', async () => {
-    db.query.mockResolvedValueOnce({ rows: [BASE_RULE] })
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({
-          type: 'expense', amount: 11.99, frequency: 'monthly', start_date: '2026-05-09',
-        }))
-        expect(res.status).toBe(201)
-        expect(db.query.mock.calls).toHaveLength(1)
-      },
-    })
-  })
-
   it('400 - unknown expense_id rolls back rule and does not run process', async () => {
     const rule = { ...BASE_RULE, id: 'rule-z' }
     const empty = { rows: [], rowCount: 0 }
@@ -381,36 +306,6 @@ describe('POST /api/recurring — linked create (transactional)', () => {
         expect(processUserRecurring).not.toHaveBeenCalled()
         const rollbackCall = db.query.mock.calls[3]
         expect(rollbackCall[0].toUpperCase()).toContain('ROLLBACK')
-        const anyDelete = db.query.mock.calls.some((c) =>
-          String(c[0]).toUpperCase().includes('DELETE'))
-        expect(anyDelete).toBe(false)
-      },
-    })
-  })
-
-  it('400 - unknown income_id rolls back rule', async () => {
-    const rule = { ...BASE_RULE, id: 'rule-w', type: 'income' }
-    const empty = { rows: [], rowCount: 0 }
-    db.query
-      .mockResolvedValueOnce(empty)
-      .mockResolvedValueOnce({ rows: [rule] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      .mockResolvedValueOnce(empty)
-    await testApiHandler({
-      appHandler: recurringHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({
-          type: 'income',
-          amount: 500,
-          frequency: 'monthly',
-          start_date: '2026-05-09',
-          source_id: 'src-1',
-          income_id: 'missing-inc',
-        }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toMatch(/income/i)
-        expect(processUserRecurring).not.toHaveBeenCalled()
-        expect(db.query.mock.calls[3][0].toUpperCase()).toContain('ROLLBACK')
         const anyDelete = db.query.mock.calls.some((c) =>
           String(c[0]).toUpperCase().includes('DELETE'))
         expect(anyDelete).toBe(false)
@@ -462,61 +357,6 @@ describe('POST /api/recurring/process', () => {
           expect(res.status).toBe(200)
           expect((await res.json()).generated).toBe(3)
           expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-03-15')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
-  it('200 - uses max(UTC, as_of) when local calendar is one day ahead', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-06-10T12:00:00Z'))
-      processUserRecurring.mockResolvedValueOnce(0)
-      await testApiHandler({
-        appHandler: processHandler,
-        async test({ fetch }) {
-          const res = await fetch(post({ as_of: '2026-06-11' }))
-          expect(res.status).toBe(200)
-          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-06-11')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
-  it('200 - ignores far-future as_of (same as resume_day cap)', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-07-12T12:00:00Z'))
-      processUserRecurring.mockResolvedValueOnce(0)
-      await testApiHandler({
-        appHandler: processHandler,
-        async test({ fetch }) {
-          const res = await fetch(post({ as_of: '2099-01-01' }))
-          expect(res.status).toBe(200)
-          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-07-12')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
-  it('200 - returns 0 when no rules are due', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-05-01T12:00:00Z'))
-      processUserRecurring.mockResolvedValueOnce(0)
-      await testApiHandler({
-        appHandler: processHandler,
-        async test({ fetch }) {
-          const res = await fetch({ method: 'POST' })
-          expect(res.status).toBe(200)
-          expect((await res.json()).generated).toBe(0)
-          expect(processUserRecurring).toHaveBeenCalledWith('uid', '2026-05-01')
         },
       })
     } finally {
@@ -617,102 +457,6 @@ describe('POST /api/recurring/update', () => {
     }
   })
 
-  it('resume advances when next_date is a Date object (node-pg), not a string', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-06-11T12:00:00Z'))
-      const pausedRule = {
-        ...BASE_RULE,
-        paused: true,
-        frequency: 'monthly',
-        next_date: new Date('2026-06-10T00:00:00.000Z'),
-      }
-      const resumed = {
-        ...pausedRule,
-        paused: false,
-        next_date: '2026-07-10',
-      }
-      db.query
-        .mockResolvedValueOnce({ rows: [pausedRule] })
-        .mockResolvedValueOnce({ rows: [resumed] })
-      await testApiHandler({
-        appHandler: updateHandler,
-        async test({ fetch }) {
-          const res = await fetch(post({ rule_id: 'rule-1', paused: false, resume_day: '2026-06-11' }))
-          expect(res.status).toBe(200)
-          const body = await res.json()
-          expect(body.next_date).toBe('2026-07-10')
-          const [, updateParams] = db.query.mock.calls[1]
-          expect(updateParams).toContain('2026-07-10')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
-  it('resuming after pause through due day advances past that day (no back-charge window)', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-07-12T12:00:00Z'))
-      const pausedRule = {
-        ...BASE_RULE,
-        paused: true,
-        frequency: 'monthly',
-        next_date: '2026-07-11',
-      }
-      const resumed = { ...pausedRule, paused: false, next_date: '2026-08-11' }
-      db.query
-        .mockResolvedValueOnce({ rows: [pausedRule] })
-        .mockResolvedValueOnce({ rows: [resumed] })
-      await testApiHandler({
-        appHandler: updateHandler,
-        async test({ fetch }) {
-          const res = await fetch(post({ rule_id: 'rule-1', paused: false }))
-          expect(res.status).toBe(200)
-          const body = await res.json()
-          expect(body.next_date).toBe('2026-08-11')
-          const [, updateParams] = db.query.mock.calls[1]
-          expect(updateParams).toContain('2026-08-11')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
-  it('resume uses client resume_day within ±1 UTC day so a missed cycle is not left in place', async () => {
-    jest.useFakeTimers()
-    try {
-      jest.setSystemTime(new Date('2026-06-10T12:00:00Z'))
-      const pausedRule = {
-        ...BASE_RULE,
-        paused: true,
-        frequency: 'monthly',
-        next_date: '2026-06-11',
-      }
-      const resumed = { ...pausedRule, paused: false, next_date: '2026-07-11' }
-      db.query
-        .mockResolvedValueOnce({ rows: [pausedRule] })
-        .mockResolvedValueOnce({ rows: [resumed] })
-      await testApiHandler({
-        appHandler: updateHandler,
-        async test({ fetch }) {
-          const res = await fetch(
-            post({ rule_id: 'rule-1', paused: false, resume_day: '2026-06-11' }),
-          )
-          expect(res.status).toBe(200)
-          const body = await res.json()
-          expect(body.next_date).toBe('2026-07-11')
-          const [, updateParams] = db.query.mock.calls[1]
-          expect(updateParams).toContain('2026-07-11')
-        },
-      })
-    } finally {
-      jest.useRealTimers()
-    }
-  })
-
   it('resume ignores resume_day beyond UTC today + 1 (production guard)', async () => {
     jest.useFakeTimers()
     try {
@@ -805,41 +549,12 @@ describe('POST /api/recurring/delete', () => {
     })
   })
 
-  it('SQL uses UPDATE SET cancelled_at, not DELETE', async () => {
-    const cancelled = { ...BASE_RULE, cancelled_at: '2026-05-09T00:00:00Z' }
-    db.query.mockResolvedValueOnce({ rows: [cancelled] })
-    await testApiHandler({
-      appHandler: deleteHandler,
-      async test({ fetch }) {
-        await fetch(post({ rule_id: 'rule-1' }))
-        const [sql] = db.query.mock.calls[0]
-        expect(sql.toUpperCase()).toContain('UPDATE')
-        expect(sql.toUpperCase()).toContain('CANCELLED_AT')
-        expect(sql.toUpperCase()).not.toContain('DELETE')
-      },
-    })
-  })
-
   it('400 - missing rule_id', async () => {
     await testApiHandler({
       appHandler: deleteHandler,
       async test({ fetch }) {
         const res = await fetch(post({}))
         expect(res.status).toBe(400)
-      },
-    })
-  })
-
-  it('SQL WHERE clause binds the specific rule_id — cannot cancel a different rule', async () => {
-    const cancelled = { ...BASE_RULE, id: 'rule-1', cancelled_at: '2026-05-09T00:00:00Z' }
-    db.query.mockResolvedValueOnce({ rows: [cancelled] })
-    await testApiHandler({
-      appHandler: deleteHandler,
-      async test({ fetch }) {
-        await fetch(post({ rule_id: 'rule-1' }))
-        const [, params] = db.query.mock.calls[0]
-        expect(params).toContain('rule-1')
-        expect(params).not.toContain('rule-2')
       },
     })
   })

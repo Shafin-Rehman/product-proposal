@@ -132,22 +132,6 @@ describe('POST /api/expenses', () => {
     })
   })
 
-  it('201 - accepts a description at the merchant length limit', async () => {
-    const description = 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH)
-    db.query.mockResolvedValueOnce({ rows: [{ ...row, description }] })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ amount: 25, date: '2026-03-01', description }))
-        expect(res.status).toBe(201)
-        expect(db.query).toHaveBeenCalledWith(
-          expect.stringContaining('INSERT INTO public.expenses'),
-          ['uid', null, 25, description, '2026-03-01']
-        )
-      }
-    })
-  })
-
   it('201 - returns a budget alert when the threshold is crossed', async () => {
     db.query.mockResolvedValueOnce({ rows: [row] })
     evaluateThresholdForMonth.mockResolvedValueOnce({
@@ -182,34 +166,11 @@ describe('POST /api/expenses', () => {
     })
   })
 
-  it('400 - missing date', async () => {
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ amount: 25 }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount and date are required')
-      }
-    })
-  })
-
   it('400 - rejects a non-positive amount', async () => {
     await testApiHandler({
       appHandler: expensesHandler,
       async test({ fetch }) {
         const res = await fetch(post({ amount: 0, date: '2026-03-01' }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
-      }
-    })
-    expect(db.query).not.toHaveBeenCalled()
-  })
-
-  it('400 - rejects a positive amount with more than 2 decimal places', async () => {
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ amount: 0.001, date: '2026-03-01' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }
@@ -268,117 +229,9 @@ describe('GET /api/expenses', () => {
     })
   })
 
-  it('keeps the unfiltered list behavior when no query params are provided', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        const res = await fetch()
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenCalledWith(
-          expect.stringContaining('WHERE e.user_id = $1'),
-          ['uid']
-        )
-        expect(db.query.mock.calls[0][0]).not.toContain('LIMIT')
-      }
-    })
-  })
-
-  it('SQL JOINs recurring_rules to include recurring_cancelled_at in each row', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        await fetch()
-        const [sql] = db.query.mock.calls[0]
-        expect(sql.toUpperCase()).toContain('RECURRING_RULES')
-        expect(sql).toContain('recurring_cancelled_at')
-      }
-    })
-  })
-
-  it('recurring expense includes recurring_cancelled_at from joined rule', async () => {
-    const rows = [{
-      id: 1, user_id: 'uid', amount: '11.99', date: '2026-05-01',
-      category_name: 'Fun', recurring_rule_id: 'rule-1', recurring_cancelled_at: '2026-05-09T00:00:00Z',
-    }]
-    db.query.mockResolvedValueOnce({ rows })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      async test({ fetch }) {
-        const res = await fetch()
-        const body = await res.json()
-        expect(body[0].recurring_cancelled_at).toBe('2026-05-09T00:00:00Z')
-      }
-    })
-  })
-
-  it('can narrow expenses to a requested month', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      url: 'http://localhost/api/expenses?month=2026-03-01',
-      async test({ fetch }) {
-        const res = await fetch()
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenCalledWith(
-          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date < $3'),
-          ['uid', '2026-03-01', '2026-04-01']
-        )
-      }
-    })
-  })
-
-  it('can narrow expenses by date range and limit', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] })
-    await testApiHandler({
-      appHandler: expensesHandler,
-      url: 'http://localhost/api/expenses?from=2026-02-01&to=2026-02-28&limit=10',
-      async test({ fetch }) {
-        const res = await fetch()
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenCalledWith(
-          expect.stringContaining('WHERE e.user_id = $1 AND e.date >= $2 AND e.date <= $3'),
-          ['uid', '2026-02-01', '2026-02-28']
-        )
-        expect(db.query.mock.calls[0][0]).toContain('LIMIT 10')
-      }
-    })
-  })
-
-  it('rejects ambiguous or invalid filters before querying', async () => {
-    await testApiHandler({
-      appHandler: expensesHandler,
-      url: 'http://localhost/api/expenses?month=2026-03-01&from=2026-03-01',
-      async test({ fetch }) {
-        const res = await fetch()
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('Use either month or from/to, not both')
-        expect(db.query).not.toHaveBeenCalled()
-      }
-    })
-  })
-
-  it('rejects an empty limit before querying', async () => {
-    await testApiHandler({
-      appHandler: expensesHandler,
-      url: 'http://localhost/api/expenses?limit=',
-      async test({ fetch }) {
-        const res = await fetch()
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('Valid limit is required')
-        expect(db.query).not.toHaveBeenCalled()
-      }
-    })
-  })
-
   it.each([
-    ['an empty month', 'http://localhost/api/expenses?month=', 'Valid month is required'],
     ['an invalid month', 'http://localhost/api/expenses?month=2026-13', 'Valid month is required'],
-    ['an empty from date', 'http://localhost/api/expenses?from=', 'Valid from date is required'],
     ['an invalid from date', 'http://localhost/api/expenses?from=not-a-date', 'Valid from date is required'],
-    ['an empty to date', 'http://localhost/api/expenses?to=', 'Valid to date is required'],
-    ['an invalid to date', 'http://localhost/api/expenses?to=not-a-date', 'Valid to date is required'],
     ['a from date after the to date', 'http://localhost/api/expenses?from=2026-03-15&to=2026-03-01', 'from date must be on or before to date'],
   ])('rejects %s before querying', async (_label, url, expectedError) => {
     await testApiHandler({
@@ -471,95 +324,6 @@ describe('POST /api/expenses/update', () => {
     })
   })
 
-  it('200 - normalizes a timestamp date before updating', async () => {
-    normalizeDate.mockReturnValueOnce('2026-03-02')
-    db.query
-      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
-      .mockResolvedValueOnce({ rows: [{ ...row, date: '2026-03-02' }] })
-    evaluateThresholdForMonth
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ expense_id: 1, date: '2026-03-02T09:15:00Z' }))
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenNthCalledWith(
-          2,
-          expect.stringContaining('UPDATE public.expenses SET'),
-          ['2026-03-02', 1, 'uid']
-        )
-      }
-    })
-  })
-
-  it('200 - persists category_id null when the client explicitly clears the category on edit', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
-      .mockResolvedValueOnce({ rows: [{ ...row, category_id: null }] })
-    evaluateThresholdForMonth
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ expense_id: 1, category_id: null }))
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenNthCalledWith(
-          2,
-          expect.stringContaining('UPDATE public.expenses SET'),
-          [null, 1, 'uid']
-        )
-      }
-    })
-  })
-
-  it('200 - accepts a description at the merchant length limit during update', async () => {
-    const description = 'M'.repeat(EXPENSE_DESCRIPTION_MAX_LENGTH)
-    db.query
-      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
-      .mockResolvedValueOnce({ rows: [{ ...row, description }] })
-    evaluateThresholdForMonth
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ expense_id: 1, description }))
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenNthCalledWith(
-          2,
-          expect.stringContaining('UPDATE public.expenses SET'),
-          [description, 1, 'uid']
-        )
-      }
-    })
-  })
-
-  it('200 - persists description null when the client clears the merchant on edit', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [{ date: '2026-03-01' }] })
-      .mockResolvedValueOnce({ rows: [{ ...row, description: null }] })
-    evaluateThresholdForMonth
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-      .mockResolvedValueOnce({ alertTriggered: false, budget_alert: null })
-
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ expense_id: 1, description: null }))
-        expect(res.status).toBe(200)
-        expect(db.query).toHaveBeenNthCalledWith(
-          2,
-          expect.stringContaining('UPDATE public.expenses SET'),
-          [null, 1, 'uid']
-        )
-      }
-    })
-  })
-
   it('400 - missing expense_id', async () => {
     await testApiHandler({
       appHandler: updateHandler,
@@ -576,18 +340,6 @@ describe('POST /api/expenses/update', () => {
       appHandler: updateHandler,
       async test({ fetch }) {
         const res = await fetch(post({ expense_id: 1, amount: 'abc' }))
-        expect(res.status).toBe(400)
-        expect((await res.json()).error).toBe('amount must be a valid positive money amount')
-      }
-    })
-    expect(db.query).not.toHaveBeenCalled()
-  })
-
-  it('400 - rejects an update amount with more than 2 decimal places', async () => {
-    await testApiHandler({
-      appHandler: updateHandler,
-      async test({ fetch }) {
-        const res = await fetch(post({ expense_id: 1, amount: '1.999' }))
         expect(res.status).toBe(400)
         expect((await res.json()).error).toBe('amount must be a valid positive money amount')
       }

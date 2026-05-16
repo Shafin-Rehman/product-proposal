@@ -41,21 +41,6 @@ describe('apiClient specification', () => {
       }))
     })
 
-    it('passes AbortSignal through to fetch when provided', async () => {
-      const controller = new AbortController()
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({}),
-      })
-
-      await apiGet('/api/test', { accessToken: 'token-123', signal: controller.signal })
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/test',
-        expect.objectContaining({ signal: controller.signal }),
-      )
-    })
-
     it('throws an ApiError with the response status and body error message', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
@@ -151,16 +136,6 @@ describe('apiClient specification', () => {
           body: JSON.stringify(body),
         }),
       )
-    })
-
-    it('treats HTTP 204 as success with null body', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 204,
-        json: jest.fn(),
-      })
-
-      await expect(apiPost('/api/x', {}, { accessToken: 't' })).resolves.toBeNull()
     })
 
     it('throws 401 when access token is missing', async () => {

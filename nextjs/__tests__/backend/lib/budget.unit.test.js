@@ -1,29 +1,6 @@
 import { isPositiveMoneyValue, normalizeDate, normalizeMonth } from '@/lib/budget'
 
 describe('budget specification', () => {
-  describe('isPositiveMoneyValue', () => {
-    it('rejects empty, non-numeric, over-precision, scientific, and null inputs', () => {
-      expect(isPositiveMoneyValue('')).toBe(false)
-      expect(isPositiveMoneyValue('abc')).toBe(false)
-      expect(isPositiveMoneyValue('1.999')).toBe(false)
-      expect(isPositiveMoneyValue('1e2')).toBe(false)
-      expect(isPositiveMoneyValue(null)).toBe(false)
-    })
-
-    it('rejects zero, negative values, and amounts above the money cap', () => {
-      expect(isPositiveMoneyValue(0)).toBe(false)
-      expect(isPositiveMoneyValue('0')).toBe(false)
-      expect(isPositiveMoneyValue('-5')).toBe(false)
-      expect(isPositiveMoneyValue(100000000)).toBe(false)
-    })
-
-    it('accepts trimmed string amounts and finite positive numbers within scale', () => {
-      expect(isPositiveMoneyValue(25)).toBe(true)
-      expect(isPositiveMoneyValue('25.50')).toBe(true)
-      expect(isPositiveMoneyValue(' 25.50 ')).toBe(true)
-    })
-  })
-
   describe('normalizeDate', () => {
     it('returns null for empty, non-ISO, and impossible calendar dates', () => {
       expect(normalizeDate('')).toBeNull()

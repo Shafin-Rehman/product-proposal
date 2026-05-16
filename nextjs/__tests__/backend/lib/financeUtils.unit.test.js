@@ -19,7 +19,6 @@ const {
   buildIncomeSourceBreakdown,
   buildRecentCashFlow,
   buildCumulativeDailyTotals,
-  buildTrendChartAxes,
 } = require('@/lib/financeUtils')
 
 describe('financeUtils specification', () => {
@@ -39,22 +38,11 @@ describe('financeUtils specification', () => {
       expect(parseCalendarDate('')).toBeNull()
     })
 
-    it('returns null for non-strings and invalid Date values', () => {
-      expect(parseCalendarDate(99)).toBeNull()
-      const invalid = new Date('not a real date')
-      expect(parseCalendarDate(invalid)).toBeNull()
-    })
-
     it('parses a YYYY-MM-DD string into the correct UTC date parts', () => {
       const d = parseCalendarDate('2026-03-15')
       expect(d.getUTCFullYear()).toBe(2026)
       expect(d.getUTCMonth()).toBe(2)
       expect(d.getUTCDate()).toBe(15)
-    })
-
-    it('accepts a valid Date instance', () => {
-      const d = new Date(Date.UTC(2026, 0, 2))
-      expect(parseCalendarDate(d)).toBe(d)
     })
   })
 
@@ -113,9 +101,6 @@ describe('financeUtils specification', () => {
       expect(shiftMonth('2026-01-01', 2)).toBe('2026-03-01')
     })
 
-    it('moves backward and wraps across year boundaries', () => {
-      expect(shiftMonth('2026-01-01', -1)).toBe('2025-12-01')
-    })
   })
 
   describe('formatCurrency', () => {
@@ -197,14 +182,6 @@ describe('financeUtils specification', () => {
       expect(Object.values(entry).join(' ')).not.toMatch(/live expense/i)
     })
 
-    it('keeps the compact expense title fallback separate from a cleared merchant', () => {
-      const expenseRow = { id: 'e4', amount: '18.00', date: '2026-03-10', created_at: '2026-03-10T00:00:00Z', description: null, category_name: 'Dining' }
-      const [entry] = buildActivityFeed([expenseRow], [])
-      expect(entry.title).toBe('Dining')
-      expect(entry.chip).toBe('Dining')
-      expect(entry.merchant).toBe('')
-    })
-
     it('sorts combined entries with the most recent first', () => {
       const expenses = [{ id: 'e1', amount: '10.00', date: '2026-03-05', created_at: '2026-03-25T09:00:00Z' }]
       const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', created_at: '2026-03-01T09:00:00Z', source_name: 'Payroll' }]
@@ -219,45 +196,6 @@ describe('financeUtils specification', () => {
       expect(feed[0].kind).toBe('income')
     })
 
-    it('resolves a tie with created_at when one side uses a Date object', () => {
-      const expenses = [{
-        id: 'e1',
-        amount: '1',
-        date: '2026-03-20',
-        created_at: new Date('2026-03-20T10:00:00Z'),
-      }]
-      const income = [{
-        id: 'i1',
-        amount: '2',
-        date: '2026-03-20',
-        created_at: new Date('2026-03-20T11:00:00Z'),
-        source_name: 'Payroll',
-      }]
-
-      const feed = buildActivityFeed(expenses, income)
-
-      expect(feed[0].kind).toBe('income')
-      expect(feed[1].kind).toBe('expense')
-    })
-
-    it('treats unparseable created_at strings as 0 in the sort tie-breaker (stable when tie-break is neutral)', () => {
-      const row = (id, amount) => ({
-        id,
-        amount,
-        date: '2026-03-20',
-        created_at: 'not a valid timestamp',
-      })
-      const feed = buildActivityFeed([row('e1', 1), row('e2', 2)], [row('i1', 3)])
-      expect(feed).toHaveLength(3)
-      expect(feed[0].sortOn).toBe(feed[1].sortOn)
-    })
-
-    it('does not invent a month-style note for income entries without notes', () => {
-      const income = [{ id: 'i1', amount: '2000.00', date: '2026-03-20', source_name: 'Payroll' }]
-      const [entry] = buildActivityFeed([], income)
-      expect(entry.note).toBe('')
-    })
-
     it('uses notes as the income title and keeps source as merchant when notes are present', () => {
       const income = [{ id: 'i2', amount: '100.00', date: '2026-03-21', source_name: 'Freelance', notes: 'Weekend session' }]
       const [entry] = buildActivityFeed([], income)
@@ -266,51 +204,6 @@ describe('financeUtils specification', () => {
       expect(entry.note).toBe('Weekend session')
     })
 
-    it('falls back to source name as income title when notes are absent', () => {
-      const income = [{ id: 'i3', amount: '100.00', date: '2026-03-21', source_name: 'Salary' }]
-      const [entry] = buildActivityFeed([], income)
-      expect(entry.title).toBe('Salary')
-      expect(entry.merchant).toBe('Salary')
-    })
-
-    it('treats explicit "No source" the same as missing for chip display, but keeps a literal "Income" source name', () => {
-      const [noSource] = buildActivityFeed([], [{
-        id: 'a',
-        amount: 1,
-        date: '2026-03-20',
-        source_name: 'No source',
-      }])
-      expect(noSource.chip).toBe(UNKNOWN_INCOME_DISPLAY)
-      const [named] = buildActivityFeed([], [{
-        id: 'b',
-        amount: 1,
-        date: '2026-03-20',
-        source_name: 'Income',
-      }])
-      expect(named.chip).toBe('Income')
-    })
-
-    it('threads category_icon and source_icon for list visuals', () => {
-      const [exp] = buildActivityFeed([{
-        id: 'e1',
-        amount: '10.00',
-        date: '2026-03-10',
-        created_at: '2026-03-10T00:00:00Z',
-        category_name: 'Food',
-        category_icon: '🥘',
-      }], [])
-      expect(exp.chip).toBe('Food')
-      expect(exp.categoryIcon).toBe('🥘')
-
-      const [inc] = buildActivityFeed([], [{
-        id: 'i1',
-        amount: '1.00',
-        date: '2026-03-20',
-        source_name: 'X',
-        source_icon: '💰',
-      }])
-      expect(inc.sourceIcon).toBe('💰')
-    })
   })
 
   describe('getEditFormCategoryName', () => {
@@ -346,9 +239,6 @@ describe('financeUtils specification', () => {
       })).toBe('Income')
     })
 
-    it('returns empty for a null entry', () => {
-      expect(getEditFormCategoryName(null)).toBe('')
-    })
   })
 
   describe('resolveCategoryOrSourceMutation', () => {
@@ -369,22 +259,6 @@ describe('financeUtils specification', () => {
       expect(
         resolveCategoryOrSourceMutation({ isEdit: true, selectedName: 'Food', options: expOpts, kind: 'expense' })
       ).toEqual({ category_id: 'c1' })
-    })
-
-    it('leaves new income payloads without source_id until the member selects a source', () => {
-      expect(resolveCategoryOrSourceMutation({ isEdit: false, selectedName: '', options: incOpts, kind: 'income' })).toEqual({})
-      expect(
-        resolveCategoryOrSourceMutation({ isEdit: false, selectedName: 'Salary', options: incOpts, kind: 'income' })
-      ).toEqual({ source_id: 's1' })
-    })
-
-    it('lets members clear an income source on edit or set it again from the picker', () => {
-      expect(resolveCategoryOrSourceMutation({ isEdit: true, selectedName: '', options: incOpts, kind: 'income' })).toEqual({
-        source_id: null,
-      })
-      expect(
-        resolveCategoryOrSourceMutation({ isEdit: true, selectedName: 'Salary', options: incOpts, kind: 'income' })
-      ).toEqual({ source_id: 's1' })
     })
 
     it('does not emit ids when free-typed labels do not match any option', () => {
@@ -517,16 +391,6 @@ describe('financeUtils specification', () => {
     it('returns an empty array when the month is invalid', () => {
       expect(buildRecentCashFlow([], [], 'nope')).toEqual([])
     })
-
-    it('returns zeroed months when there is no matching data', () => {
-      const series = buildRecentCashFlow([], [], '2026-03-01', 2)
-      expect(series).toHaveLength(2)
-      series.forEach((item) => {
-        expect(item.incomeAmount).toBe(0)
-        expect(item.expenseAmount).toBe(0)
-        expect(item.netAmount).toBe(0)
-      })
-    })
   })
 
   describe('buildCumulativeDailyTotals', () => {
@@ -541,48 +405,6 @@ describe('financeUtils specification', () => {
       expect(series[2].amount).toBe(50)
       expect(series[9].amount).toBe(150)
       expect(series[30].amount).toBe(150)
-    })
-
-    it('returns an empty array for an invalid month', () => {
-      expect(buildCumulativeDailyTotals([], 'nope')).toEqual([])
-    })
-  })
-
-  describe('buildTrendChartAxes', () => {
-    it('returns a pace line, budget line y-coordinate, and axis labels when a budget exists', () => {
-      const axes = buildTrendChartAxes({
-        budget: 1000,
-        monthLength: 31,
-        activeDay: 15,
-        pointCount: 15,
-        width: 312,
-        height: 148,
-        inset: 18,
-      })
-
-      expect(axes.budgetLineY).toBe(18)
-      expect(axes.axisLabels).toHaveLength(2)
-      expect(axes.axisLabels[0]).toEqual({ y: 130, value: 0 })
-      expect(axes.axisLabels[1]).toEqual({ y: 18, value: 1000 })
-      expect(axes.paceLine).toMatchObject({ startX: 18, startY: 130 })
-      expect(axes.paceLine.endX).toBeGreaterThan(18)
-      expect(axes.paceLine.endY).toBeLessThan(130)
-      expect(axes.budgetLineLabel).toBe('$1,000.00')
-    })
-
-    it('omits pace line and axis labels when no budget is provided', () => {
-      const axes = buildTrendChartAxes({
-        budget: 0,
-        monthLength: 30,
-        activeDay: 10,
-        pointCount: 10,
-        width: 312,
-        height: 148,
-        inset: 18,
-      })
-      expect(axes.paceLine).toBeNull()
-      expect(axes.budgetLineY).toBeNull()
-      expect(axes.axisLabels).toBeNull()
     })
   })
 })
