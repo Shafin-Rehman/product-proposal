@@ -9,10 +9,10 @@ function toSafeNumber(value) {
   return Number.isFinite(amount) ? amount : 0
 }
 
-function formatDelta(value) {
+function formatDelta(value, isPrivate) {
   if (value == null || !Number.isFinite(value)) return '--'
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
-  return `${sign}${formatCurrency(Math.abs(value))}`
+  return `${sign}${formatCurrency(Math.abs(value), isPrivate)}`
 }
 
 export default function CashFlowSnapshot({
@@ -21,6 +21,7 @@ export default function CashFlowSnapshot({
   trend = [],
   monthLabel = 'This month',
   viewMoreHref = null,
+  isPrivacyMode = false,
 }) {
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
@@ -90,7 +91,7 @@ export default function CashFlowSnapshot({
                 style={{ width: `${incomeBarWidth}%` }}
               />
             </span>
-            <strong className="cashflow-snapshot__row-value">{formatCurrency(displayIncome)}</strong>
+            <strong className="cashflow-snapshot__row-value">{formatCurrency(displayIncome, isPrivacyMode)}</strong>
           </div>
           <div className="cashflow-snapshot__row cashflow-snapshot__row--expense">
             <span className="cashflow-snapshot__row-label">Expenses</span>
@@ -100,7 +101,7 @@ export default function CashFlowSnapshot({
                 style={{ width: `${expenseBarWidth}%` }}
               />
             </span>
-            <strong className="cashflow-snapshot__row-value">{formatCurrency(displayExpenses)}</strong>
+            <strong className="cashflow-snapshot__row-value">{formatCurrency(displayExpenses, isPrivacyMode)}</strong>
           </div>
         </div>
       ) : (
@@ -112,7 +113,7 @@ export default function CashFlowSnapshot({
           <span>Net</span>
           <strong>
             {displayNet > 0 ? '+' : ''}
-            {formatCurrency(displayNet)}
+            {formatCurrency(displayNet, isPrivacyMode)}
           </strong>
         </div>
         <div className="cashflow-snapshot__savings">
@@ -139,7 +140,7 @@ export default function CashFlowSnapshot({
               const barOpacity = isFocused ? 1 : 0.45 + (heightRatio * 0.55)
               return (
                 <button
-                  aria-label={`${item.label} net ${formatDelta(value)}`}
+                  aria-label={`${item.label} net ${formatDelta(value, isPrivacyMode)}`}
                   aria-pressed={isFocused}
                   className={`cashflow-snapshot__trend-col cashflow-snapshot__trend-col--${barTone}${isFocused ? ' cashflow-snapshot__trend-col--focused' : ''}`}
                   key={item.month}
@@ -167,12 +168,12 @@ export default function CashFlowSnapshot({
                   ? (hoveredTrendItem ? `${hoveredTrendItem.label} selected` : `${trendReadoutItem.label} latest`)
                   : '3-month net trend'}
               </span>
-              <strong>{formatDelta(readoutNet)}</strong>
+              <strong>{formatDelta(readoutNet, isPrivacyMode)}</strong>
             </div>
             {trendReadoutItem ? (
               <div className="cashflow-snapshot__trend-readout-detail">
-                <span>Inc {formatCurrency(toSafeNumber(trendReadoutItem.incomeAmount))}</span>
-                <span>Exp {formatCurrency(toSafeNumber(trendReadoutItem.expenseAmount))}</span>
+                <span>Inc {formatCurrency(toSafeNumber(trendReadoutItem.incomeAmount), isPrivacyMode)}</span>
+                <span>Exp {formatCurrency(toSafeNumber(trendReadoutItem.expenseAmount), isPrivacyMode)}</span>
                 <span>
                   Save{' '}
                   {toSafeNumber(trendReadoutItem.incomeAmount) > 0

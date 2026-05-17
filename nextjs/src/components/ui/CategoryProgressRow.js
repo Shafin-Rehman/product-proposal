@@ -30,14 +30,15 @@ export default function CategoryProgressRow({
   showStatusChip = 'auto',
   onSelect = null,
   selectLabel = null,
+  isPrivacyMode = false,
 }) {
   const hasBudget = monthlyLimit != null && Number(monthlyLimit) > 0
   const isOverBudget = hasBudget && remainingAmount != null && Number(remainingAmount) < 0
   const safeProgress = clampPercent(progressPercentage)
   const barFillWidth = Math.max(safeProgress, amount > 0 ? 4 : 0)
   const amountDisplay = hasBudget
-    ? `${formatCurrency(amount)} / ${formatCurrency(monthlyLimit)}`
-    : formatCurrency(amount)
+    ? `${formatCurrency(amount, isPrivacyMode)} / ${formatCurrency(monthlyLimit, isPrivacyMode)}`
+    : formatCurrency(amount, isPrivacyMode)
   const chipVisible = shouldRenderChip(statusLabel, tone, showStatusChip)
   const isInteractive = typeof onSelect === 'function'
   const Tag = isInteractive ? 'button' : 'div'

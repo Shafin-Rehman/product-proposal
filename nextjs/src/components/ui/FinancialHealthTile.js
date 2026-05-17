@@ -19,7 +19,7 @@ function buildSegments(income, expenses) {
   }
 }
 
-export default function FinancialHealthTile({ health, income, expenses }) {
+export default function FinancialHealthTile({ health, income, expenses, isPrivacyMode = false }) {
   if (!health) return null
 
   const safeIncome = toSafeNumber(income)
@@ -58,11 +58,11 @@ export default function FinancialHealthTile({ health, income, expenses }) {
           <dl className="health-tile__legend">
             <div>
               <dt>Income</dt>
-              <dd>{formatCurrency(safeIncome)}</dd>
+              <dd>{formatCurrency(safeIncome, isPrivacyMode)}</dd>
             </div>
             <div>
               <dt>Expenses</dt>
-              <dd>{formatCurrency(safeExpenses)}</dd>
+              <dd>{formatCurrency(safeExpenses, isPrivacyMode)}</dd>
             </div>
           </dl>
         </>

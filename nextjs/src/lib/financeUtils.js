@@ -66,7 +66,8 @@ export function shiftMonth(value, offset = 0) {
   return getMonthStartValue(nextDate)
 }
 
-export function formatCurrency(value) {
+export function formatCurrency(value, isPrivate = false) {
+  if (isPrivate) return '$***.**'
   const amount = Number(value)
   return Number.isFinite(amount) ? currencyFormatter.format(amount) : '--'
 }
@@ -476,6 +477,7 @@ export function buildTrendChartAxes({
   insetTop,
   insetBottom,
   valueCeiling,
+  isPrivate = false,
 }) {
   const safeMonthLength = Math.max(0, Number(monthLength) || 0)
   const safeActiveDay = Math.max(0, Math.min(Number(activeDay) || 0, safeMonthLength))
@@ -524,7 +526,7 @@ export function buildTrendChartAxes({
     ]
     : null
 
-  const budgetLineLabel = safeBudget > 0 ? formatCurrency(safeBudget) : null
+  const budgetLineLabel = safeBudget > 0 ? formatCurrency(safeBudget, isPrivate) : null
 
   return {
     paceLine,

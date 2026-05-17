@@ -50,9 +50,9 @@ export function getBudgetCtaLabel(summary) {
   return 'Set budget'
 }
 
-export function getBudgetHintText(summary) {
+export function getBudgetHintText(summary, { isPrivate = false } = {}) {
   if (hasOverallMonthlyLimit(summary)) {
-    return `Current limit: ${formatCurrency(summary?.monthly_limit)}. Changes take effect immediately.`
+    return `Current limit: ${formatCurrency(summary?.monthly_limit, isPrivate)}. Changes take effect immediately.`
   }
 
   if (hasCategoryBudgets(summary)) {
@@ -66,15 +66,16 @@ export function getMonthProgressState(month, { observedDayCount = 0, referenceDa
   return getSharedMonthProgressState(month, { observedDayCount, referenceDate })
 }
 
-export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date(), availability = summary ? 'ready' : 'loading' } = {}) {
+export function getBudgetHudModel(summary, { month, observedDayCount = 0, referenceDate = new Date(), availability = summary ? 'ready' : 'loading', isPrivate = false } = {}) {
   const overallHealth = buildSharedOverallBudgetHealth({
     summary,
     availability,
     month,
     observedDayCount,
     referenceDate,
+    isPrivate,
   })
-  const financialHealth = buildFinancialHealth({ summary, availability })
+  const financialHealth = buildFinancialHealth({ summary, availability, isPrivate })
   const budget = overallHealth.totalBudget ?? 0
   const spent = overallHealth.spent ?? 0
   const income = getSafeMoneyNumber(summary?.total_income)
@@ -97,7 +98,7 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
     : [
       {
         label: 'Spent',
-        value: formatCurrency(spent),
+        value: formatCurrency(spent, isPrivate),
         hint: hasBudget ? `${Math.round(overallHealth.progressPercentage)}% of budget used` : 'Current month',
       },
       {
@@ -107,12 +108,12 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
       },
       {
         label: 'Daily allowance',
-        value: overallHealth.dailyAllowance == null ? '--' : formatCurrency(overallHealth.dailyAllowance),
+        value: overallHealth.dailyAllowance == null ? '--' : formatCurrency(overallHealth.dailyAllowance, isPrivate),
         hint: overallHealth.key === 'over_budget' ? 'Needs correction' : 'Left per day',
       },
       {
         label: 'Net this month',
-        value: financialHealth.netAmount == null ? '--' : formatCurrency(financialHealth.netAmount),
+        value: financialHealth.netAmount == null ? '--' : formatCurrency(financialHealth.netAmount, isPrivate),
         hint: financialHealth.key === 'negative_cash_flow'
           ? 'Expenses above income'
           : 'Income minus spend',
@@ -137,7 +138,7 @@ export function getBudgetHudModel(summary, { month, observedDayCount = 0, refere
   }
 }
 
-function buildLiveCategoryCards(categoryStatuses = []) {
+function buildLiveCategoryCards(categoryStatuses = [], isPrivate = false) {
   return categoryStatuses.map((item) => {
     const presentation = getCategoryPresentation({
       name: item.category_name,
@@ -149,6 +150,7 @@ function buildLiveCategoryCards(categoryStatuses = []) {
       monthlyLimit: item.monthly_limit,
       spent: item.spent,
       actualsAvailable: true,
+      isPrivate,
     })
 
     return {
@@ -230,13 +232,14 @@ export function buildDerivedCategoryCards(expenses = []) {
   })
 }
 
-export function buildSampleCategoryCards(categoryBudgets = []) {
+export function buildSampleCategoryCards(categoryBudgets = [], isPrivate = false) {
   return categoryBudgets.map((item) => {
     const presentation = getCategoryPresentation({ name: item.name, kind: 'expense' })
     const categoryHealth = buildCategoryBudgetHealth({
       monthlyLimit: item.budget,
       spent: item.spent,
       actualsAvailable: true,
+      isPrivate,
     })
     return {
       id: item.id,
@@ -255,9 +258,9 @@ export function buildSampleCategoryCards(categoryBudgets = []) {
   })
 }
 
-export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null) {
+export function getCategoryCards(categoryStatuses, expenses = [], derivedCategoryCards = null, isPrivate = false) {
   return hasBudgetedCategoryStatuses(categoryStatuses)
-    ? buildLiveCategoryCards(categoryStatuses)
+    ? buildLiveCategoryCards(categoryStatuses, isPrivate)
     : Array.isArray(derivedCategoryCards) ? derivedCategoryCards : buildDerivedCategoryCards(expenses)
 }
 
