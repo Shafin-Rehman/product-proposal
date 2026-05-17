@@ -244,6 +244,7 @@ export default function TransactionsView() {
   const [isRecurringSheetOpen, setIsRecurringSheetOpen] = useState(false)
   const [expenseCategories, setExpenseCategories] = useState([])
   const [incomeCategories, setIncomeCategories] = useState([])
+  const [budgetPing, setBudgetPing] = useState(null)
   const [liveState, setLiveState] = useState({
     status: 'loading',
     message: '',
@@ -524,9 +525,17 @@ export default function TransactionsView() {
           }),
         }
         if (editingEntry) {
-          await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
+          const updated = await apiPost('/api/expenses/update', { expense_id: editingEntry.raw.id, ...body }, { accessToken: session.accessToken })
+          if (updated?.budget_alert?.threshold_exceeded) {
+            setBudgetPing(updated.budget_alert)
+            setTimeout(() => setBudgetPing(null), 8000)
+          }
         } else {
           const created = await apiPost('/api/expenses', body, { accessToken: session.accessToken })
+          if (created?.budget_alert?.threshold_exceeded) {
+            setBudgetPing(created.budget_alert)
+            setTimeout(() => setBudgetPing(null), 8000)
+          }
           if (entryDraft.repeat !== 'none') {
             const selectedCategory = expenseCategories.find((c) => c.name === entryDraft.category)
             await apiPost('/api/recurring', {
@@ -1048,6 +1057,35 @@ export default function TransactionsView() {
               </div>
             </form>
           </div>
+        </div>
+      ) : null}
+
+      {budgetPing ? (
+        <div className="budget-ping-toast" role="alert" style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--danger-strong, #dc2626)',
+          color: '#fff',
+          padding: '16px 24px',
+          borderRadius: '8px',
+          zIndex: 9999,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontWeight: 500
+        }}>
+          <span>⚠️ <strong>Budget Limit Reached!</strong> You have exceeded your monthly limit of ${budgetPing.monthly_limit}.</span>
+          <button onClick={() => setBudgetPing(null)} aria-label="Close alert" style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            cursor: 'pointer',
+            fontSize: '20px',
+            padding: '0 4px'
+          }}>&times;</button>
         </div>
       ) : null}
     </>
